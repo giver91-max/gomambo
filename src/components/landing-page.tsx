@@ -455,7 +455,7 @@ export function LandingPage() {
         }
 
         .gomambo-landing {
-          --black: #0a0a0a;
+          --black: #000000;
           --white: #fafafa;
           --yellow: #f5c518;
           --yellow-dim: #c9a010;
