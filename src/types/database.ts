@@ -39,6 +39,7 @@ export type Database = {
         Row: Profile;
         Insert: Partial<Profile> & { id: string };
         Update: Partial<Profile>;
+        Relationships: [];
       };
       cars: {
         Row: Car;
@@ -51,12 +52,34 @@ export type Database = {
           city: string;
         };
         Update: Partial<Car>;
+        Relationships: [
+          {
+            foreignKeyName: "cars_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       car_images: {
         Row: CarImage;
         Insert: Partial<CarImage> & { car_id: string; storage_path: string };
         Update: Partial<CarImage>;
+        Relationships: [
+          {
+            foreignKeyName: "car_images_car_id_fkey";
+            columns: ["car_id"];
+            isOneToOne: false;
+            referencedRelation: "cars";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 };
