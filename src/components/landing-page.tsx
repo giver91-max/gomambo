@@ -11,7 +11,17 @@ const inter = Inter({
 
 type Tab = "owner" | "renter";
 
-export function LandingPage() {
+export type LandingCar = {
+  id: string;
+  brand: string;
+  model: string;
+  year: number;
+  city: string;
+  pricePerDay: number;
+  imageUrl: string | null;
+};
+
+export function LandingPage({ cars }: { cars: LandingCar[] }) {
   const [activeTab, setActiveTab] = useState<Tab>("owner");
   const [ownerSubmitted, setOwnerSubmitted] = useState(false);
   const [renterSubmitted, setRenterSubmitted] = useState(false);
@@ -249,6 +259,11 @@ export function LandingPage() {
           </div>
 
           <div className={`tab-content${activeTab === "owner" ? " active" : ""}`}>
+            <Link href="/register" className="choice-cta">
+              Dodaj auto i zacznij zarabiać już teraz →
+            </Link>
+            <p className="choice-divider">albo zostaw tylko e-mail, jeśli jeszcze się zastanawiasz</p>
+
             <div className="form-group">
               <label>E-mail</label>
               <input type="email" placeholder="rafal@example.com" ref={ownerEmail} />
@@ -261,7 +276,7 @@ export function LandingPage() {
                   disabled={ownerSubmitting}
                   onClick={() => submitSignup("owner")}
                 >
-                  {ownerSubmitting ? "Zapisywanie..." : "Chcę zarabiać na swoim aucie →"}
+                  {ownerSubmitting ? "Zapisywanie..." : "Zapisz mnie na listę →"}
                 </button>
                 <p className="form-note">
                   Bez spamu. Odezwiemy się gdy platforma będzie gotowa. Pierwsi
@@ -279,6 +294,47 @@ export function LandingPage() {
           </div>
 
           <div className={`tab-content${activeTab === "renter" ? " active" : ""}`}>
+            {cars.length > 0 ? (
+              <>
+                <p className="choice-divider" style={{ marginTop: 0 }}>
+                  Dostępne auta w tej chwili
+                </p>
+                <div className="mini-car-grid">
+                  {cars.map((car) => (
+                    <Link key={car.id} href={`/auta/${car.id}`} className="mini-car-card">
+                      <div className="mini-car-visual">
+                        {car.imageUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={car.imageUrl} alt={`${car.brand} ${car.model}`} />
+                        )}
+                      </div>
+                      <div className="mini-car-info">
+                        <div className="mini-car-name">
+                          {car.brand} {car.model}
+                        </div>
+                        <div className="mini-car-meta">
+                          {car.city} · {car.pricePerDay.toFixed(0)} zł/dzień
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+                <Link href="/auta" className="choice-cta" style={{ marginTop: 20 }}>
+                  Zobacz wszystkie dostępne auta →
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/auta" className="choice-cta">
+                  Przeglądaj dostępne auta →
+                </Link>
+                <p className="choice-divider">
+                  Na razie żadne auto nie czeka jeszcze w Twojej okolicy — zostaw e-mail,
+                  a powiadomimy Cię jako pierwszego
+                </p>
+              </>
+            )}
+
             <div className="form-group">
               <label>E-mail</label>
               <input type="email" placeholder="anna@example.com" ref={renterEmail} />
@@ -291,7 +347,7 @@ export function LandingPage() {
                   disabled={renterSubmitting}
                   onClick={() => submitSignup("renter")}
                 >
-                  {renterSubmitting ? "Zapisywanie..." : "Chcę wynajmować auta →"}
+                  {renterSubmitting ? "Zapisywanie..." : "Powiadom mnie o nowych autach →"}
                 </button>
                 <p className="form-note">
                   Bez spamu. Odezwiemy się gdy pierwsze auta będą dostępne w
@@ -389,14 +445,14 @@ export function LandingPage() {
           backdrop-filter: blur(12px);
           border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
-        .gomambo-landing .logo {
+        .gomambo-landing :global(.logo) {
           font-size: 18px;
           font-weight: 900;
           letter-spacing: -0.5px;
           color: var(--white);
           text-decoration: none;
         }
-        .gomambo-landing .logo :global(span) {
+        .gomambo-landing :global(.logo span) {
           color: var(--yellow);
         }
         .gomambo-landing .nav-actions {
@@ -760,6 +816,71 @@ export function LandingPage() {
           opacity: 0.7;
           cursor: default;
         }
+        .gomambo-landing :global(.choice-cta) {
+          display: block;
+          width: 100%;
+          text-align: center;
+          padding: 16px;
+          background: var(--yellow);
+          color: var(--black);
+          border-radius: 8px;
+          font-size: 16px;
+          font-weight: 800;
+          letter-spacing: -0.2px;
+          text-decoration: none;
+          transition: background 0.2s;
+        }
+        .gomambo-landing :global(.choice-cta:hover) {
+          background: var(--yellow-dim);
+        }
+        .gomambo-landing .choice-divider {
+          font-size: 13px;
+          color: var(--gray);
+          text-align: center;
+          margin: 16px 0;
+          line-height: 1.5;
+        }
+        .gomambo-landing .mini-car-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+          gap: 10px;
+          margin-bottom: 8px;
+        }
+        .gomambo-landing :global(.mini-car-card) {
+          display: block;
+          background: var(--gray-mid);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 8px;
+          overflow: hidden;
+          text-decoration: none;
+          transition: transform 0.2s;
+        }
+        .gomambo-landing :global(.mini-car-card:hover) {
+          transform: translateY(-2px);
+        }
+        .gomambo-landing .mini-car-visual {
+          aspect-ratio: 4 / 3;
+          background: var(--gray-light);
+        }
+        .gomambo-landing .mini-car-visual :global(img) {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .gomambo-landing .mini-car-info {
+          padding: 10px 12px;
+        }
+        .gomambo-landing .mini-car-name {
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--white);
+        }
+        .gomambo-landing .mini-car-meta {
+          font-size: 12px;
+          color: var(--gray);
+          margin-top: 2px;
+        }
         .gomambo-landing .form-note {
           font-size: 12px;
           color: var(--gray);
@@ -815,7 +936,7 @@ export function LandingPage() {
           flex-wrap: wrap;
           gap: 16px;
         }
-        .gomambo-landing footer .logo {
+        .gomambo-landing footer :global(.logo) {
           font-size: 16px;
         }
         .gomambo-landing footer :global(p) {
@@ -828,7 +949,7 @@ export function LandingPage() {
           .gomambo-landing nav {
             padding: 16px 20px;
           }
-          .gomambo-landing .logo {
+          .gomambo-landing :global(.logo) {
             font-size: 16px;
           }
           .gomambo-landing .nav-actions {

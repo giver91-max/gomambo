@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { LandingPage } from "@/components/landing-page";
+import { LandingPage, type LandingCar } from "@/components/landing-page";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -12,5 +12,34 @@ export default async function Home() {
     redirect("/dashboard");
   }
 
-  return <LandingPage />;
+  const { data: cars } = await supabase
+    .from("cars")
+    .select("id, brand, model, year, city, price_per_day, car_images(storage_path, position)")
+    .eq("status", "approved")
+    .order("created_at", { ascending: false })
+    .order("position", { referencedTable: "car_images", ascending: true })
+    .limit(6);
+
+  const landingCars: LandingCar[] = (cars ?? []).map((car) => {
+    const images = (car.car_images ?? []) as {
+      storage_path: string;
+      position: number;
+    }[];
+    const imageUrl = images[0]
+      ? supabase.storage.from("car-images").getPublicUrl(images[0].storage_path)
+          .data.publicUrl
+      : null;
+
+    return {
+      id: car.id,
+      brand: car.brand,
+      model: car.model,
+      year: car.year,
+      city: car.city,
+      pricePerDay: Number(car.price_per_day),
+      imageUrl,
+    };
+  });
+
+  return <LandingPage cars={landingCars} />;
 }
