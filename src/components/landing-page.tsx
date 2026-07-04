@@ -927,6 +927,17 @@ export function LandingPage() {
           .gomambo-landing .hero-headline {
             letter-spacing: -1px;
           }
+          .gomambo-landing .counter-block {
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            width: 100%;
+            padding: 16px 20px;
+          }
+          .gomambo-landing .counter-label {
+            white-space: normal;
+            text-align: center;
+          }
           .gomambo-landing .split-cta {
             flex-direction: column;
           }
