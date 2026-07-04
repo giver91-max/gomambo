@@ -33,7 +33,7 @@ function RegisterForm() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-muted/30 px-4">
-      <Link href="/" className="text-lg font-semibold">
+      <Link href="/" className="text-lg font-black tracking-tight">
         Go<span className="text-primary">Mambo</span>
       </Link>
       <Card className="w-full max-w-sm">

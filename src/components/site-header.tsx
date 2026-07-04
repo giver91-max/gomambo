@@ -11,7 +11,7 @@ export function SiteHeader({
 }) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b px-4 py-4 sm:px-6">
-      <Link href="/" className="text-lg font-semibold">
+      <Link href="/" className="text-lg font-black tracking-tight">
         Go<span className="text-primary">Mambo</span>
       </Link>
       <nav className="flex flex-wrap items-center gap-3 text-sm sm:gap-4">
