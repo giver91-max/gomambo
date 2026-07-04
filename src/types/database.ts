@@ -1,0 +1,62 @@
+export type ProfileRole = "owner" | "admin";
+export type CarStatus = "pending" | "approved" | "rejected";
+
+export type Profile = {
+  id: string;
+  role: ProfileRole;
+  full_name: string;
+  phone: string | null;
+  created_at: string;
+};
+
+export type Car = {
+  id: string;
+  owner_id: string;
+  brand: string;
+  model: string;
+  year: number;
+  price_per_day: number;
+  city: string;
+  description: string | null;
+  status: CarStatus;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CarImage = {
+  id: string;
+  car_id: string;
+  storage_path: string;
+  position: number;
+  created_at: string;
+};
+
+export type Database = {
+  public: {
+    Tables: {
+      profiles: {
+        Row: Profile;
+        Insert: Partial<Profile> & { id: string };
+        Update: Partial<Profile>;
+      };
+      cars: {
+        Row: Car;
+        Insert: Partial<Car> & {
+          owner_id: string;
+          brand: string;
+          model: string;
+          year: number;
+          price_per_day: number;
+          city: string;
+        };
+        Update: Partial<Car>;
+      };
+      car_images: {
+        Row: CarImage;
+        Insert: Partial<CarImage> & { car_id: string; storage_path: string };
+        Update: Partial<CarImage>;
+      };
+    };
+  };
+};
