@@ -10,11 +10,11 @@ export function SiteHeader({
   role: "owner" | "admin";
 }) {
   return (
-    <header className="flex items-center justify-between border-b px-6 py-4">
+    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b px-4 py-4 sm:px-6">
       <Link href="/dashboard" className="text-lg font-semibold">
         GoMambo
       </Link>
-      <nav className="flex items-center gap-4 text-sm">
+      <nav className="flex flex-wrap items-center gap-3 text-sm sm:gap-4">
         <Link href="/dashboard" className="hover:underline">
           Moje auta
         </Link>

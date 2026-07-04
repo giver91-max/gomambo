@@ -192,17 +192,13 @@ export function LandingPage() {
               Zarabiaj gdy Twój samochód stoi. Ty ustalasz ceny i dostępność.
             </div>
           </Link>
-          <a
-            href="#waitlist"
-            className="cta-card renter"
-            onClick={() => setActiveTab("renter")}
-          >
+          <Link href="/auta" className="cta-card renter">
             <div className="cta-role">Dla najemców</div>
             <div className="cta-title">Wynajmij auto →</div>
             <div className="cta-desc">
               Sprawdzone auta od prywatnych właścicieli. Rezerwacja w 2 minuty.
             </div>
-          </a>
+          </Link>
         </div>
 
         <div className="scroll-hint">

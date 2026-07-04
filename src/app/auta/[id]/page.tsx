@@ -1,0 +1,81 @@
+import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { Card, CardContent } from "@/components/ui/card";
+
+export default async function CarDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const supabase = await createClient();
+
+  const { data: car } = await supabase
+    .from("cars")
+    .select("*, car_images(storage_path, position)")
+    .eq("id", params.id)
+    .eq("status", "approved")
+    .order("position", { referencedTable: "car_images", ascending: true })
+    .single();
+
+  if (!car) {
+    notFound();
+  }
+
+  const images = (car.car_images ?? []) as {
+    storage_path: string;
+    position: number;
+  }[];
+  const imageUrls = images.map(
+    (img) =>
+      supabase.storage.from("car-images").getPublicUrl(img.storage_path).data
+        .publicUrl
+  );
+
+  return (
+    <div className="space-y-6">
+      {imageUrls.length > 0 ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {imageUrls.map((src, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={i}
+              src={src}
+              alt={`${car.brand} ${car.model} - zdjęcie ${i + 1}`}
+              className={`w-full rounded-lg object-cover ${
+                i === 0 ? "sm:col-span-2 aspect-video" : "aspect-square"
+              }`}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="aspect-video w-full rounded-lg bg-muted" />
+      )}
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">
+            {car.brand} {car.model} ({car.year})
+          </h1>
+          <p className="text-muted-foreground">{car.city}</p>
+        </div>
+        <Card className="sm:w-56">
+          <CardContent className="py-4 text-center">
+            <p className="text-2xl font-bold">
+              {Number(car.price_per_day).toFixed(2)} zł
+            </p>
+            <p className="text-sm text-muted-foreground">za dzień</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {car.description && (
+        <div>
+          <h2 className="mb-2 font-semibold">Opis</h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {car.description}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
