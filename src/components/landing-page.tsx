@@ -760,6 +760,7 @@ export function LandingPage() {
         }
         .gomambo-landing .waitlist-inner {
           max-width: 560px;
+          margin: 0 auto;
         }
         .gomambo-landing .waitlist-tabs {
           display: flex;
