@@ -140,7 +140,7 @@ export function LandingPage() {
         <a href="#" className="logo">
           Go<span>Mambo</span>
         </a>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div className="nav-actions">
           <Link href="/login" className="nav-login">
             Zaloguj się
           </Link>
@@ -496,11 +496,17 @@ export function LandingPage() {
         .gomambo-landing .logo :global(span) {
           color: var(--yellow);
         }
+        .gomambo-landing .nav-actions {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+        }
         .gomambo-landing :global(.nav-login) {
           font-size: 13px;
           font-weight: 600;
           color: var(--gray);
           text-decoration: none;
+          white-space: nowrap;
         }
         .gomambo-landing :global(.nav-login:hover) {
           color: var(--white);
@@ -514,6 +520,7 @@ export function LandingPage() {
           padding: 9px 20px;
           border-radius: 6px;
           text-decoration: none;
+          white-space: nowrap;
           transition: background 0.2s;
         }
         .gomambo-landing :global(a.nav-cta:hover) {
@@ -916,6 +923,19 @@ export function LandingPage() {
         @media (max-width: 640px) {
           .gomambo-landing nav {
             padding: 16px 20px;
+          }
+          .gomambo-landing .logo {
+            font-size: 16px;
+          }
+          .gomambo-landing .nav-actions {
+            gap: 10px;
+          }
+          .gomambo-landing :global(.nav-login) {
+            font-size: 12px;
+          }
+          .gomambo-landing :global(a.nav-cta) {
+            font-size: 12px;
+            padding: 8px 14px;
           }
           .gomambo-landing #hero,
           .gomambo-landing #how,
