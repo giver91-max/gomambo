@@ -161,7 +161,7 @@ export function LandingPage() {
             alt="GoMambo"
           />
         </div>
-        <p className="hero-eyebrow">Polska · Platforma P2P · Uruchomienie Q4 2026</p>
+        <p className="hero-eyebrow">Polska · Platforma P2P · Uruchomienie IV kwartał 2026</p>
         <h1 className="hero-headline">
           Twoje auto
           <br />
