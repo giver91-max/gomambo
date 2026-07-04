@@ -21,17 +21,8 @@ export function LandingPage() {
   const heroRef = useRef<HTMLElement>(null);
   const counterRef = useRef<HTMLSpanElement>(null);
 
-  const ownerName = useRef<HTMLInputElement>(null);
-  const ownerPhone = useRef<HTMLInputElement>(null);
   const ownerEmail = useRef<HTMLInputElement>(null);
-  const ownerCar = useRef<HTMLInputElement>(null);
-  const ownerCity = useRef<HTMLSelectElement>(null);
-
-  const renterName = useRef<HTMLInputElement>(null);
-  const renterPhone = useRef<HTMLInputElement>(null);
   const renterEmail = useRef<HTMLInputElement>(null);
-  const renterFreq = useRef<HTMLSelectElement>(null);
-  const renterCity = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
     const el = counterRef.current;
@@ -67,12 +58,10 @@ export function LandingPage() {
 
   async function submitSignup(type: Tab) {
     const isOwner = type === "owner";
-    const name = (isOwner ? ownerName : renterName).current?.value.trim() ?? "";
-    const phone = (isOwner ? ownerPhone : renterPhone).current?.value.trim() ?? "";
-    const email = (isOwner ? ownerEmail : renterEmail).current?.value.trim() ?? "";
     const emailRef = isOwner ? ownerEmail : renterEmail;
+    const email = emailRef.current?.value.trim() ?? "";
 
-    if (!name || !email) {
+    if (!email) {
       const target = emailRef.current;
       if (target) {
         target.style.borderColor = "rgba(255,80,80,.6)";
@@ -84,21 +73,7 @@ export function LandingPage() {
     }
 
     const table = isOwner ? "owner_signups" : "renter_signups";
-    const payload = isOwner
-      ? {
-          name,
-          phone,
-          email,
-          city: ownerCity.current?.value.trim() ?? "",
-          car: ownerCar.current?.value.trim() ?? "",
-        }
-      : {
-          name,
-          phone,
-          email,
-          city: renterCity.current?.value.trim() ?? "",
-          frequency: renterFreq.current?.value ?? "",
-        };
+    const payload = { email };
 
     const setSubmitting = isOwner ? setOwnerSubmitting : setRenterSubmitting;
     const setSubmitted = isOwner ? setOwnerSubmitted : setRenterSubmitted;
@@ -274,40 +249,9 @@ export function LandingPage() {
           </div>
 
           <div className={`tab-content${activeTab === "owner" ? " active" : ""}`}>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Imię</label>
-                <input type="text" placeholder="Rafał" ref={ownerName} />
-              </div>
-              <div className="form-group">
-                <label>Telefon</label>
-                <input type="tel" placeholder="+48 500 000 000" ref={ownerPhone} />
-              </div>
-            </div>
             <div className="form-group">
               <label>E-mail</label>
               <input type="email" placeholder="rafal@example.com" ref={ownerEmail} />
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Marka auta</label>
-                <input type="text" placeholder="np. Škoda, BMW, Toyota" ref={ownerCar} />
-              </div>
-              <div className="form-group">
-                <label>Miasto</label>
-                <select ref={ownerCity} defaultValue="">
-                  <option value="">Wybierz miasto</option>
-                  <option>Katowice</option>
-                  <option>Gliwice</option>
-                  <option>Zabrze</option>
-                  <option>Bytom</option>
-                  <option>Ruda Śląska</option>
-                  <option>Sosnowiec</option>
-                  <option>Tychy</option>
-                  <option>Chorzów</option>
-                  <option>Inne miasto</option>
-                </select>
-              </div>
             </div>
             {!ownerSubmitted && (
               <>
@@ -335,46 +279,9 @@ export function LandingPage() {
           </div>
 
           <div className={`tab-content${activeTab === "renter" ? " active" : ""}`}>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Imię</label>
-                <input type="text" placeholder="Anna" ref={renterName} />
-              </div>
-              <div className="form-group">
-                <label>Telefon</label>
-                <input type="tel" placeholder="+48 500 000 000" ref={renterPhone} />
-              </div>
-            </div>
             <div className="form-group">
               <label>E-mail</label>
               <input type="email" placeholder="anna@example.com" ref={renterEmail} />
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Jak często wynajmujesz?</label>
-                <select ref={renterFreq} defaultValue="">
-                  <option value="">Wybierz</option>
-                  <option>Kilka razy w roku</option>
-                  <option>Raz w miesiącu</option>
-                  <option>Kilka razy w miesiącu</option>
-                  <option>Co tydzień lub częściej</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Miasto</label>
-                <select ref={renterCity} defaultValue="">
-                  <option value="">Wybierz miasto</option>
-                  <option>Katowice</option>
-                  <option>Gliwice</option>
-                  <option>Zabrze</option>
-                  <option>Bytom</option>
-                  <option>Ruda Śląska</option>
-                  <option>Sosnowiec</option>
-                  <option>Tychy</option>
-                  <option>Chorzów</option>
-                  <option>Inne miasto</option>
-                </select>
-              </div>
             </div>
             {!renterSubmitted && (
               <>
