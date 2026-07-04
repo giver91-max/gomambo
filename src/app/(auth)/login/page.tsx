@@ -32,7 +32,10 @@ function LoginForm() {
   const redirectTo = searchParams.get("redirect") ?? "/dashboard";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-muted/30 px-4">
+      <Link href="/" className="text-lg font-semibold">
+        Go<span className="text-primary">Mambo</span>
+      </Link>
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Zaloguj się do GoMambo</CardTitle>

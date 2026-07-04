@@ -137,9 +137,9 @@ export function LandingPage() {
       style={{ "--font": inter.style.fontFamily } as React.CSSProperties}
     >
       <nav>
-        <a href="#" className="logo">
+        <Link href="/" className="logo">
           Go<span>Mambo</span>
-        </a>
+        </Link>
         <div className="nav-actions">
           <Link href="/login" className="nav-login">
             Zaloguj się
@@ -423,9 +423,9 @@ export function LandingPage() {
       </section>
 
       <footer>
-        <a href="#" className="logo">
+        <Link href="/" className="logo">
           Go<span>Mambo</span>
-        </a>
+        </Link>
         <p>
           © 2026 GoMambo · Polska ·{" "}
           <a href="#" style={{ color: "var(--gray)", textDecoration: "none" }}>

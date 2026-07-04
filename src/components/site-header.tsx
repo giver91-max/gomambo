@@ -11,12 +11,15 @@ export function SiteHeader({
 }) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b px-4 py-4 sm:px-6">
-      <Link href="/dashboard" className="text-lg font-semibold">
-        GoMambo
+      <Link href="/" className="text-lg font-semibold">
+        Go<span className="text-primary">Mambo</span>
       </Link>
       <nav className="flex flex-wrap items-center gap-3 text-sm sm:gap-4">
         <Link href="/dashboard" className="hover:underline">
           Moje auta
+        </Link>
+        <Link href="/auta" className="hover:underline">
+          Przeglądaj auta
         </Link>
         {role === "admin" && (
           <Link href="/admin" className="hover:underline">
