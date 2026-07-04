@@ -1,7 +1,9 @@
 "use client";
 
+import { Suspense } from "react";
 import { useFormState } from "react-dom";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { signUp, type AuthActionState } from "../actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +19,17 @@ import { SubmitButton } from "@/components/submit-button";
 const initialState: AuthActionState = { error: null };
 
 export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const [state, formAction] = useFormState(signUp, initialState);
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "/dashboard";
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-muted/30 px-4">
@@ -33,6 +45,7 @@ export default function RegisterPage() {
         </CardHeader>
         <CardContent>
           <form action={formAction} className="space-y-4">
+            <input type="hidden" name="next" value={next} />
             <div className="space-y-2">
               <Label htmlFor="fullName">Imię i nazwisko</Label>
               <Input id="fullName" name="fullName" required autoComplete="name" />
@@ -59,7 +72,10 @@ export default function RegisterPage() {
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Masz już konto?{" "}
-            <Link href="/login" className="underline underline-offset-4">
+            <Link
+              href={{ pathname: "/login", query: { redirect: next } }}
+              className="underline underline-offset-4"
+            >
               Zaloguj się
             </Link>
           </p>

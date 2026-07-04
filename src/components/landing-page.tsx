@@ -129,7 +129,7 @@ export function LandingPage({ cars }: { cars: LandingCar[] }) {
           <Link href="/login" className="nav-login">
             Zaloguj się
           </Link>
-          <Link href="/register" className="nav-cta">
+          <Link href={{ pathname: "/register", query: { next: "/dashboard/cars/new" } }} className="nav-cta">
             Zostań właścicielem
           </Link>
         </div>
@@ -170,7 +170,7 @@ export function LandingPage({ cars }: { cars: LandingCar[] }) {
         </p>
 
         <div className="split-cta">
-          <Link href="/register" className="cta-card owner">
+          <Link href={{ pathname: "/register", query: { next: "/dashboard/cars/new" } }} className="cta-card owner">
             <div className="cta-role">Dla właścicieli</div>
             <div className="cta-title">Udostępnij auto →</div>
             <div className="cta-desc">
@@ -259,7 +259,7 @@ export function LandingPage({ cars }: { cars: LandingCar[] }) {
           </div>
 
           <div className={`tab-content${activeTab === "owner" ? " active" : ""}`}>
-            <Link href="/register" className="choice-cta">
+            <Link href={{ pathname: "/register", query: { next: "/dashboard/cars/new" } }} className="choice-cta">
               Dodaj auto i zacznij zarabiać już teraz →
             </Link>
             <p className="choice-divider">albo zostaw tylko e-mail, jeśli jeszcze się zastanawiasz</p>

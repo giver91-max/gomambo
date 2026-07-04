@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthActionState = { error: string | null };
@@ -13,6 +14,7 @@ export async function signUp(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const fullName = String(formData.get("fullName") ?? "").trim();
+  const next = String(formData.get("next") ?? "/dashboard");
 
   if (!email || !password || !fullName) {
     return { error: "Wypełnij wszystkie pola." };
@@ -21,11 +23,19 @@ export async function signUp(
     return { error: "Hasło musi mieć co najmniej 8 znaków." };
   }
 
+  const headersList = await headers();
+  const host = headersList.get("host");
+  const proto = headersList.get("x-forwarded-proto") ?? "http";
+  const origin = headersList.get("origin") ?? `${proto}://${host}`;
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName } },
+    options: {
+      data: { full_name: fullName },
+      emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+    },
   });
 
   if (error) {

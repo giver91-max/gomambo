@@ -65,7 +65,10 @@ function LoginForm() {
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Nie masz konta?{" "}
-            <Link href="/register" className="underline underline-offset-4">
+            <Link
+              href={{ pathname: "/register", query: { next: redirectTo } }}
+              className="underline underline-offset-4"
+            >
               Zarejestruj się
             </Link>
           </p>
