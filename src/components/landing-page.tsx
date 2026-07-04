@@ -21,7 +21,17 @@ export type LandingCar = {
   imageUrl: string | null;
 };
 
-export function LandingPage({ cars }: { cars: LandingCar[] }) {
+export function LandingPage({
+  cars,
+  isLoggedIn,
+}: {
+  cars: LandingCar[];
+  isLoggedIn: boolean;
+}) {
+  const addCarHref = isLoggedIn
+    ? "/dashboard/cars/new"
+    : { pathname: "/register", query: { next: "/dashboard/cars/new" } };
+
   const [activeTab, setActiveTab] = useState<Tab>("owner");
   const [ownerSubmitted, setOwnerSubmitted] = useState(false);
   const [renterSubmitted, setRenterSubmitted] = useState(false);
@@ -126,12 +136,23 @@ export function LandingPage({ cars }: { cars: LandingCar[] }) {
           Go<span>Mambo</span>
         </Link>
         <div className="nav-actions">
-          <Link href="/login" className="nav-login">
-            Zaloguj się
-          </Link>
-          <Link href={{ pathname: "/register", query: { next: "/dashboard/cars/new" } }} className="nav-cta">
-            Zostań właścicielem
-          </Link>
+          {isLoggedIn ? (
+            <Link href="/dashboard" className="nav-cta">
+              Panel
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className="nav-login">
+                Zaloguj się
+              </Link>
+              <Link
+                href={{ pathname: "/register", query: { next: "/dashboard/cars/new" } }}
+                className="nav-cta"
+              >
+                Zostań właścicielem
+              </Link>
+            </>
+          )}
         </div>
       </nav>
 
@@ -170,7 +191,7 @@ export function LandingPage({ cars }: { cars: LandingCar[] }) {
         </p>
 
         <div className="split-cta">
-          <Link href={{ pathname: "/register", query: { next: "/dashboard/cars/new" } }} className="cta-card owner">
+          <Link href={addCarHref} className="cta-card owner">
             <div className="cta-role">Dla właścicieli</div>
             <div className="cta-title">Udostępnij auto →</div>
             <div className="cta-desc">
@@ -259,7 +280,7 @@ export function LandingPage({ cars }: { cars: LandingCar[] }) {
           </div>
 
           <div className={`tab-content${activeTab === "owner" ? " active" : ""}`}>
-            <Link href={{ pathname: "/register", query: { next: "/dashboard/cars/new" } }} className="choice-cta">
+            <Link href={addCarHref} className="choice-cta">
               Dodaj auto i zacznij zarabiać już teraz →
             </Link>
             <p className="choice-divider">albo zostaw tylko e-mail, jeśli jeszcze się zastanawiasz</p>

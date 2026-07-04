@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LandingPage, type LandingCar } from "@/components/landing-page";
 
@@ -7,10 +6,6 @@ export default async function Home() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect("/dashboard");
-  }
 
   const { data: cars } = await supabase
     .from("cars")
@@ -41,5 +36,5 @@ export default async function Home() {
     };
   });
 
-  return <LandingPage cars={landingCars} />;
+  return <LandingPage cars={landingCars} isLoggedIn={!!user} />;
 }
