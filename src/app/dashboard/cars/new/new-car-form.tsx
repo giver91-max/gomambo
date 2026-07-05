@@ -1,29 +1,120 @@
 "use client";
 
-import { useFormState } from "react-dom";
-import { useState } from "react";
-import { createCar, type CarFormState } from "../actions";
+import { useState, useTransition } from "react";
+import { createCarDraft, deleteCarDraft, attachCarImages } from "../actions";
+import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { SubmitButton } from "@/components/submit-button";
+import { Button } from "@/components/ui/button";
 
-const initialState: CarFormState = { error: null };
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGES = 8;
 
 export function NewCarForm() {
-  const [state, formAction] = useFormState(createCar, initialState);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   function handleFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
+    const selected = Array.from(e.target.files ?? []);
     setPreviews((old) => {
       old.forEach((url) => URL.revokeObjectURL(url));
-      return files.map((f) => URL.createObjectURL(f));
+      return selected.map((f) => URL.createObjectURL(f));
+    });
+    setFiles(selected);
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+
+    if (files.length === 0) {
+      setError("Dodaj przynajmniej jedno zdjęcie auta.");
+      return;
+    }
+    if (files.length > MAX_IMAGES) {
+      setError(`Maksymalnie ${MAX_IMAGES} zdjęć.`);
+      return;
+    }
+    for (const image of files) {
+      if (!image.type.startsWith("image/")) {
+        setError(`Plik "${image.name}" nie jest zdjęciem.`);
+        return;
+      }
+      if (image.size > MAX_IMAGE_BYTES) {
+        setError(`Zdjęcie "${image.name}" przekracza 5 MB.`);
+        return;
+      }
+    }
+
+    const formData = new FormData(e.currentTarget);
+    // The "images" field still holds the raw File objects from the file
+    // input (FormData captures every named control in the form) — strip it
+    // so this request stays tiny; photos upload directly to Storage below.
+    formData.delete("images");
+    const filesToUpload = files;
+
+    startTransition(async () => {
+      setStatus("Zapisywanie danych auta…");
+      const draft = await createCarDraft({ error: null }, formData);
+      if (draft.error || !draft.carId) {
+        setError(draft.error ?? "Nie udało się zapisać auta.");
+        setStatus(null);
+        return;
+      }
+      const carId = draft.carId;
+
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setError("Sesja wygasła. Zaloguj się ponownie.");
+        setStatus(null);
+        await deleteCarDraft(carId);
+        return;
+      }
+
+      const uploaded: { path: string; position: number }[] = [];
+
+      for (let index = 0; index < filesToUpload.length; index++) {
+        const image = filesToUpload[index];
+        setStatus(`Wgrywanie zdjęcia ${index + 1} z ${filesToUpload.length}…`);
+        const ext = image.name.split(".").pop() || "jpg";
+        const path = `${user.id}/${carId}/${crypto.randomUUID()}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("car-images")
+          .upload(path, image, { contentType: image.type });
+
+        if (uploadError) {
+          setError(`Błąd wgrywania zdjęcia: ${uploadError.message}`);
+          setStatus(null);
+          if (uploaded.length > 0) {
+            await supabase.storage.from("car-images").remove(uploaded.map((u) => u.path));
+          }
+          await deleteCarDraft(carId);
+          return;
+        }
+
+        uploaded.push({ path, position: index });
+      }
+
+      setStatus("Finalizowanie…");
+      const finalize = await attachCarImages(carId, uploaded);
+      if (finalize.error) {
+        setError(finalize.error);
+        setStatus(null);
+      }
     });
   }
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="brand">Marka</Label>
@@ -103,9 +194,11 @@ export function NewCarForm() {
         )}
       </div>
 
-      {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <SubmitButton>Dodaj auto do weryfikacji</SubmitButton>
+      <Button type="submit" className="w-full" disabled={isPending}>
+        {isPending ? status ?? "Chwileczkę…" : "Dodaj auto do weryfikacji"}
+      </Button>
     </form>
   );
 }
