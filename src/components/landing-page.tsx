@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Inter } from "next/font/google";
 import { useEffect, useRef, useState } from "react";
+import styles from "./landing-page.module.css";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
@@ -128,26 +129,26 @@ export function LandingPage({
 
   return (
     <div
-      className="gomambo-landing"
+      className={styles.page}
       style={{ "--font": inter.style.fontFamily } as React.CSSProperties}
     >
       <nav>
-        <Link href="/" className="logo">
+        <Link href="/" className={styles.logo}>
           Go<span>Mambo</span>
         </Link>
-        <div className="nav-actions">
+        <div className={styles.navActions}>
           {isLoggedIn ? (
-            <Link href="/dashboard" className="nav-cta">
+            <Link href="/dashboard" className={styles.navCta}>
               Panel
             </Link>
           ) : (
             <>
-              <Link href="/login" className="nav-login">
+              <Link href="/login" className={styles.navLogin}>
                 Zaloguj się
               </Link>
               <Link
                 href={{ pathname: "/register", query: { next: "/dashboard/cars/new" } }}
-                className="nav-cta"
+                className={styles.navCta}
               >
                 Zostań właścicielem
               </Link>
@@ -157,7 +158,7 @@ export function LandingPage({
       </nav>
 
       <section id="hero" ref={heroRef}>
-        <div className="hero-bg" />
+        <div className={styles.heroBg} />
 
         <div style={{ marginBottom: 40, display: "flex", justifyContent: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -167,8 +168,8 @@ export function LandingPage({
             alt="GoMambo"
           />
         </div>
-        <p className="hero-eyebrow">Polska · Platforma P2P · Uruchomienie IV kwartał 2026</p>
-        <h1 className="hero-headline">
+        <p className={styles.heroEyebrow}>Polska · Platforma P2P · Uruchomienie IV kwartał 2026</p>
+        <h1 className={styles.heroHeadline}>
           Twoje auto
           <br />
           zarabia,
@@ -176,38 +177,38 @@ export function LandingPage({
           gdy <em>Ty nie jeździsz.</em>
         </h1>
 
-        <div className="counter-block">
-          <span className="counter-label">Twoje auto może zarabiać do</span>
-          <span className="counter-value" id="counter" ref={counterRef}>
+        <div className={styles.counterBlock}>
+          <span className={styles.counterLabel}>Twoje auto może zarabiać do</span>
+          <span className={styles.counterValue} id="counter" ref={counterRef}>
             0
           </span>
-          <span className="counter-unit">zł / miesiąc</span>
+          <span className={styles.counterUnit}>zł / miesiąc</span>
         </div>
 
-        <p className="hero-sub">
+        <p className={styles.heroSub}>
           GoMambo to pierwsza polska platforma peer-to-peer wynajmu aut. Łączymy
           właścicieli samochodów z osobami, które potrzebują auta — bez
           pośredników i bez zbędnych formalności.
         </p>
 
-        <div className="split-cta">
-          <Link href={addCarHref} className="cta-card owner">
-            <div className="cta-role">Dla właścicieli</div>
-            <div className="cta-title">Udostępnij auto →</div>
-            <div className="cta-desc">
+        <div className={styles.splitCta}>
+          <Link href={addCarHref} className={`${styles.ctaCard} ${styles.owner}`}>
+            <div className={styles.ctaRole}>Dla właścicieli</div>
+            <div className={styles.ctaTitle}>Udostępnij auto →</div>
+            <div className={styles.ctaDesc}>
               Zarabiaj gdy Twój samochód stoi. Ty ustalasz ceny i dostępność.
             </div>
           </Link>
-          <Link href="/auta" className="cta-card renter">
-            <div className="cta-role">Dla najemców</div>
-            <div className="cta-title">Wynajmij auto →</div>
-            <div className="cta-desc">
+          <Link href="/auta" className={`${styles.ctaCard} ${styles.renter}`}>
+            <div className={styles.ctaRole}>Dla najemców</div>
+            <div className={styles.ctaTitle}>Wynajmij auto →</div>
+            <div className={styles.ctaDesc}>
               Sprawdzone auta od prywatnych właścicieli. Rezerwacja w 2 minuty.
             </div>
           </Link>
         </div>
 
-        <div className="scroll-hint">
+        <div className={styles.scrollHint}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path
               d="M8 3v10M3 9l5 5 5-5"
@@ -221,30 +222,30 @@ export function LandingPage({
       </section>
 
       <section id="how">
-        <p className="section-label">Jak to działa</p>
-        <h2 className="section-title">Proste jak wypożyczenie od sąsiada</h2>
-        <div className="steps">
-          <div className="step">
-            <div className="step-num">Krok 01</div>
-            <div className="step-icon">🪪</div>
+        <p className={styles.sectionLabel}>Jak to działa</p>
+        <h2 className={styles.sectionTitle}>Proste jak wypożyczenie od sąsiada</h2>
+        <div className={styles.steps}>
+          <div className={styles.step}>
+            <div className={styles.stepNum}>Krok 01</div>
+            <div className={styles.stepIcon}>🪪</div>
             <h3>Zarejestruj się</h3>
             <p>Weryfikacja tożsamości i prawa jazdy zajmuje 5 minut. Robimy to raz.</p>
           </div>
-          <div className="step">
-            <div className="step-num">Krok 02</div>
-            <div className="step-icon">🔍</div>
+          <div className={styles.step}>
+            <div className={styles.stepNum}>Krok 02</div>
+            <div className={styles.stepIcon}>🔍</div>
             <h3>Wybierz lub dodaj auto</h3>
             <p>Przeglądaj dostępne auta w swojej okolicy lub dodaj własne i ustaw cenę.</p>
           </div>
-          <div className="step">
-            <div className="step-num">Krok 03</div>
-            <div className="step-icon">📅</div>
+          <div className={styles.step}>
+            <div className={styles.stepNum}>Krok 03</div>
+            <div className={styles.stepIcon}>📅</div>
             <h3>Zarezerwuj</h3>
             <p>Płatność online, ubezpieczenie w cenie. Odbiór bezpośrednio od właściciela.</p>
           </div>
-          <div className="step">
-            <div className="step-num">Krok 04</div>
-            <div className="step-icon">💰</div>
+          <div className={styles.step}>
+            <div className={styles.stepNum}>Krok 04</div>
+            <div className={styles.stepIcon}>💰</div>
             <h3>Jedź / Zarabiaj</h3>
             <p>Najemca jedzie, właściciel zarabia. Wypłata w 5 dni roboczych po zwrocie.</p>
           </div>
@@ -252,9 +253,9 @@ export function LandingPage({
       </section>
 
       <section id="waitlist">
-        <div className="waitlist-inner">
-          <p className="section-label">Wczesny dostęp</p>
-          <h2 className="section-title" style={{ marginBottom: 12 }}>
+        <div className={styles.waitlistInner}>
+          <p className={styles.sectionLabel}>Wczesny dostęp</p>
+          <h2 className={styles.sectionTitle} style={{ marginBottom: 12 }}>
             Bądź pierwszy w Polsce
           </h2>
           <p style={{ color: "var(--gray)", fontSize: 15, lineHeight: 1.6, marginBottom: 36 }}>
@@ -262,30 +263,32 @@ export function LandingPage({
             pierwsze dostaną dostęp — i specjalne warunki na start.
           </p>
 
-          <div className="waitlist-tabs">
+          <div className={styles.waitlistTabs}>
             <button
               type="button"
-              className={`tab-btn${activeTab === "owner" ? " active" : ""}`}
+              className={`${styles.tabBtn}${activeTab === "owner" ? ` ${styles.active}` : ""}`}
               onClick={() => setActiveTab("owner")}
             >
               Mam auto
             </button>
             <button
               type="button"
-              className={`tab-btn${activeTab === "renter" ? " active" : ""}`}
+              className={`${styles.tabBtn}${activeTab === "renter" ? ` ${styles.active}` : ""}`}
               onClick={() => setActiveTab("renter")}
             >
               Szukam auta
             </button>
           </div>
 
-          <div className={`tab-content${activeTab === "owner" ? " active" : ""}`}>
-            <Link href={addCarHref} className="choice-cta">
+          <div
+            className={`${styles.tabContent}${activeTab === "owner" ? ` ${styles.active}` : ""}`}
+          >
+            <Link href={addCarHref} className={styles.choiceCta}>
               Dodaj auto i zacznij zarabiać już teraz →
             </Link>
-            <p className="choice-divider">albo zostaw tylko e-mail, jeśli jeszcze się zastanawiasz</p>
+            <p className={styles.choiceDivider}>albo zostaw tylko e-mail, jeśli jeszcze się zastanawiasz</p>
 
-            <div className="form-group">
+            <div className={styles.formGroup}>
               <label>E-mail</label>
               <input type="email" placeholder="rafal@example.com" ref={ownerEmail} />
             </div>
@@ -293,19 +296,22 @@ export function LandingPage({
               <>
                 <button
                   type="button"
-                  className="submit-btn"
+                  className={styles.submitBtn}
                   disabled={ownerSubmitting}
                   onClick={() => submitSignup("owner")}
                 >
                   {ownerSubmitting ? "Zapisywanie..." : "Zapisz mnie na listę →"}
                 </button>
-                <p className="form-note">
+                <p className={styles.formNote}>
                   Bez spamu. Odezwiemy się gdy platforma będzie gotowa. Pierwsi
                   właściciele otrzymają obniżoną prowizję przez 6 miesięcy.
                 </p>
               </>
             )}
-            <div className="success-msg" style={{ display: ownerSubmitted ? "block" : "none" }}>
+            <div
+              className={styles.successMsg}
+              style={{ display: ownerSubmitted ? "block" : "none" }}
+            >
               <strong>Jesteś na liście! 🎉</strong>
               <br />
               Odezwiemy się do Ciebie jako jednego z pierwszych. Właściciele z
@@ -314,49 +320,51 @@ export function LandingPage({
             </div>
           </div>
 
-          <div className={`tab-content${activeTab === "renter" ? " active" : ""}`}>
+          <div
+            className={`${styles.tabContent}${activeTab === "renter" ? ` ${styles.active}` : ""}`}
+          >
             {cars.length > 0 ? (
               <>
-                <p className="choice-divider" style={{ marginTop: 0 }}>
+                <p className={styles.choiceDivider} style={{ marginTop: 0 }}>
                   Dostępne auta w tej chwili
                 </p>
-                <div className="mini-car-grid">
+                <div className={styles.miniCarGrid}>
                   {cars.map((car) => (
-                    <Link key={car.id} href={`/auta/${car.id}`} className="mini-car-card">
-                      <div className="mini-car-visual">
+                    <Link key={car.id} href={`/auta/${car.id}`} className={styles.miniCarCard}>
+                      <div className={styles.miniCarVisual}>
                         {car.imageUrl && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={car.imageUrl} alt={`${car.brand} ${car.model}`} />
                         )}
                       </div>
-                      <div className="mini-car-info">
-                        <div className="mini-car-name">
+                      <div className={styles.miniCarInfo}>
+                        <div className={styles.miniCarName}>
                           {car.brand} {car.model}
                         </div>
-                        <div className="mini-car-meta">
+                        <div className={styles.miniCarMeta}>
                           {car.city} · {car.pricePerDay.toFixed(0)} zł/dzień
                         </div>
                       </div>
                     </Link>
                   ))}
                 </div>
-                <Link href="/auta" className="choice-cta" style={{ marginTop: 20 }}>
+                <Link href="/auta" className={styles.choiceCta} style={{ marginTop: 20 }}>
                   Zobacz wszystkie dostępne auta →
                 </Link>
               </>
             ) : (
               <>
-                <Link href="/auta" className="choice-cta">
+                <Link href="/auta" className={styles.choiceCta}>
                   Przeglądaj dostępne auta →
                 </Link>
-                <p className="choice-divider">
+                <p className={styles.choiceDivider}>
                   Na razie żadne auto nie czeka jeszcze w Twojej okolicy — zostaw e-mail,
                   a powiadomimy Cię jako pierwszego
                 </p>
               </>
             )}
 
-            <div className="form-group">
+            <div className={styles.formGroup}>
               <label>E-mail</label>
               <input type="email" placeholder="anna@example.com" ref={renterEmail} />
             </div>
@@ -364,19 +372,22 @@ export function LandingPage({
               <>
                 <button
                   type="button"
-                  className="submit-btn"
+                  className={styles.submitBtn}
                   disabled={renterSubmitting}
                   onClick={() => submitSignup("renter")}
                 >
                   {renterSubmitting ? "Zapisywanie..." : "Powiadom mnie o nowych autach →"}
                 </button>
-                <p className="form-note">
+                <p className={styles.formNote}>
                   Bez spamu. Odezwiemy się gdy pierwsze auta będą dostępne w
                   Twoim mieście.
                 </p>
               </>
             )}
-            <div className="success-msg" style={{ display: renterSubmitted ? "block" : "none" }}>
+            <div
+              className={styles.successMsg}
+              style={{ display: renterSubmitted ? "block" : "none" }}
+            >
               <strong>Jesteś na liście! 🎉</strong>
               <br />
               Gdy pierwsze auta pojawią się w Twoim mieście, dostaniesz SMS i
@@ -388,26 +399,26 @@ export function LandingPage({
       </section>
 
       <section id="trust">
-        <div className="trust-item">
-          <span className="trust-num">0 zł</span>
-          <div className="trust-desc">Opłata za rejestrację</div>
+        <div className={styles.trustItem}>
+          <span className={styles.trustNum}>0 zł</span>
+          <div className={styles.trustDesc}>Opłata za rejestrację</div>
         </div>
-        <div className="trust-item">
-          <span className="trust-num">100%</span>
-          <div className="trust-desc">Ubezpieczenie w cenie</div>
+        <div className={styles.trustItem}>
+          <span className={styles.trustNum}>100%</span>
+          <div className={styles.trustDesc}>Ubezpieczenie w cenie</div>
         </div>
-        <div className="trust-item">
-          <span className="trust-num">5 dni</span>
-          <div className="trust-desc">Wypłata dla właściciela</div>
+        <div className={styles.trustItem}>
+          <span className={styles.trustNum}>5 dni</span>
+          <div className={styles.trustDesc}>Wypłata dla właściciela</div>
         </div>
-        <div className="trust-item">
-          <span className="trust-num">24/7</span>
-          <div className="trust-desc">Wsparcie techniczne</div>
+        <div className={styles.trustItem}>
+          <span className={styles.trustNum}>24/7</span>
+          <div className={styles.trustDesc}>Wsparcie techniczne</div>
         </div>
       </section>
 
       <footer>
-        <Link href="/" className="logo">
+        <Link href="/" className={styles.logo}>
           Go<span>Mambo</span>
         </Link>
         <p>
@@ -421,626 +432,6 @@ export function LandingPage({
           </a>
         </p>
       </footer>
-
-      <style jsx>{`
-        .gomambo-landing,
-        .gomambo-landing *,
-        .gomambo-landing *::before,
-        .gomambo-landing *::after {
-          box-sizing: border-box;
-        }
-        .gomambo-landing * {
-          margin: 0;
-          padding: 0;
-        }
-
-        .gomambo-landing {
-          --black: #000000;
-          --white: #fafafa;
-          --yellow: #f5c518;
-          --yellow-dim: #c9a010;
-          --gray: #888;
-          --gray-light: #1a1a1a;
-          --gray-mid: #2a2a2a;
-          --font: "Inter", system-ui, sans-serif;
-          scroll-behavior: smooth;
-          background: var(--black);
-          color: var(--white);
-          font-family: var(--font);
-          -webkit-font-smoothing: antialiased;
-          min-height: 100vh;
-        }
-
-        /* NAV */
-        .gomambo-landing nav {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          z-index: 100;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 20px 40px;
-          background: rgba(10, 10, 10, 0.85);
-          backdrop-filter: blur(12px);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .gomambo-landing :global(.logo) {
-          font-size: 18px;
-          font-weight: 900;
-          letter-spacing: -0.5px;
-          color: var(--white);
-          text-decoration: none;
-        }
-        .gomambo-landing :global(.logo span) {
-          color: var(--yellow);
-        }
-        .gomambo-landing .nav-actions {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
-        .gomambo-landing :global(.nav-login) {
-          font-size: 13px;
-          font-weight: 600;
-          color: var(--gray);
-          text-decoration: none;
-          white-space: nowrap;
-        }
-        .gomambo-landing :global(.nav-login:hover) {
-          color: var(--white);
-        }
-        .gomambo-landing :global(a.nav-cta) {
-          background: var(--yellow);
-          color: var(--black);
-          font-size: 13px;
-          font-weight: 700;
-          letter-spacing: 0.3px;
-          padding: 9px 20px;
-          border-radius: 6px;
-          text-decoration: none;
-          white-space: nowrap;
-          transition: background 0.2s;
-        }
-        .gomambo-landing :global(a.nav-cta:hover) {
-          background: var(--yellow-dim);
-        }
-
-        /* HERO */
-        .gomambo-landing #hero {
-          min-height: 100vh;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          padding: 120px 40px 80px;
-          position: relative;
-          overflow: hidden;
-          text-align: center;
-        }
-        .gomambo-landing .hero-bg {
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(
-            ellipse 80% 60% at 70% 50%,
-            rgba(245, 197, 24, 0.07) 0%,
-            transparent 70%
-          );
-          pointer-events: none;
-        }
-        .gomambo-landing .hero-eyebrow {
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 2.5px;
-          text-transform: uppercase;
-          color: var(--yellow);
-          margin-bottom: 24px;
-        }
-        .gomambo-landing .hero-headline {
-          font-size: clamp(42px, 7vw, 96px);
-          font-weight: 900;
-          line-height: 1;
-          letter-spacing: -2px;
-          max-width: 800px;
-          margin-bottom: 32px;
-        }
-        .gomambo-landing .hero-headline em {
-          font-style: normal;
-          color: var(--yellow);
-        }
-
-        /* EARNINGS COUNTER */
-        .gomambo-landing .counter-block {
-          margin: 0 auto;
-          display: inline-flex;
-          align-items: baseline;
-          gap: 8px;
-          background: var(--gray-light);
-          border: 1px solid rgba(245, 197, 24, 0.2);
-          border-radius: 12px;
-          padding: 20px 28px;
-          margin-bottom: 48px;
-        }
-        .gomambo-landing .counter-label {
-          font-size: 13px;
-          color: var(--gray);
-          font-weight: 500;
-          white-space: nowrap;
-        }
-        .gomambo-landing .counter-value {
-          font-size: clamp(32px, 5vw, 52px);
-          font-weight: 900;
-          color: var(--yellow);
-          letter-spacing: -1px;
-          font-variant-numeric: tabular-nums;
-        }
-        .gomambo-landing .counter-unit {
-          font-size: 18px;
-          color: var(--gray);
-          font-weight: 500;
-        }
-
-        .gomambo-landing .hero-sub {
-          font-size: 17px;
-          color: var(--gray);
-          line-height: 1.6;
-          max-width: 480px;
-          margin-bottom: 48px;
-          text-align: center;
-        }
-
-        /* SPLIT CTA */
-        .gomambo-landing .split-cta {
-          display: flex;
-          gap: 16px;
-          flex-wrap: wrap;
-          justify-content: center;
-        }
-        .gomambo-landing :global(.cta-card) {
-          flex: 1;
-          min-width: 220px;
-          max-width: 320px;
-          border-radius: 12px;
-          padding: 24px;
-          cursor: pointer;
-          text-decoration: none;
-          transition: transform 0.2s, box-shadow 0.2s;
-          display: block;
-        }
-        .gomambo-landing :global(.cta-card:hover) {
-          transform: translateY(-3px);
-        }
-        .gomambo-landing :global(.cta-card.owner) {
-          background: var(--yellow);
-          color: var(--black);
-        }
-        .gomambo-landing :global(.cta-card.renter) {
-          background: var(--gray-light);
-          color: var(--white);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .gomambo-landing :global(.cta-card .cta-role) {
-          font-size: 11px;
-          font-weight: 700;
-          letter-spacing: 2px;
-          text-transform: uppercase;
-          opacity: 0.6;
-          margin-bottom: 8px;
-        }
-        .gomambo-landing :global(.cta-card.owner .cta-role) {
-          color: var(--black);
-        }
-        .gomambo-landing :global(.cta-card .cta-title) {
-          font-size: 20px;
-          font-weight: 800;
-          margin-bottom: 6px;
-          letter-spacing: -0.3px;
-        }
-        .gomambo-landing :global(.cta-card .cta-desc) {
-          font-size: 13px;
-          opacity: 0.7;
-          line-height: 1.5;
-        }
-        .gomambo-landing :global(.cta-card.owner .cta-desc) {
-          color: var(--black);
-        }
-
-        /* SCROLL INDICATOR */
-        .gomambo-landing .scroll-hint {
-          position: absolute;
-          bottom: 32px;
-          left: 50%;
-          transform: translateX(-50%);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 8px;
-          color: var(--gray);
-          font-size: 11px;
-          letter-spacing: 1.5px;
-          text-transform: uppercase;
-          animation: bounce 2s infinite;
-        }
-        .gomambo-landing .scroll-hint svg {
-          opacity: 0.4;
-        }
-        @keyframes bounce {
-          0%,
-          100% {
-            transform: translateX(-50%) translateY(0);
-          }
-          50% {
-            transform: translateX(-50%) translateY(6px);
-          }
-        }
-
-        /* HOW IT WORKS */
-        .gomambo-landing #how {
-          padding: 100px 40px;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
-        }
-        .gomambo-landing .section-label {
-          font-size: 11px;
-          font-weight: 700;
-          letter-spacing: 2.5px;
-          text-transform: uppercase;
-          color: var(--yellow);
-          margin-bottom: 16px;
-        }
-        .gomambo-landing .section-title {
-          font-size: clamp(28px, 4vw, 48px);
-          font-weight: 900;
-          letter-spacing: -1px;
-          margin-bottom: 64px;
-          max-width: 540px;
-          line-height: 1.1;
-        }
-        .gomambo-landing .steps {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-          gap: 2px;
-        }
-        .gomambo-landing .step {
-          background: var(--gray-light);
-          padding: 36px 28px;
-          position: relative;
-        }
-        .gomambo-landing .step:first-child {
-          border-radius: 12px 0 0 12px;
-        }
-        .gomambo-landing .step:last-child {
-          border-radius: 0 12px 12px 0;
-        }
-        .gomambo-landing .step-num {
-          font-size: 11px;
-          font-weight: 700;
-          letter-spacing: 2px;
-          color: var(--yellow);
-          margin-bottom: 20px;
-          text-transform: uppercase;
-        }
-        .gomambo-landing .step-icon {
-          font-size: 28px;
-          margin-bottom: 16px;
-        }
-        .gomambo-landing .step :global(h3) {
-          font-size: 17px;
-          font-weight: 700;
-          margin-bottom: 10px;
-          letter-spacing: -0.3px;
-        }
-        .gomambo-landing .step :global(p) {
-          font-size: 14px;
-          color: var(--gray);
-          line-height: 1.6;
-        }
-
-        /* WAITLIST */
-        .gomambo-landing #waitlist {
-          padding: 100px 40px;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
-          background: var(--gray-light);
-        }
-        .gomambo-landing .waitlist-inner {
-          max-width: 560px;
-          margin: 0 auto;
-        }
-        .gomambo-landing .waitlist-tabs {
-          display: flex;
-          gap: 4px;
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 10px;
-          padding: 4px;
-          margin-bottom: 40px;
-          width: fit-content;
-        }
-        .gomambo-landing :global(.tab-btn) {
-          padding: 10px 24px;
-          border-radius: 7px;
-          border: none;
-          font-size: 14px;
-          font-weight: 600;
-          font-family: var(--font);
-          cursor: pointer;
-          transition: all 0.2s;
-          background: transparent;
-          color: var(--gray);
-        }
-        .gomambo-landing :global(.tab-btn.active) {
-          background: var(--yellow);
-          color: var(--black);
-        }
-        .gomambo-landing :global(.tab-content) {
-          display: none;
-        }
-        .gomambo-landing :global(.tab-content.active) {
-          display: block;
-        }
-        .gomambo-landing .form-group {
-          margin-bottom: 16px;
-        }
-        .gomambo-landing .form-group :global(label) {
-          display: block;
-          font-size: 12px;
-          font-weight: 600;
-          letter-spacing: 0.5px;
-          color: var(--gray);
-          margin-bottom: 8px;
-          text-transform: uppercase;
-        }
-        .gomambo-landing .form-group :global(input),
-        .gomambo-landing .form-group :global(select) {
-          width: 100%;
-          padding: 14px 16px;
-          background: var(--gray-mid);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 8px;
-          color: var(--white);
-          font-size: 15px;
-          font-family: var(--font);
-          transition: border-color 0.2s;
-          outline: none;
-          appearance: none;
-        }
-        .gomambo-landing .form-group :global(input:focus),
-        .gomambo-landing .form-group :global(select:focus) {
-          border-color: rgba(245, 197, 24, 0.5);
-        }
-        .gomambo-landing .form-group :global(select option) {
-          background: #1a1a1a;
-        }
-        .gomambo-landing .form-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-        }
-        .gomambo-landing :global(.submit-btn) {
-          width: 100%;
-          padding: 16px;
-          background: var(--yellow);
-          color: var(--black);
-          border: none;
-          border-radius: 8px;
-          font-size: 16px;
-          font-weight: 800;
-          font-family: var(--font);
-          cursor: pointer;
-          transition: background 0.2s;
-          margin-top: 8px;
-          letter-spacing: -0.2px;
-        }
-        .gomambo-landing :global(.submit-btn:hover) {
-          background: var(--yellow-dim);
-        }
-        .gomambo-landing :global(.submit-btn:disabled) {
-          opacity: 0.7;
-          cursor: default;
-        }
-        .gomambo-landing :global(.choice-cta) {
-          display: block;
-          width: 100%;
-          text-align: center;
-          padding: 16px;
-          background: var(--yellow);
-          color: var(--black);
-          border-radius: 8px;
-          font-size: 16px;
-          font-weight: 800;
-          letter-spacing: -0.2px;
-          text-decoration: none;
-          transition: background 0.2s;
-        }
-        .gomambo-landing :global(.choice-cta:hover) {
-          background: var(--yellow-dim);
-        }
-        .gomambo-landing .choice-divider {
-          font-size: 13px;
-          color: var(--gray);
-          text-align: center;
-          margin: 16px 0;
-          line-height: 1.5;
-        }
-        .gomambo-landing .mini-car-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-          gap: 10px;
-          margin-bottom: 8px;
-        }
-        .gomambo-landing :global(.mini-car-card) {
-          display: block;
-          background: var(--gray-mid);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 8px;
-          overflow: hidden;
-          text-decoration: none;
-          transition: transform 0.2s;
-        }
-        .gomambo-landing :global(.mini-car-card:hover) {
-          transform: translateY(-2px);
-        }
-        .gomambo-landing .mini-car-visual {
-          aspect-ratio: 4 / 3;
-          background: var(--gray-light);
-        }
-        .gomambo-landing .mini-car-visual :global(img) {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-        .gomambo-landing .mini-car-info {
-          padding: 10px 12px;
-        }
-        .gomambo-landing .mini-car-name {
-          font-size: 13px;
-          font-weight: 700;
-          color: var(--white);
-        }
-        .gomambo-landing .mini-car-meta {
-          font-size: 12px;
-          color: var(--gray);
-          margin-top: 2px;
-        }
-        .gomambo-landing .form-note {
-          font-size: 12px;
-          color: var(--gray);
-          margin-top: 12px;
-          line-height: 1.6;
-        }
-        .gomambo-landing .success-msg {
-          padding: 20px 24px;
-          background: rgba(245, 197, 24, 0.1);
-          border: 1px solid rgba(245, 197, 24, 0.3);
-          border-radius: 10px;
-          font-size: 15px;
-          color: var(--white);
-          line-height: 1.6;
-        }
-        .gomambo-landing .success-msg :global(strong) {
-          color: var(--yellow);
-        }
-
-        /* TRUST BAR */
-        .gomambo-landing #trust {
-          padding: 64px 40px;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 64px;
-          flex-wrap: wrap;
-        }
-        .gomambo-landing .trust-item {
-          text-align: center;
-        }
-        .gomambo-landing .trust-num {
-          font-size: 36px;
-          font-weight: 900;
-          color: var(--yellow);
-          letter-spacing: -1px;
-          display: block;
-        }
-        .gomambo-landing .trust-desc {
-          font-size: 13px;
-          color: var(--gray);
-          margin-top: 4px;
-        }
-
-        /* FOOTER */
-        .gomambo-landing footer {
-          padding: 40px;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          flex-wrap: wrap;
-          gap: 16px;
-        }
-        .gomambo-landing footer :global(.logo) {
-          font-size: 16px;
-        }
-        .gomambo-landing footer :global(p) {
-          font-size: 12px;
-          color: var(--gray);
-        }
-
-        /* RESPONSIVE */
-        @media (max-width: 640px) {
-          .gomambo-landing nav {
-            padding: 16px 20px;
-          }
-          .gomambo-landing :global(.logo) {
-            font-size: 16px;
-          }
-          .gomambo-landing .nav-actions {
-            gap: 10px;
-          }
-          .gomambo-landing :global(.nav-login) {
-            font-size: 12px;
-          }
-          .gomambo-landing :global(a.nav-cta) {
-            font-size: 12px;
-            padding: 8px 14px;
-          }
-          .gomambo-landing #hero,
-          .gomambo-landing #how,
-          .gomambo-landing #waitlist,
-          .gomambo-landing #trust {
-            padding-left: 20px;
-            padding-right: 20px;
-          }
-          .gomambo-landing .hero-headline {
-            letter-spacing: -1px;
-          }
-          .gomambo-landing .counter-block {
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            width: 100%;
-            padding: 16px 20px;
-          }
-          .gomambo-landing .counter-label {
-            white-space: normal;
-            text-align: center;
-          }
-          .gomambo-landing .split-cta {
-            flex-direction: column;
-          }
-          .gomambo-landing :global(.cta-card) {
-            max-width: 100%;
-          }
-          .gomambo-landing .step:first-child,
-          .gomambo-landing .step:last-child {
-            border-radius: 0;
-          }
-          .gomambo-landing .step:first-child {
-            border-radius: 12px 12px 0 0;
-          }
-          .gomambo-landing .step:last-child {
-            border-radius: 0 0 12px 12px;
-          }
-          .gomambo-landing .form-row {
-            grid-template-columns: 1fr;
-          }
-          .gomambo-landing #trust {
-            gap: 32px;
-          }
-          .gomambo-landing footer {
-            flex-direction: column;
-            text-align: center;
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .gomambo-landing .scroll-hint {
-            animation: none;
-          }
-          .gomambo-landing * {
-            transition-duration: 0.01ms !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
