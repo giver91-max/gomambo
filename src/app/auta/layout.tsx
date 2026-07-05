@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SiteFooter } from "@/components/site-footer";
 
 export default async function AutaLayout({
   children,
@@ -43,6 +44,7 @@ export default async function AutaLayout({
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <SiteFooter />
     </div>
   );
 }

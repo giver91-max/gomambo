@@ -423,13 +423,13 @@ export function LandingPage({
         </Link>
         <p>
           © 2026 GoMambo · Polska ·{" "}
-          <a href="#" style={{ color: "var(--gray)", textDecoration: "none" }}>
+          <Link href="/regulamin" style={{ color: "var(--gray)", textDecoration: "none" }}>
             Regulamin
-          </a>{" "}
+          </Link>{" "}
           ·{" "}
-          <a href="#" style={{ color: "var(--gray)", textDecoration: "none" }}>
+          <Link href="/polityka-prywatnosci" style={{ color: "var(--gray)", textDecoration: "none" }}>
             Polityka prywatności
-          </a>
+          </Link>
         </p>
       </footer>
     </div>
