@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { sendNotificationEmail } from "@/lib/email";
 
 export type CarFormState = { error: string | null };
 
@@ -99,6 +100,23 @@ export async function createCar(
       return { error: imageRowError.message };
     }
   }
+
+  const ownerName = String(user.user_metadata?.full_name ?? user.email ?? "nieznany");
+
+  await sendNotificationEmail({
+    to: "auto@gomambo.pl",
+    subject: `Nowe auto do weryfikacji: ${brand} ${model}`,
+    html: `
+      <p>Właściciel dodał nowe auto oczekujące na zatwierdzenie.</p>
+      <ul>
+        <li><strong>Auto:</strong> ${brand} ${model} (${year})</li>
+        <li><strong>Miasto:</strong> ${city}</li>
+        <li><strong>Cena:</strong> ${pricePerDay.toFixed(2)} zł/dzień</li>
+        <li><strong>Właściciel:</strong> ${ownerName} (${user.email})</li>
+      </ul>
+      <p><a href="https://www.gomambo.pl/admin">Przejdź do panelu admina</a></p>
+    `,
+  });
 
   revalidatePath("/dashboard");
   redirect("/dashboard");

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { sendNotificationEmail } from "@/lib/email";
 
 export type AuthActionState = { error: string | null };
 
@@ -41,6 +42,18 @@ export async function signUp(
   if (error) {
     return { error: error.message };
   }
+
+  await sendNotificationEmail({
+    to: "user@gomambo.pl",
+    subject: `Nowa rejestracja: ${fullName}`,
+    html: `
+      <p>Nowy użytkownik zarejestrował się w GoMambo.</p>
+      <ul>
+        <li><strong>Imię i nazwisko:</strong> ${fullName}</li>
+        <li><strong>Email:</strong> ${email}</li>
+      </ul>
+    `,
+  });
 
   redirect("/register/sprawdz-email");
 }
