@@ -1,27 +1,20 @@
+import { cache } from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 
-export default async function CarDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+const getCar = cache(async (id: string) => {
   const supabase = await createClient();
-
   const { data: car } = await supabase
     .from("cars")
     .select("*, car_images(storage_path, position)")
-    .eq("id", params.id)
+    .eq("id", id)
     .eq("status", "approved")
     .order("position", { referencedTable: "car_images", ascending: true })
     .single();
 
-  if (!car) {
-    notFound();
-  }
-
-  const images = (car.car_images ?? []) as {
+  const images = (car?.car_images ?? []) as {
     storage_path: string;
     position: number;
   }[];
@@ -30,6 +23,48 @@ export default async function CarDetailPage({
       supabase.storage.from("car-images").getPublicUrl(img.storage_path).data
         .publicUrl
   );
+
+  return { car, imageUrls };
+});
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string };
+}): Promise<Metadata> {
+  const { car, imageUrls } = await getCar(params.id);
+
+  if (!car) {
+    return { title: "Auto nie znalezione" };
+  }
+
+  const title = `${car.brand} ${car.model} (${car.year}) — ${car.city}`;
+  const description =
+    car.description ??
+    `Wynajmij ${car.brand} ${car.model} z ${car.year} roku w ${car.city} za ${Number(car.price_per_day).toFixed(0)} zł/dzień na GoMambo.`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: `/auta/${car.id}` },
+    openGraph: {
+      title,
+      description,
+      images: imageUrls.length > 0 ? [imageUrls[0]] : undefined,
+    },
+  };
+}
+
+export default async function CarDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const { car, imageUrls } = await getCar(params.id);
+
+  if (!car) {
+    notFound();
+  }
 
   return (
     <div className="space-y-6">

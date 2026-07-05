@@ -1,9 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+
+export const metadata: Metadata = {
+  title: "Wynajmij auto od sąsiada",
+  description:
+    "Przeglądaj sprawdzone samochody dostępne do wynajęcia od prywatnych właścicieli w Twojej okolicy. Filtruj po mieście i cenie.",
+  alternates: { canonical: "/auta" },
+};
 
 export default async function AutaPage({
   searchParams,
