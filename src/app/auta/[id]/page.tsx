@@ -97,21 +97,11 @@ export default async function CarDetailPage({
         <div className="aspect-video w-full rounded-lg bg-muted" />
       )}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">
-            {car.brand} {car.model} ({car.year})
-          </h1>
-          <p className="text-muted-foreground">{car.city}</p>
-        </div>
-        <Card className="sm:w-56">
-          <CardContent className="py-4 text-center">
-            <p className="text-2xl font-bold">
-              {Number(car.price_per_day).toFixed(2)} zł
-            </p>
-            <p className="text-sm text-muted-foreground">za dzień</p>
-          </CardContent>
-        </Card>
+      <div>
+        <h1 className="text-2xl font-bold">
+          {car.brand} {car.model} ({car.year})
+        </h1>
+        <p className="text-muted-foreground">{car.city}</p>
       </div>
 
       {car.description && (
@@ -125,7 +115,15 @@ export default async function CarDetailPage({
 
       <Card>
         <CardContent className="space-y-3 py-4">
-          <h2 className="font-semibold">Dostępność i zapytanie</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">Dostępność i zapytanie</h2>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                {Number(car.price_per_day).toFixed(2)} zł
+              </span>{" "}
+              / dzień
+            </p>
+          </div>
           <AvailabilityAndInquiry carId={car.id} availableDates={availableDates} />
         </CardContent>
       </Card>

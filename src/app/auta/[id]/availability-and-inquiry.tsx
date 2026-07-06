@@ -14,7 +14,7 @@ export function AvailabilityAndInquiry({
   const [range, setRange] = useState<SelectedRange>({ start: "", end: null });
 
   return (
-    <div className="space-y-4">
+    <div className="grid gap-6 sm:grid-cols-[20rem_1fr] sm:items-start">
       <AvailabilityView availableDates={availableDates} onRangeChange={setRange} />
       <InquiryForm carId={carId} selectedRange={range} />
     </div>
