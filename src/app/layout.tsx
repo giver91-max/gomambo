@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
+import { AnalyticsConsent } from "@/components/analytics-consent";
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "@/lib/site";
 
 const geistSans = localFont({
@@ -19,11 +20,13 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "GoMambo — wynajem i udostępnianie aut P2P w Polsce",
+    default: "GoMambo — wypożyczalnia i wynajem aut P2P w Polsce",
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
   keywords: [
+    "wypożyczalnia samochodów",
+    "wypożyczalnia aut",
     "wynajem samochodów",
     "car sharing",
     "wypożyczalnia aut peer-to-peer",
@@ -40,13 +43,13 @@ export const metadata: Metadata = {
     locale: "pl_PL",
     url: SITE_URL,
     siteName: SITE_NAME,
-    title: "GoMambo — wynajem i udostępnianie aut P2P w Polsce",
+    title: "GoMambo — wypożyczalnia i wynajem aut P2P w Polsce",
     description: SITE_DESCRIPTION,
     images: [{ url: "/hero.png", width: 1672, height: 941, alt: SITE_NAME }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "GoMambo — wynajem i udostępnianie aut P2P w Polsce",
+    title: "GoMambo — wypożyczalnia i wynajem aut P2P w Polsce",
     description: SITE_DESCRIPTION,
     images: ["/hero.png"],
   },
@@ -58,7 +61,7 @@ export const metadata: Metadata = {
 
 const organizationJsonLd = {
   "@context": "https://schema.org",
-  "@type": "Organization",
+  "@type": "AutoRental",
   name: SITE_NAME,
   url: SITE_URL,
   logo: `${SITE_URL}/icon.png`,
@@ -76,6 +79,7 @@ export default function RootLayout({
       <body className="antialiased">
         {children}
         <Toaster />
+        <AnalyticsConsent />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}

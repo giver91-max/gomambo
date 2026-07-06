@@ -19,7 +19,7 @@ export default function PolitykaPrywatnosciPage() {
       <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">Polityka prywatności</h1>
-          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 5 lipca 2026</p>
+          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 6 lipca 2026</p>
         </div>
 
         <section className="space-y-2">
@@ -72,7 +72,8 @@ export default function PolitykaPrywatnosciPage() {
           <ul className="list-disc space-y-1 pl-6">
             <li>Supabase — baza danych, uwierzytelnianie użytkowników i przechowywanie zdjęć,</li>
             <li>Vercel — hosting i infrastruktura serwerowa Serwisu,</li>
-            <li>Resend — wysyłka wiadomości e-mail (powiadomienia o rejestracji i nowych ogłoszeniach).</li>
+            <li>Resend — wysyłka wiadomości e-mail (powiadomienia o rejestracji i nowych ogłoszeniach),</li>
+            <li>Google Analytics (Google Ireland Ltd.) — wyłącznie po wyrażeniu zgody na cookies analityczne, opisane w sekcji 7.</li>
           </ul>
           <p>
             Dostawcy ci mogą przetwarzać dane na serwerach zlokalizowanych poza
@@ -119,10 +120,26 @@ export default function PolitykaPrywatnosciPage() {
         <section className="space-y-2">
           <h2 className="text-lg font-semibold">7. Pliki cookies</h2>
           <p>
-            Serwis wykorzystuje wyłącznie niezbędne pliki cookies, odpowiedzialne za
-            utrzymanie sesji zalogowanego użytkownika (uwierzytelnianie). Nie stosujemy
-            obecnie plików cookies analitycznych ani marketingowych. Cookies niezbędne do
-            działania Serwisu nie wymagają odrębnej zgody użytkownika.
+            Serwis wykorzystuje niezbędne pliki cookies, odpowiedzialne za utrzymanie
+            sesji zalogowanego użytkownika (uwierzytelnianie). Te pliki cookies nie
+            wymagają odrębnej zgody użytkownika.
+          </p>
+          <p>
+            Za Twoją zgodą Serwis korzysta również z plików cookies Google Analytics,
+            które pomagają nam analizować ruch w Serwisie (liczbę odwiedzin,
+            odwiedzane podstrony, źródła wizyt). Zgodę można wyrazić lub odrzucić w
+            banerze wyświetlanym przy pierwszej wizycie w Serwisie; brak zgody nie
+            ogranicza dostępu do żadnych funkcji Serwisu. Więcej informacji o
+            przetwarzaniu danych przez Google znajduje się w{" "}
+            <a
+              href="https://policies.google.com/privacy"
+              className="underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              polityce prywatności Google
+            </a>
+            .
           </p>
         </section>
 

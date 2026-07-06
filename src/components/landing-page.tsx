@@ -186,9 +186,9 @@ export function LandingPage({
         </div>
 
         <p className={styles.heroSub}>
-          GoMambo to pierwsza polska platforma peer-to-peer wynajmu aut. Łączymy
-          właścicieli samochodów z osobami, które potrzebują auta — bez
-          pośredników i bez zbędnych formalności.
+          GoMambo to internetowa wypożyczalnia i pierwsza polska platforma
+          peer-to-peer wynajmu aut. Łączymy właścicieli samochodów z osobami,
+          które potrzebują auta — bez pośredników i bez zbędnych formalności.
         </p>
 
         <div className={styles.splitCta}>

@@ -7,9 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Wynajmij auto od sąsiada",
+  title: "Wypożyczalnia aut — wynajmij auto od sąsiada",
   description:
-    "Przeglądaj sprawdzone samochody dostępne do wynajęcia od prywatnych właścicieli w Twojej okolicy. Filtruj po mieście i cenie.",
+    "GoMambo to internetowa wypożyczalnia samochodów peer-to-peer. Przeglądaj sprawdzone auta dostępne do wynajęcia od prywatnych właścicieli w Twojej okolicy. Filtruj po mieście i cenie.",
   alternates: { canonical: "/auta" },
 };
 
@@ -49,7 +49,7 @@ export default async function AutaPage({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Przeglądaj auta</h1>
+        <h1 className="text-2xl font-bold">Wypożyczalnia aut — przeglądaj oferty</h1>
         <p className="text-sm text-muted-foreground">
           Zatwierdzone samochody dostępne od właścicieli w Twojej okolicy.
         </p>
