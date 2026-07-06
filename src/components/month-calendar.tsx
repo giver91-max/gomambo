@@ -55,13 +55,13 @@ export function MonthCalendar({
         {days.map(({ date, iso, inMonth }) => {
           const isPast = minDateIso ? iso < minDateIso : false;
           const isHighlighted = highlightedDates.has(iso);
-          const isRangeStart = selectedRange?.start === iso;
-          const isRangeEnd = selectedRange?.end === iso;
-          const isInRange =
-            !!selectedRange?.start &&
-            !!selectedRange?.end &&
-            iso >= selectedRange.start &&
-            iso <= selectedRange.end;
+          const isSelected =
+            selectedRange?.start === iso ||
+            selectedRange?.end === iso ||
+            (!!selectedRange?.start &&
+              !!selectedRange?.end &&
+              iso >= selectedRange.start &&
+              iso <= selectedRange.end);
           const isDisabled = isPast || (restrictToHighlighted && !isHighlighted);
           const clickable = !isDisabled && !!onDayClick;
 
@@ -74,9 +74,8 @@ export function MonthCalendar({
               className={cn(
                 "aspect-square rounded-md text-sm transition-colors",
                 !inMonth && "text-muted-foreground/40",
-                isHighlighted && "bg-primary/20",
-                (isRangeStart || isRangeEnd) && "bg-primary text-primary-foreground",
-                isInRange && !isRangeStart && !isRangeEnd && "bg-primary/40",
+                isHighlighted && !isSelected && "bg-primary/20",
+                isSelected && "bg-primary text-primary-foreground",
                 isDisabled && "cursor-not-allowed opacity-30",
                 clickable && "cursor-pointer hover:bg-muted"
               )}

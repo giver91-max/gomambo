@@ -50,8 +50,8 @@ export function AvailabilityView({
         restrictToHighlighted
       />
       <p className="text-xs text-muted-foreground">
-        Zielone dni są dostępne. Kliknij dzień początkowy i końcowy, aby zaznaczyć
-        termin — zostanie dołączony do zapytania.
+        Podświetlone dni są dostępne. Kliknij dzień początkowy i końcowy, aby
+        zaznaczyć termin — zostanie dołączony do zapytania.
       </p>
     </div>
   );
