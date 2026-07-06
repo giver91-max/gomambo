@@ -61,7 +61,9 @@ export function AvailabilityEditor({
         zaznaczyć cały zakres dat poniżej.
       </p>
 
-      <MonthCalendar highlightedDates={available} onDayClick={handleDayClick} minDateIso={todayIso} />
+      <div className="max-w-xs">
+        <MonthCalendar highlightedDates={available} onDayClick={handleDayClick} minDateIso={todayIso} />
+      </div>
 
       <div className="flex flex-wrap items-end gap-2 border-t pt-4">
         <div className="space-y-1.5">

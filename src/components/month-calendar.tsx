@@ -22,7 +22,7 @@ export function MonthCalendar({
   const days = getMonthGrid(month);
 
   return (
-    <div className="w-full max-w-xs space-y-2">
+    <div className="w-full space-y-2">
       <div className="flex items-center justify-between">
         <Button
           type="button"
