@@ -82,16 +82,14 @@ export default async function CarDetailPage({
   return (
     <div className="space-y-6">
       {imageUrls.length > 0 ? (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {imageUrls.map((src, i) => (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               key={i}
               src={src}
               alt={`${car.brand} ${car.model} - zdjęcie ${i + 1}`}
-              className={`w-full rounded-lg object-cover ${
-                i === 0 ? "sm:col-span-2 aspect-video" : "aspect-square"
-              }`}
+              className="aspect-square w-full rounded-lg object-cover"
             />
           ))}
         </div>
