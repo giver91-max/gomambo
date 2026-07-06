@@ -32,6 +32,13 @@ export type CarImage = {
   created_at: string;
 };
 
+export type CarAvailability = {
+  id: string;
+  car_id: string;
+  date: string;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -69,6 +76,20 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "car_images_car_id_fkey";
+            columns: ["car_id"];
+            isOneToOne: false;
+            referencedRelation: "cars";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      car_availability: {
+        Row: CarAvailability;
+        Insert: Partial<CarAvailability> & { car_id: string; date: string };
+        Update: Partial<CarAvailability>;
+        Relationships: [
+          {
+            foreignKeyName: "car_availability_car_id_fkey";
             columns: ["car_id"];
             isOneToOne: false;
             referencedRelation: "cars";

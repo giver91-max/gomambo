@@ -56,7 +56,7 @@ export default async function DashboardPage() {
                   {statusLabel[car.status]}
                 </Badge>
               </CardHeader>
-              <CardContent className="space-y-1 text-sm text-muted-foreground">
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
                 <p>{car.city}</p>
                 <p>{Number(car.price_per_day).toFixed(2)} zł / dzień</p>
                 {car.status === "rejected" && car.rejection_reason && (
@@ -64,6 +64,12 @@ export default async function DashboardPage() {
                     Powód odrzucenia: {car.rejection_reason}
                   </p>
                 )}
+                <Link
+                  href={`/dashboard/cars/${car.id}/availability`}
+                  className="inline-block text-sm text-primary hover:underline"
+                >
+                  Zarządzaj dostępnością →
+                </Link>
               </CardContent>
             </Card>
           ))}

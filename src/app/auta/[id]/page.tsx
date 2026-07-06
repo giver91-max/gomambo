@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
+import { AvailabilityAndInquiry } from "./availability-and-inquiry";
+import { toISODate } from "@/lib/calendar";
 
 const getCar = cache(async (id: string) => {
   const supabase = await createClient();
@@ -24,7 +26,18 @@ const getCar = cache(async (id: string) => {
         .publicUrl
   );
 
-  return { car, imageUrls };
+  let availableDates: string[] = [];
+  if (car) {
+    const { data: availability } = await supabase
+      .from("car_availability")
+      .select("date")
+      .eq("car_id", car.id)
+      .gte("date", toISODate(new Date()))
+      .order("date");
+    availableDates = (availability ?? []).map((row) => row.date);
+  }
+
+  return { car, imageUrls, availableDates };
 });
 
 export async function generateMetadata({
@@ -60,7 +73,7 @@ export default async function CarDetailPage({
 }: {
   params: { id: string };
 }) {
-  const { car, imageUrls } = await getCar(params.id);
+  const { car, imageUrls, availableDates } = await getCar(params.id);
 
   if (!car) {
     notFound();
@@ -111,6 +124,13 @@ export default async function CarDetailPage({
           </p>
         </div>
       )}
+
+      <Card>
+        <CardContent className="space-y-3 py-4">
+          <h2 className="font-semibold">Dostępność i zapytanie</h2>
+          <AvailabilityAndInquiry carId={car.id} availableDates={availableDates} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
