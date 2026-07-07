@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { getRecaptchaToken } from "@/lib/recaptcha-client";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 8;
@@ -59,6 +60,8 @@ export function NewCarForm() {
 
     startTransition(async () => {
       setStatus("Zapisywanie danych auta…");
+      const token = await getRecaptchaToken("add_car");
+      formData.set("recaptchaToken", token ?? "");
       const draft = await createCarDraft({ error: null }, formData);
       if (draft.error || !draft.carId) {
         setError(draft.error ?? "Nie udało się zapisać auta.");
@@ -106,7 +109,9 @@ export function NewCarForm() {
 
       setStatus("Finalizowanie…");
       const finalize = await attachCarImages(carId, uploaded);
-      if (finalize.error) {
+      // attachCarImages redirects on success instead of returning a value —
+      // only handle the result on failure, otherwise the page is navigating away.
+      if (finalize?.error) {
         setError(finalize.error);
         setStatus(null);
       }

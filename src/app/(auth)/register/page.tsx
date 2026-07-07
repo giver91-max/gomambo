@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
-import { useFormState } from "react-dom";
+import { Suspense, useState, useTransition } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { signUp, type AuthActionState } from "../actions";
@@ -14,7 +13,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { SubmitButton } from "@/components/submit-button";
+import { Button } from "@/components/ui/button";
+import { getRecaptchaToken } from "@/lib/recaptcha-client";
 
 const initialState: AuthActionState = { error: null };
 
@@ -27,9 +27,23 @@ export default function RegisterPage() {
 }
 
 function RegisterForm() {
-  const [state, formAction] = useFormState(signUp, initialState);
+  const [state, setState] = useState<AuthActionState>(initialState);
+  const [isPending, startTransition] = useTransition();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/dashboard";
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const token = await getRecaptchaToken("register");
+      formData.set("recaptchaToken", token ?? "");
+      const result = await signUp(initialState, formData);
+      // signUp redirects on success instead of returning a value — only
+      // update state on failure, otherwise the page is already navigating away.
+      if (result) setState(result);
+    });
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-muted/30 px-4">
@@ -44,7 +58,7 @@ function RegisterForm() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={formAction} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <input type="hidden" name="next" value={next} />
             <div className="space-y-2">
               <Label htmlFor="fullName">Imię i nazwisko</Label>
@@ -68,7 +82,9 @@ function RegisterForm() {
             {state.error && (
               <p className="text-sm text-destructive">{state.error}</p>
             )}
-            <SubmitButton>Zarejestruj się</SubmitButton>
+            <Button type="submit" className="w-full" disabled={isPending}>
+              {isPending ? "Chwileczkę…" : "Zarejestruj się"}
+            </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Masz już konto?{" "}

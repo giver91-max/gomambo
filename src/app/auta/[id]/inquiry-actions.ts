@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
+import { verifyRecaptcha } from "@/lib/recaptcha";
 
 export type InquiryState = { error: string | null; success?: boolean };
 
@@ -24,12 +25,16 @@ export async function sendInquiry(
   const message = String(formData.get("message") ?? "").trim();
   const rangeStart = String(formData.get("rangeStart") ?? "").trim();
   const rangeEnd = String(formData.get("rangeEnd") ?? "").trim();
+  const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
 
   if (!carId || !name || !email || !message) {
     return { error: "Wypełnij imię, e-mail i wiadomość." };
   }
   if (!EMAIL_RE.test(email)) {
     return { error: "Podaj prawidłowy adres e-mail." };
+  }
+  if (!(await verifyRecaptcha(recaptchaToken, "inquiry"))) {
+    return { error: "Weryfikacja antyspamowa nie powiodła się. Spróbuj ponownie." };
   }
 
   const supabase = await createClient();

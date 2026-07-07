@@ -1,11 +1,12 @@
 "use client";
 
-import { useFormState } from "react-dom";
+import { useState, useTransition } from "react";
 import { sendInquiry, type InquiryState } from "./inquiry-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { SubmitButton } from "@/components/submit-button";
+import { Button } from "@/components/ui/button";
+import { getRecaptchaToken } from "@/lib/recaptcha-client";
 import type { SelectedRange } from "./availability-view";
 
 const initialState: InquiryState = { error: null };
@@ -17,7 +18,8 @@ export function InquiryForm({
   carId: string;
   selectedRange?: SelectedRange;
 }) {
-  const [state, formAction] = useFormState(sendInquiry, initialState);
+  const [state, setState] = useState<InquiryState>(initialState);
+  const [isPending, startTransition] = useTransition();
 
   if (state.success) {
     return (
@@ -28,8 +30,19 @@ export function InquiryForm({
     );
   }
 
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const token = await getRecaptchaToken("inquiry");
+      formData.set("recaptchaToken", token ?? "");
+      const result = await sendInquiry(initialState, formData);
+      setState(result);
+    });
+  }
+
   return (
-    <form action={formAction} className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-3">
       <input type="hidden" name="carId" value={carId} />
       <input type="hidden" name="rangeStart" value={selectedRange?.start ?? ""} />
       <input type="hidden" name="rangeEnd" value={selectedRange?.end ?? ""} />
@@ -85,7 +98,9 @@ export function InquiryForm({
 
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
 
-      <SubmitButton>Zapytaj o dostępność</SubmitButton>
+      <Button type="submit" className="w-full" disabled={isPending}>
+        {isPending ? "Chwileczkę…" : "Zapytaj o dostępność"}
+      </Button>
     </form>
   );
 }

@@ -19,7 +19,7 @@ export default function PolitykaPrywatnosciPage() {
       <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">Polityka prywatności</h1>
-          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 6 lipca 2026</p>
+          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 7 lipca 2026</p>
         </div>
 
         <section className="space-y-2">
@@ -73,7 +73,8 @@ export default function PolitykaPrywatnosciPage() {
             <li>Supabase — baza danych, uwierzytelnianie użytkowników i przechowywanie zdjęć,</li>
             <li>Vercel — hosting i infrastruktura serwerowa Serwisu,</li>
             <li>Resend — wysyłka wiadomości e-mail (powiadomienia o rejestracji i nowych ogłoszeniach),</li>
-            <li>Google Analytics (Google Ireland Ltd.) — wyłącznie po wyrażeniu zgody na cookies analityczne, opisane w sekcji 7.</li>
+            <li>Google Analytics (Google Ireland Ltd.) — wyłącznie po wyrażeniu zgody na cookies analityczne, opisane w sekcji 7,</li>
+            <li>Google reCAPTCHA (Google Ireland Ltd.) — ochrona formularzy przed botami i spamem, w oparciu o prawnie uzasadniony interes administratora (bezpieczeństwo Serwisu).</li>
           </ul>
           <p>
             Dostawcy ci mogą przetwarzać dane na serwerach zlokalizowanych poza
@@ -121,8 +122,10 @@ export default function PolitykaPrywatnosciPage() {
           <h2 className="text-lg font-semibold">7. Pliki cookies</h2>
           <p>
             Serwis wykorzystuje niezbędne pliki cookies, odpowiedzialne za utrzymanie
-            sesji zalogowanego użytkownika (uwierzytelnianie). Te pliki cookies nie
-            wymagają odrębnej zgody użytkownika.
+            sesji zalogowanego użytkownika (uwierzytelnianie), oraz pliki cookies
+            Google reCAPTCHA, chroniące formularze przed botami i spamem. Te pliki
+            cookies nie wymagają odrębnej zgody użytkownika — są niezbędne do
+            bezpiecznego działania Serwisu.
           </p>
           <p>
             Za Twoją zgodą Serwis korzysta również z plików cookies Google Analytics,

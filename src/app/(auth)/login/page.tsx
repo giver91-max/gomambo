@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
-import { useFormState } from "react-dom";
+import { Suspense, useState, useTransition } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { signIn, type AuthActionState } from "../actions";
@@ -14,7 +13,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { SubmitButton } from "@/components/submit-button";
+import { Button } from "@/components/ui/button";
+import { getRecaptchaToken } from "@/lib/recaptcha-client";
 
 const initialState: AuthActionState = { error: null };
 
@@ -27,9 +27,23 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
-  const [state, formAction] = useFormState(signIn, initialState);
+  const [state, setState] = useState<AuthActionState>(initialState);
+  const [isPending, startTransition] = useTransition();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") ?? "/dashboard";
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const token = await getRecaptchaToken("login");
+      formData.set("recaptchaToken", token ?? "");
+      const result = await signIn(initialState, formData);
+      // signIn redirects on success instead of returning a value — only
+      // update state on failure, otherwise the page is already navigating away.
+      if (result) setState(result);
+    });
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-muted/30 px-4">
@@ -42,7 +56,7 @@ function LoginForm() {
           <CardDescription>Panel właściciela i administratora.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={formAction} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <input type="hidden" name="redirectTo" value={redirectTo} />
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -61,7 +75,9 @@ function LoginForm() {
             {state.error && (
               <p className="text-sm text-destructive">{state.error}</p>
             )}
-            <SubmitButton>Zaloguj się</SubmitButton>
+            <Button type="submit" className="w-full" disabled={isPending}>
+              {isPending ? "Chwileczkę…" : "Zaloguj się"}
+            </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
             Nie masz konta?{" "}

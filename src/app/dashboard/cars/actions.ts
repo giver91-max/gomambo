@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { sendNotificationEmail } from "@/lib/email";
+import { verifyRecaptcha } from "@/lib/recaptcha";
 
 export type CarFormState = { error: string | null };
 export type CarDraftResult = { error: string | null; carId?: string };
@@ -32,6 +33,7 @@ export async function createCarDraft(
   const pricePerDay = Number(formData.get("price_per_day"));
   const city = String(formData.get("city") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
+  const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
 
   if (!brand || !model || !city) {
     return { error: "Wypełnij markę, model i miasto." };
@@ -41,6 +43,9 @@ export async function createCarDraft(
   }
   if (!(pricePerDay > 0)) {
     return { error: "Cena za dzień musi być większa od zera." };
+  }
+  if (!(await verifyRecaptcha(recaptchaToken, "add_car"))) {
+    return { error: "Weryfikacja antyspamowa nie powiodła się. Spróbuj ponownie." };
   }
 
   const { data: car, error: carError } = await supabase
