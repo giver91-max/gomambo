@@ -45,6 +45,16 @@ function LoginForm() {
     });
   }
 
+  // Pressing Enter in a text input should submit the form like a native
+  // submit button does; make that explicit instead of relying on the
+  // browser's implicit-submission heuristic to fire onSubmit reliably.
+  function handleKeyDown(e: React.KeyboardEvent<HTMLFormElement>) {
+    if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+      e.preventDefault();
+      e.currentTarget.requestSubmit();
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-muted/30 px-4">
       <Link href="/" className="text-lg font-black tracking-tight">
@@ -56,7 +66,7 @@ function LoginForm() {
           <CardDescription>Panel właściciela i administratora.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4">
             <input type="hidden" name="redirectTo" value={redirectTo} />
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
