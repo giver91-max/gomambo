@@ -1,26 +1,17 @@
 "use client";
 
 import Script from "next/script";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { CONSENT_COOKIE, type Consent } from "@/lib/consent";
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
-const CONSENT_KEY = "gomambo-cookie-consent";
 
-type Consent = "accepted" | "rejected" | null;
-
-export function AnalyticsConsent() {
-  const [consent, setConsent] = useState<Consent>(null);
-  const [checkedStorage, setCheckedStorage] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(CONSENT_KEY);
-    setConsent(stored === "accepted" || stored === "rejected" ? stored : null);
-    setCheckedStorage(true);
-  }, []);
+export function AnalyticsConsent({ initialConsent }: { initialConsent: Consent }) {
+  const [consent, setConsent] = useState<Consent>(initialConsent);
 
   function choose(value: "accepted" | "rejected") {
-    localStorage.setItem(CONSENT_KEY, value);
+    document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=31536000; SameSite=Lax`;
     setConsent(value);
   }
 
@@ -43,7 +34,7 @@ export function AnalyticsConsent() {
         </>
       )}
 
-      {checkedStorage && consent === null && (
+      {consent === null && (
         <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-background p-4 shadow-lg">
           <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 sm:flex-row">
             <p className="text-sm text-muted-foreground">

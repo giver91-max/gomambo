@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { cookies } from "next/headers";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { AnalyticsConsent } from "@/components/analytics-consent";
+import { CONSENT_COOKIE, type Consent } from "@/lib/consent";
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "@/lib/site";
 
 const geistSans = localFont({
@@ -69,17 +71,21 @@ const organizationJsonLd = {
   areaServed: "PL",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const stored = cookieStore.get(CONSENT_COOKIE)?.value;
+  const initialConsent: Consent = stored === "accepted" || stored === "rejected" ? stored : null;
+
   return (
     <html lang="pl" className={cn("font-sans", geistSans.variable, geistMono.variable)}>
       <body className="antialiased">
         {children}
         <Toaster />
-        <AnalyticsConsent />
+        <AnalyticsConsent initialConsent={initialConsent} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
