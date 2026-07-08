@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { SiteFooter } from "@/components/site-footer";
+import { BackButton } from "@/components/back-button";
 
 export const metadata: Metadata = {
   title: "Polityka prywatności",
@@ -17,6 +18,8 @@ export default function PolitykaPrywatnosciPage() {
       </header>
 
       <main className="mx-auto max-w-3xl space-y-6 px-6 py-10">
+        <BackButton />
+
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">Polityka prywatności</h1>
           <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 7 lipca 2026</p>

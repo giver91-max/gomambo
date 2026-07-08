@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { AvailabilityAndInquiry } from "./availability-and-inquiry";
 import { toISODate } from "@/lib/calendar";
+import { BackButton } from "@/components/back-button";
 
 const getCar = cache(async (id: string) => {
   const supabase = await createClient();
@@ -82,6 +83,8 @@ export default async function CarDetailPage({
 
   return (
     <div className="space-y-6">
+      <BackButton />
+
       {imageUrls.length > 0 ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {imageUrls.map((src, i) => (
