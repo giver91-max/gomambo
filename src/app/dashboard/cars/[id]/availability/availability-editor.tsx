@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { MonthCalendar } from "@/components/month-calendar";
-import { toggleAvailability, addAvailabilityRange, removeAvailabilityRange } from "./actions";
+import { addAvailabilityRange, removeAvailabilityRange } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,19 +17,26 @@ export function AvailabilityEditor({
 }) {
   const [available, setAvailable] = useState(() => new Set(initialAvailable));
   const [isPending, startTransition] = useTransition();
+  const [pendingStart, setPendingStart] = useState<string | null>(null);
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
   const todayIso = toISODate(new Date());
 
   function handleDayClick(iso: string) {
-    const willBeAvailable = !available.has(iso);
+    if (pendingStart === null) {
+      setPendingStart(iso);
+      return;
+    }
+
+    const [from, to] = pendingStart <= iso ? [pendingStart, iso] : [iso, pendingStart];
+    const dates = eachDateInRange(from, to);
     setAvailable((prev) => {
       const next = new Set(prev);
-      if (willBeAvailable) next.add(iso);
-      else next.delete(iso);
+      dates.forEach((d) => next.add(d));
       return next;
     });
-    startTransition(() => toggleAvailability(carId, iso, willBeAvailable));
+    startTransition(() => addAvailabilityRange(carId, from, to));
+    setPendingStart(null);
   }
 
   function handleAddRange() {
@@ -57,12 +64,30 @@ export function AvailabilityEditor({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Kliknij dzień, aby oznaczyć go jako dostępny lub niedostępny. Możesz też
-        zaznaczyć cały zakres dat poniżej.
+        {pendingStart
+          ? "Kliknij dzień końcowy, aby oznaczyć cały zakres jako dostępny."
+          : "Kliknij dzień początkowy i końcowy, aby oznaczyć cały zakres jako dostępny. Aby usunąć dostępność, użyj pól poniżej."}
+        {pendingStart && (
+          <>
+            {" "}
+            <button
+              type="button"
+              onClick={() => setPendingStart(null)}
+              className="text-primary hover:underline"
+            >
+              Anuluj wybór
+            </button>
+          </>
+        )}
       </p>
 
       <div className="max-w-xs">
-        <MonthCalendar highlightedDates={available} onDayClick={handleDayClick} minDateIso={todayIso} />
+        <MonthCalendar
+          highlightedDates={available}
+          selectedRange={pendingStart ? { start: pendingStart, end: pendingStart } : undefined}
+          onDayClick={handleDayClick}
+          minDateIso={todayIso}
+        />
       </div>
 
       <div className="flex flex-wrap items-end gap-2 border-t pt-4">
