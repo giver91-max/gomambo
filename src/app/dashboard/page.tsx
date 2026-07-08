@@ -64,12 +64,20 @@ export default async function DashboardPage() {
                     Powód odrzucenia: {car.rejection_reason}
                   </p>
                 )}
-                <Link
-                  href={`/dashboard/cars/${car.id}/availability`}
-                  className="inline-block text-sm text-primary hover:underline"
-                >
-                  Zarządzaj dostępnością →
-                </Link>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <Link
+                    href={`/dashboard/cars/${car.id}/edit`}
+                    className="inline-block text-sm text-primary hover:underline"
+                  >
+                    Edytuj →
+                  </Link>
+                  <Link
+                    href={`/dashboard/cars/${car.id}/availability`}
+                    className="inline-block text-sm text-primary hover:underline"
+                  >
+                    Zarządzaj dostępnością →
+                  </Link>
+                </div>
               </CardContent>
             </Card>
           ))}
