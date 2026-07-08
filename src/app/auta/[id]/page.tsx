@@ -1,5 +1,6 @@
 import { cache } from "react";
 import type { Metadata } from "next";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
@@ -84,13 +85,16 @@ export default async function CarDetailPage({
       {imageUrls.length > 0 ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {imageUrls.map((src, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={i}
-              src={src}
-              alt={`${car.brand} ${car.model} - zdjęcie ${i + 1}`}
-              className="aspect-square w-full rounded-lg object-cover"
-            />
+            <div key={i} className="relative aspect-square w-full overflow-hidden rounded-lg">
+              <Image
+                src={src}
+                alt={`${car.brand} ${car.model} - zdjęcie ${i + 1}`}
+                fill
+                sizes="(min-width: 640px) 33vw, 50vw"
+                className="object-cover"
+                priority={i === 0}
+              />
+            </div>
           ))}
         </div>
       ) : (

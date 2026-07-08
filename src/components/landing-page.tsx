@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Inter } from "next/font/google";
 import { useEffect, useRef, useState } from "react";
 import styles from "./landing-page.module.css";
@@ -333,8 +334,12 @@ export function LandingPage({
                     <Link key={car.id} href={`/auta/${car.id}`} className={styles.miniCarCard}>
                       <div className={styles.miniCarVisual}>
                         {car.imageUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={car.imageUrl} alt={`${car.brand} ${car.model}`} />
+                          <Image
+                            src={car.imageUrl}
+                            alt={`${car.brand} ${car.model}`}
+                            fill
+                            sizes="(min-width: 640px) 140px, 45vw"
+                          />
                         )}
                       </div>
                       <div className={styles.miniCarInfo}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import { approveCar, rejectCar } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -87,13 +88,15 @@ export function CarReviewCard({ car, ownerName, imageUrls }: Props) {
         {imageUrls.length > 0 && (
           <div className="grid grid-cols-4 gap-2">
             {imageUrls.map((src, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={i}
-                src={src}
-                alt={`Zdjęcie ${i + 1}`}
-                className="aspect-square w-full rounded-md object-cover"
-              />
+              <div key={i} className="relative aspect-square w-full overflow-hidden rounded-md">
+                <Image
+                  src={src}
+                  alt={`Zdjęcie ${i + 1}`}
+                  fill
+                  sizes="25vw"
+                  className="object-cover"
+                />
+              </div>
             ))}
           </div>
         )}

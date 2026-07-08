@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -109,13 +110,14 @@ export default async function AutaPage({
             return (
               <Link key={car.id} href={`/auta/${car.id}`}>
                 <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
-                  <div className="aspect-video w-full bg-muted">
+                  <div className="relative aspect-video w-full bg-muted">
                     {thumbnail && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={thumbnail}
                         alt={`${car.brand} ${car.model}`}
-                        className="h-full w-full object-cover"
+                        fill
+                        sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                        className="object-cover"
                       />
                     )}
                   </div>
