@@ -9,7 +9,7 @@ export function BackButton({ label = "Wstecz" }: { label?: string }) {
     <button
       type="button"
       onClick={() => router.back()}
-      className="text-sm text-muted-foreground hover:underline"
+      className="inline-block w-fit self-start text-left text-sm text-muted-foreground hover:underline"
     >
       ← {label}
     </button>

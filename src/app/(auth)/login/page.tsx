@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getRecaptchaToken } from "@/lib/recaptcha-client";
+import { BackButton } from "@/components/back-button";
 
 const initialState: AuthActionState = { error: null };
 
@@ -62,6 +63,7 @@ function LoginForm() {
       </Link>
       <Card className="w-full max-w-sm">
         <CardHeader>
+          <BackButton />
           <CardTitle>Zaloguj się do GoMambo</CardTitle>
           <CardDescription>Panel właściciela i administratora.</CardDescription>
         </CardHeader>

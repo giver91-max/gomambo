@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CarReviewCard } from "./car-review-card";
 import type { CarStatus } from "@/types/database";
 import { cn } from "@/lib/utils";
+import { BackButton } from "@/components/back-button";
 
 const TABS: { value: CarStatus; label: string }[] = [
   { value: "pending", label: "Oczekujące" },
@@ -30,6 +31,7 @@ export default async function AdminPage({
 
   return (
     <div className="space-y-6">
+      <BackButton />
       <h1 className="text-2xl font-bold">Panel admina — auta</h1>
 
       <div className="flex gap-2 border-b">

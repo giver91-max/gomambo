@@ -4,6 +4,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { CarStatus } from "@/types/database";
+import { BackButton } from "@/components/back-button";
 
 const statusLabel: Record<CarStatus, string> = {
   pending: "Oczekuje na zatwierdzenie",
@@ -31,6 +32,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <BackButton />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Moje auta</h1>
         <Link href="/dashboard/cars/new" className={buttonVariants()}>

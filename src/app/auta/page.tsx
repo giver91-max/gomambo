@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/back-button";
 
 export const metadata: Metadata = {
   title: "Wypożyczalnia aut — wynajmij auto od sąsiada",
@@ -49,6 +50,7 @@ export default async function AutaPage({
 
   return (
     <div className="space-y-8">
+      <BackButton />
       <div>
         <h1 className="text-2xl font-bold">Wypożyczalnia aut — przeglądaj oferty</h1>
         <p className="text-sm text-muted-foreground">
