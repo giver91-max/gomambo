@@ -52,7 +52,7 @@ export function LandingPage({
 
     function animateCounter() {
       if (!el) return;
-      const target = 3400;
+      const target = 5000;
       const duration = 2000;
       const start = performance.now();
       function step(now: number) {
@@ -178,7 +178,7 @@ export function LandingPage({
         </h1>
 
         <div className={styles.counterBlock}>
-          <span className={styles.counterLabel}>Twoje auto może zarabiać do</span>
+          <span className={styles.counterLabel}>Twoje auto może zarabiać nawet</span>
           <span className={styles.counterValue} id="counter" ref={counterRef}>
             0
           </span>
