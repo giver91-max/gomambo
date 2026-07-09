@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { getRecaptchaToken } from "@/lib/recaptcha-client";
+import { PlateCoverEditor } from "@/components/plate-cover-editor";
+import { DEFAULT_STICKER, flattenImageWithSticker, type StickerRect } from "@/lib/plate-cover";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 8;
@@ -15,6 +17,7 @@ const MAX_IMAGES = 8;
 export function NewCarForm() {
   const [previews, setPreviews] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
+  const [stickers, setStickers] = useState<(StickerRect | null)[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -26,6 +29,15 @@ export function NewCarForm() {
       return selected.map((f) => URL.createObjectURL(f));
     });
     setFiles(selected);
+    setStickers(selected.map(() => DEFAULT_STICKER));
+  }
+
+  function updateSticker(index: number, rect: StickerRect) {
+    setStickers((prev) => prev.map((s, i) => (i === index ? rect : s)));
+  }
+
+  function toggleSticker(index: number) {
+    setStickers((prev) => prev.map((s, i) => (i === index ? (s ? null : DEFAULT_STICKER) : s)));
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -57,6 +69,7 @@ export function NewCarForm() {
     // so this request stays tiny; photos upload directly to Storage below.
     formData.delete("images");
     const filesToUpload = files;
+    const stickersToUpload = stickers;
 
     startTransition(async () => {
       setStatus("Zapisywanie danych auta…");
@@ -85,8 +98,8 @@ export function NewCarForm() {
       const uploaded: { path: string; position: number }[] = [];
 
       for (let index = 0; index < filesToUpload.length; index++) {
-        const image = filesToUpload[index];
         setStatus(`Wgrywanie zdjęcia ${index + 1} z ${filesToUpload.length}…`);
+        const image = await flattenImageWithSticker(filesToUpload[index], stickersToUpload[index]);
         const ext = image.name.split(".").pop() || "jpg";
         const path = `${user.id}/${carId}/${crypto.randomUUID()}.${ext}`;
 
@@ -185,16 +198,31 @@ export function NewCarForm() {
           onChange={handleFilesChange}
         />
         {previews.length > 0 && (
-          <div className="grid grid-cols-4 gap-2 pt-2">
-            {previews.map((src, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={i}
-                src={src}
-                alt={`Podgląd ${i + 1}`}
-                className="aspect-square w-full rounded-md object-cover"
-              />
-            ))}
+          <div className="space-y-3 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Przeciągnij nasze logo, aby ukryć swoją tablicę rejestracyjną. Jeśli na
+              zdjęciu nie widać tablicy, możesz je pominąć.
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {previews.map((src, i) => (
+                <div key={i} className="space-y-1">
+                  <PlateCoverEditor
+                    imageUrl={src}
+                    sticker={stickers[i] ?? null}
+                    onChange={(rect) => updateSticker(i, rect)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => toggleSticker(i)}
+                    className="text-xs text-muted-foreground hover:underline"
+                  >
+                    {stickers[i]
+                      ? "Nie widać tablicy na tym zdjęciu — usuń logo"
+                      : "Przywróć logo na tym zdjęciu"}
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
