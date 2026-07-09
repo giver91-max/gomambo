@@ -67,12 +67,23 @@ export async function updateEmail(
   };
 }
 
-export async function updateNotificationPrefs(formData: FormData): Promise<void> {
+export async function updateNotificationPrefs(
+  formData: FormData
+): Promise<{ error: string | null }> {
   const { supabase, user } = await requireUser();
   const notifyEmail = formData.get("notify_email") === "on";
 
-  await supabase.from("profiles").update({ notify_email: notifyEmail }).eq("id", user.id);
+  const { error } = await supabase
+    .from("profiles")
+    .update({ notify_email: notifyEmail })
+    .eq("id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
   revalidatePath("/dashboard/profile");
+  return { error: null };
 }
 
 export async function setAvatar(path: string): Promise<{ error: string | null }> {

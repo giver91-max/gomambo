@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { signIn, type AuthActionState } from "../actions";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Card,
@@ -75,11 +76,18 @@ function LoginForm() {
               <Input id="email" name="email" type="email" required autoComplete="email" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Hasło</Label>
-              <Input
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Hasło</Label>
+                <Link
+                  href="/zapomniane-haslo"
+                  className="text-xs text-muted-foreground hover:underline"
+                >
+                  Zapomniałeś hasła?
+                </Link>
+              </div>
+              <PasswordInput
                 id="password"
                 name="password"
-                type="password"
                 required
                 autoComplete="current-password"
               />

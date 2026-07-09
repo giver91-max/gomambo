@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
 
-export type AuthActionState = { error: string | null };
+export type AuthActionState = { error: string | null; success?: boolean };
 
 export async function signUp(
   _prevState: AuthActionState,
@@ -95,4 +95,61 @@ export async function signOut() {
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/login");
+}
+
+export async function requestPasswordReset(
+  _prevState: AuthActionState,
+  formData: FormData
+): Promise<AuthActionState> {
+  const email = String(formData.get("email") ?? "").trim();
+  const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
+
+  if (!email) {
+    return { error: "Podaj adres e-mail." };
+  }
+  if (!(await verifyRecaptcha(recaptchaToken, "forgot_password"))) {
+    return { error: "Weryfikacja antyspamowa nie powiodła się. Spróbuj ponownie." };
+  }
+
+  const headersList = await headers();
+  const host = headersList.get("host");
+  const proto = headersList.get("x-forwarded-proto") ?? "http";
+  const origin = headersList.get("origin") ?? `${proto}://${host}`;
+
+  const supabase = await createClient();
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/callback?next=/nowe-haslo`,
+  });
+
+  // Always report success regardless of whether the e-mail has an
+  // account — otherwise this form could be used to enumerate accounts.
+  return { error: null, success: true };
+}
+
+export async function updatePasswordAfterReset(
+  _prevState: AuthActionState,
+  formData: FormData
+): Promise<AuthActionState> {
+  const password = String(formData.get("password") ?? "");
+
+  if (password.length < 8) {
+    return { error: "Hasło musi mieć co najmniej 8 znaków." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Link wygasł. Poproś o nowy link resetujący hasło." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/", "layout");
+  redirect("/dashboard");
 }

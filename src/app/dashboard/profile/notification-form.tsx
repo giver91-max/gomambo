@@ -6,14 +6,24 @@ import { cn } from "@/lib/utils";
 
 export function NotificationForm({ initialEmailEnabled }: { initialEmailEnabled: boolean }) {
   const [emailEnabled, setEmailEnabled] = useState(initialEmailEnabled);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleToggle(next: boolean) {
     setEmailEnabled(next);
+    setError(null);
+    setSaved(false);
     startTransition(async () => {
       const formData = new FormData();
       if (next) formData.set("notify_email", "on");
-      await updateNotificationPrefs(formData);
+      const result = await updateNotificationPrefs(formData);
+      if (result.error) {
+        setEmailEnabled(!next);
+        setError("Nie udało się zapisać zmiany. Spróbuj ponownie.");
+      } else {
+        setSaved(true);
+      }
     });
   }
 
@@ -46,6 +56,9 @@ export function NotificationForm({ initialEmailEnabled }: { initialEmailEnabled:
         </button>
       </div>
 
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      {saved && !error && <p className="text-sm text-muted-foreground">Zapisano.</p>}
+
       <div className="flex items-center justify-between gap-4 rounded-lg border p-3 opacity-50">
         <div>
           <p className="font-medium">Powiadomienia SMS</p>
@@ -56,7 +69,7 @@ export function NotificationForm({ initialEmailEnabled }: { initialEmailEnabled:
           role="switch"
           aria-checked={false}
           disabled
-          className="relative h-6 w-11 shrink-0 rounded-full bg-muted"
+          className="relative h-6 w-11 shrink-0 cursor-not-allowed rounded-full bg-muted"
         >
           <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow" />
         </button>
