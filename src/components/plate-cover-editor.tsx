@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef } from "react";
-import type { StickerRect } from "@/lib/plate-cover";
+import { useMemo, useRef } from "react";
+import { getBadgeFontSizeCqw, type StickerRect } from "@/lib/plate-cover";
 
 const MIN_WIDTH_FRACTION = 0.08;
 
@@ -32,6 +32,7 @@ export function PlateCoverEditor({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const drag = useRef<DragState | null>(null);
+  const fontSizeCqw = useMemo(() => getBadgeFontSizeCqw(), []);
 
   function handleMoveStart(e: React.PointerEvent<HTMLDivElement>) {
     if (!sticker) return;
@@ -153,10 +154,14 @@ export function PlateCoverEditor({
             width: `${sticker.w * 100}%`,
             height: `${sticker.h * 100}%`,
             transform: `rotate(${sticker.rotation}deg)`,
+            containerType: "inline-size",
           }}
           className="absolute flex touch-none cursor-move items-center justify-center rounded-sm border-2 border-primary bg-white shadow-md"
         >
-          <span className="pointer-events-none select-none whitespace-nowrap text-xs font-black leading-none text-black sm:text-sm">
+          <span
+            style={{ fontSize: `${fontSizeCqw}cqw` }}
+            className="pointer-events-none select-none whitespace-nowrap font-black leading-none text-black"
+          >
             Go<span className="text-primary">Mambo</span>
           </span>
           <div

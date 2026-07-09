@@ -12,6 +12,33 @@ export const DEFAULT_STICKER: StickerRect = {
 
 const PRIMARY = "#f5c518";
 const INK = "#111111";
+const FONT = `system-ui, -apple-system, sans-serif`;
+const TEXT_FILL_RATIO = 0.9;
+
+let measureCanvas: HTMLCanvasElement | null = null;
+
+function measureTextWidthAtSize(text: string, fontSizePx: number): number {
+  if (!measureCanvas) measureCanvas = document.createElement("canvas");
+  const ctx = measureCanvas.getContext("2d")!;
+  ctx.font = `900 ${fontSizePx}px ${FONT}`;
+  return ctx.measureText(text).width;
+}
+
+// Width of "GoMambo" per 1px of font-size — text metrics scale linearly
+// with font-size, so this lets us solve directly for the font-size that
+// makes the text fill a given target width instead of guessing a ratio.
+function unitTextWidth(): number {
+  const seed = 100;
+  return (measureTextWidthAtSize("Go", seed) + measureTextWidthAtSize("Mambo", seed)) / seed;
+}
+
+// Font-size, in CSS container-query width units (1cqw = 1% of the badge's
+// own width), that makes "GoMambo" fill TEXT_FILL_RATIO of the badge — the
+// live preview uses this (with container queries handling the actual
+// responsive scaling) so it tracks the same target used when flattening.
+export function getBadgeFontSizeCqw(): number {
+  return (TEXT_FILL_RATIO * 100) / unitTextWidth();
+}
 
 // Bakes the GoMambo badge into the actual image pixels (not just a DOM
 // overlay) so the covered plate never leaves the browser in the uploaded
@@ -46,8 +73,9 @@ export async function flattenImageWithSticker(
   ctx.strokeStyle = INK;
   ctx.strokeRect(-w / 2, -h / 2, w, h);
 
-  const fontSize = Math.round(h * 0.62);
-  ctx.font = `900 ${fontSize}px system-ui, -apple-system, sans-serif`;
+  const targetTextWidth = w * TEXT_FILL_RATIO;
+  const fontSize = Math.min(targetTextWidth / unitTextWidth(), h * 0.85);
+  ctx.font = `900 ${fontSize}px ${FONT}`;
   ctx.textBaseline = "middle";
   const goText = "Go";
   const amboText = "Mambo";
