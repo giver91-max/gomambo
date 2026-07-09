@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { approveCar, rejectCar } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DeleteCarButton } from "@/app/dashboard/cars/[id]/edit/delete-car-button";
 import type { CarStatus } from "@/types/database";
 
 type Props = {
@@ -131,6 +133,16 @@ export function CarReviewCard({ car, ownerName, imageUrls }: Props) {
             </Button>
           </div>
         )}
+
+        <div className="flex items-center gap-4 border-t pt-3">
+          <Link
+            href={`/dashboard/cars/${car.id}/edit`}
+            className="text-sm text-primary hover:underline"
+          >
+            Edytuj →
+          </Link>
+          <DeleteCarButton carId={car.id} redirectTo="/admin" />
+        </div>
       </CardContent>
     </Card>
   );

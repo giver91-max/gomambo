@@ -19,18 +19,24 @@ export default async function EditCarPage({
     redirect("/login");
   }
 
-  const { data: car } = await supabase
-    .from("cars")
-    .select("*, car_images(id, storage_path, position)")
-    .eq("id", params.id)
-    .single();
+  const [{ data: car }, { data: profile }] = await Promise.all([
+    supabase
+      .from("cars")
+      .select("*, car_images(id, storage_path, position)")
+      .eq("id", params.id)
+      .single(),
+    supabase.from("profiles").select("role").eq("id", user.id).single(),
+  ]);
 
   if (!car) {
     notFound();
   }
-  if (car.owner_id !== user.id) {
+  const isAdmin = profile?.role === "admin";
+  const isOwner = car.owner_id === user.id;
+  if (!isOwner && !isAdmin) {
     redirect("/dashboard");
   }
+  const viewingAsAdmin = isAdmin && !isOwner;
 
   const images = (car.car_images ?? [])
     .slice()
@@ -45,17 +51,20 @@ export default async function EditCarPage({
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/dashboard" className="text-sm text-muted-foreground hover:underline">
-            ← Moje auta
+          <Link
+            href={viewingAsAdmin ? "/admin" : "/dashboard"}
+            className="text-sm text-muted-foreground hover:underline"
+          >
+            {viewingAsAdmin ? "← Panel admina" : "← Moje auta"}
           </Link>
           <h1 className="mt-1 text-2xl font-bold">
             Edytuj auto — {car.brand} {car.model}
           </h1>
         </div>
-        <DeleteCarButton carId={car.id} />
+        <DeleteCarButton carId={car.id} redirectTo={viewingAsAdmin ? "/admin" : undefined} />
       </div>
 
-      {car.status === "approved" && (
+      {car.status === "approved" && !isAdmin && (
         <p className="rounded-lg border border-yellow-600/30 bg-yellow-600/10 p-3 text-sm text-yellow-700 dark:text-yellow-400">
           To auto jest już zatwierdzone. Jeśli zmienisz zdjęcia lub dane, ogłoszenie
           wróci do statusu „Oczekuje na zatwierdzenie&rdquo; do czasu ponownej weryfikacji.

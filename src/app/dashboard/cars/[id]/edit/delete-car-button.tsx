@@ -15,7 +15,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-export function DeleteCarButton({ carId }: { carId: string }) {
+export function DeleteCarButton({
+  carId,
+  redirectTo,
+}: {
+  carId: string;
+  redirectTo?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -23,7 +29,7 @@ export function DeleteCarButton({ carId }: { carId: string }) {
   function handleConfirm() {
     setError(null);
     startTransition(async () => {
-      const result = await deleteCar(carId);
+      const result = await deleteCar(carId, redirectTo);
       if (result?.error) {
         setError(result.error);
       }

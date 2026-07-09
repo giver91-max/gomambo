@@ -17,25 +17,32 @@ async function requireOwnedCar(carId: string) {
     redirect("/login");
   }
 
-  const { data: car } = await supabase
-    .from("cars")
-    .select("owner_id, status")
-    .eq("id", carId)
-    .single();
+  const [{ data: car }, { data: profile }] = await Promise.all([
+    supabase.from("cars").select("owner_id, status").eq("id", carId).single(),
+    supabase.from("profiles").select("role").eq("id", user.id).single(),
+  ]);
+  const isAdmin = profile?.role === "admin";
 
-  if (!car || car.owner_id !== user.id) {
-    return { supabase, user, car: null as null | { owner_id: string; status: string } };
+  if (!car || (car.owner_id !== user.id && !isAdmin)) {
+    return {
+      supabase,
+      user,
+      car: null as null | { owner_id: string; status: string },
+      isAdmin,
+    };
   }
 
-  return { supabase, user, car };
+  return { supabase, user, car, isAdmin };
 }
 
 // Any edit to an already-approved car (details, photos) reverts it to
 // "pending" so an admin re-reviews the new content. Owners can't set status
 // themselves (see enforce_car_update_rules trigger) — only the admin client
-// can, and only because auth.uid() is null for service-role calls.
-async function revertToPendingIfApproved(carId: string, wasApproved: boolean) {
-  if (!wasApproved) return;
+// can, and only because auth.uid() is null for service-role calls. Admins
+// editing a car are themselves the reviewer, so their edits don't need
+// re-review and the status is left untouched.
+async function revertToPendingIfApproved(carId: string, wasApproved: boolean, isAdmin: boolean) {
+  if (!wasApproved || isAdmin) return;
   const admin = createAdminClient();
   await admin.from("cars").update({ status: "pending", rejection_reason: null }).eq("id", carId);
 }
@@ -45,7 +52,7 @@ export async function updateCarDetails(
   _prevState: EditCarState,
   formData: FormData
 ): Promise<EditCarState> {
-  const { user, car } = await requireOwnedCar(carId);
+  const { user, car, isAdmin } = await requireOwnedCar(carId);
   if (!user) redirect("/login");
   if (!car) {
     return { error: "Nie masz dostępu do tego ogłoszenia." };
@@ -79,7 +86,7 @@ export async function updateCarDetails(
       price_per_day: pricePerDay,
       city,
       description: description || null,
-      ...(wasApproved ? { status: "pending", rejection_reason: null } : {}),
+      ...(wasApproved && !isAdmin ? { status: "pending", rejection_reason: null } : {}),
     })
     .eq("id", carId);
 
@@ -98,7 +105,7 @@ export async function addCarPhoto(
   path: string,
   position: number
 ): Promise<{ error: string | null }> {
-  const { supabase, user, car } = await requireOwnedCar(carId);
+  const { supabase, user, car, isAdmin } = await requireOwnedCar(carId);
   if (!user) redirect("/login");
   if (!car) {
     return { error: "Nie masz dostępu do tego ogłoszenia." };
@@ -112,7 +119,7 @@ export async function addCarPhoto(
     return { error: error.message };
   }
 
-  await revertToPendingIfApproved(carId, car.status === "approved");
+  await revertToPendingIfApproved(carId, car.status === "approved", isAdmin);
 
   revalidatePath(`/dashboard/cars/${carId}/edit`);
   revalidatePath(`/auta/${carId}`);
@@ -125,7 +132,7 @@ export async function removeCarPhoto(
   imageId: string,
   storagePath: string
 ): Promise<{ error: string | null }> {
-  const { supabase, user, car } = await requireOwnedCar(carId);
+  const { supabase, user, car, isAdmin } = await requireOwnedCar(carId);
   if (!user) redirect("/login");
   if (!car) {
     return { error: "Nie masz dostępu do tego ogłoszenia." };
@@ -138,7 +145,7 @@ export async function removeCarPhoto(
     return { error: error.message };
   }
 
-  await revertToPendingIfApproved(carId, car.status === "approved");
+  await revertToPendingIfApproved(carId, car.status === "approved", isAdmin);
 
   revalidatePath(`/dashboard/cars/${carId}/edit`);
   revalidatePath(`/auta/${carId}`);
@@ -146,7 +153,10 @@ export async function removeCarPhoto(
   return { error: null };
 }
 
-export async function deleteCar(carId: string): Promise<{ error: string | null }> {
+export async function deleteCar(
+  carId: string,
+  redirectTo: string = "/dashboard"
+): Promise<{ error: string | null }> {
   const { supabase, user, car } = await requireOwnedCar(carId);
   if (!user) redirect("/login");
   if (!car) {
@@ -168,5 +178,6 @@ export async function deleteCar(carId: string): Promise<{ error: string | null }
   }
 
   revalidatePath("/dashboard");
-  redirect("/dashboard");
+  revalidatePath("/admin");
+  redirect(redirectTo);
 }
