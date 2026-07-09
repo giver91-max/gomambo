@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AvailabilityAndInquiry } from "./availability-and-inquiry";
 import { toISODate } from "@/lib/calendar";
 import { BackButton } from "@/components/back-button";
+import { FavoriteButton } from "@/components/favorite-button";
 
 const getCar = cache(async (id: string) => {
   const supabase = await createClient();
@@ -81,28 +82,47 @@ export default async function CarDetailPage({
     notFound();
   }
 
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let isFavorited = false;
+  if (user) {
+    const { data: favorite } = await supabase
+      .from("favorites")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("car_id", car.id)
+      .maybeSingle();
+    isFavorited = !!favorite;
+  }
+
   return (
     <div className="space-y-6">
       <BackButton />
 
-      {imageUrls.length > 0 ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {imageUrls.map((src, i) => (
-            <div key={i} className="relative aspect-square w-full overflow-hidden rounded-lg">
-              <Image
-                src={src}
-                alt={`${car.brand} ${car.model} - zdjęcie ${i + 1}`}
-                fill
-                sizes="(min-width: 640px) 33vw, 50vw"
-                className="object-cover"
-                priority={i === 0}
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="aspect-video w-full rounded-lg bg-muted" />
-      )}
+      <div className="relative">
+        <FavoriteButton carId={car.id} initialFavorited={isFavorited} isLoggedIn={!!user} />
+        {imageUrls.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {imageUrls.map((src, i) => (
+              <div key={i} className="relative aspect-square w-full overflow-hidden rounded-lg">
+                <Image
+                  src={src}
+                  alt={`${car.brand} ${car.model} - zdjęcie ${i + 1}`}
+                  fill
+                  sizes="(min-width: 640px) 33vw, 50vw"
+                  className="object-cover"
+                  priority={i === 0}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="aspect-video w-full rounded-lg bg-muted" />
+        )}
+      </div>
 
       <div>
         <h1 className="text-2xl font-bold">
@@ -131,7 +151,11 @@ export default async function CarDetailPage({
               / dzień
             </p>
           </div>
-          <AvailabilityAndInquiry carId={car.id} availableDates={availableDates} />
+          <AvailabilityAndInquiry
+            carId={car.id}
+            availableDates={availableDates}
+            isLoggedIn={!!user}
+          />
         </CardContent>
       </Card>
     </div>

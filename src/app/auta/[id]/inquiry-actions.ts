@@ -7,8 +7,6 @@ import { verifyRecaptcha } from "@/lib/recaptcha";
 
 export type InquiryState = { error: string | null; success?: boolean };
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 export async function sendInquiry(
   _prevState: InquiryState,
   formData: FormData
@@ -18,26 +16,28 @@ export async function sendInquiry(
     return { error: null, success: true };
   }
 
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Zaloguj się, aby wysłać zapytanie o wynajem." };
+  }
+
   const carId = String(formData.get("carId") ?? "");
-  const name = String(formData.get("name") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim();
-  const phone = String(formData.get("phone") ?? "").trim();
   const message = String(formData.get("message") ?? "").trim();
   const rangeStart = String(formData.get("rangeStart") ?? "").trim();
   const rangeEnd = String(formData.get("rangeEnd") ?? "").trim();
   const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
 
-  if (!carId || !name || !email || !message) {
-    return { error: "Wypełnij imię, e-mail i wiadomość." };
-  }
-  if (!EMAIL_RE.test(email)) {
-    return { error: "Podaj prawidłowy adres e-mail." };
+  if (!carId || !message || !rangeStart || !rangeEnd) {
+    return { error: "Wybierz termin i napisz wiadomość." };
   }
   if (!(await verifyRecaptcha(recaptchaToken, "inquiry"))) {
     return { error: "Weryfikacja antyspamowa nie powiodła się. Spróbuj ponownie." };
   }
 
-  const supabase = await createClient();
   const { data: car } = await supabase
     .from("cars")
     .select("brand, model, year, city, owner_id")
@@ -48,35 +48,70 @@ export async function sendInquiry(
   if (!car) {
     return { error: "Nie znaleziono ogłoszenia." };
   }
-
-  const admin = createAdminClient();
-  const { data: ownerAuth } = await admin.auth.admin.getUserById(car.owner_id);
-  const ownerEmail = ownerAuth?.user?.email;
-
-  if (!ownerEmail) {
-    return { error: "Nie udało się skontaktować z właścicielem. Spróbuj ponownie później." };
+  if (car.owner_id === user.id) {
+    return { error: "Nie możesz wysłać zapytania o własne auto." };
   }
 
-  await sendNotificationEmail({
-    to: ownerEmail,
-    subject: `Zapytanie o dostępność: ${car.brand} ${car.model}`,
-    html: `
-      <p>Ktoś jest zainteresowany Twoim ogłoszeniem na GoMambo.</p>
-      <ul>
-        <li><strong>Auto:</strong> ${car.brand} ${car.model} (${car.year}), ${car.city}</li>
-        <li><strong>Imię:</strong> ${name}</li>
-        <li><strong>E-mail:</strong> ${email}</li>
-        ${phone ? `<li><strong>Telefon:</strong> ${phone}</li>` : ""}
-        ${
-          rangeStart
-            ? `<li><strong>Wybrany termin:</strong> ${rangeStart}${rangeEnd ? ` – ${rangeEnd}` : ""}</li>`
-            : ""
-        }
-      </ul>
-      <p><strong>Wiadomość:</strong></p>
-      <p>${message.replace(/\n/g, "<br>")}</p>
-    `,
+  const { error: bookingError } = await supabase.from("bookings").insert({
+    car_id: carId,
+    owner_id: car.owner_id,
+    renter_id: user.id,
+    start_date: rangeStart,
+    end_date: rangeEnd,
   });
+  if (bookingError) {
+    return { error: bookingError.message };
+  }
+
+  const { data: conversation, error: conversationError } = await supabase
+    .from("conversations")
+    .upsert(
+      { car_id: carId, owner_id: car.owner_id, renter_id: user.id },
+      { onConflict: "car_id,renter_id", ignoreDuplicates: false }
+    )
+    .select("id")
+    .single();
+  if (conversationError || !conversation) {
+    return { error: conversationError?.message ?? "Nie udało się utworzyć wątku wiadomości." };
+  }
+
+  const { error: messageError } = await supabase.from("messages").insert({
+    conversation_id: conversation.id,
+    sender_id: user.id,
+    body: `Zapytanie o wynajem (${rangeStart} – ${rangeEnd}):\n\n${message}`,
+  });
+  if (messageError) {
+    return { error: messageError.message };
+  }
+
+  const { data: ownerProfile } = await supabase
+    .from("profiles")
+    .select("notify_email")
+    .eq("id", car.owner_id)
+    .single();
+
+  if (ownerProfile?.notify_email !== false) {
+    const admin = createAdminClient();
+    const { data: ownerAuth } = await admin.auth.admin.getUserById(car.owner_id);
+    const ownerEmail = ownerAuth?.user?.email;
+
+    if (ownerEmail) {
+      await sendNotificationEmail({
+        to: ownerEmail,
+        subject: `Zapytanie o wynajem: ${car.brand} ${car.model}`,
+        html: `
+          <p>Masz nowe zapytanie o wynajem na GoMambo.</p>
+          <ul>
+            <li><strong>Auto:</strong> ${car.brand} ${car.model} (${car.year}), ${car.city}</li>
+            <li><strong>Termin:</strong> ${rangeStart} – ${rangeEnd}</li>
+          </ul>
+          <p><strong>Wiadomość:</strong></p>
+          <p>${message.replace(/\n/g, "<br>")}</p>
+          <p>Odpowiedz w skrzynce wiadomości na GoMambo.</p>
+        `,
+      });
+    }
+  }
 
   return { error: null, success: true };
 }

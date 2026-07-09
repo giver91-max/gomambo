@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { sendInquiry, type InquiryState } from "./inquiry-actions";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -14,18 +14,31 @@ const initialState: InquiryState = { error: null };
 export function InquiryForm({
   carId,
   selectedRange,
+  isLoggedIn,
 }: {
   carId: string;
   selectedRange?: SelectedRange;
+  isLoggedIn: boolean;
 }) {
   const [state, setState] = useState<InquiryState>(initialState);
   const [isPending, startTransition] = useTransition();
 
+  if (!isLoggedIn) {
+    return (
+      <div className="space-y-2 rounded-lg border p-4 text-sm">
+        <p>Zaloguj się, aby zapytać o wynajem tego auta.</p>
+        <Button render={<Link href={`/login?redirect=/auta/${carId}`} />}>
+          Zaloguj się
+        </Button>
+      </div>
+    );
+  }
+
   if (state.success) {
     return (
       <p className="text-sm text-muted-foreground">
-        Wiadomość została wysłana do właściciela. Odpowie bezpośrednio na podany
-        przez Ciebie adres e-mail.
+        Zapytanie zostało wysłane do właściciela. Odpowiedź znajdziesz w skrzynce
+        wiadomości.
       </p>
     );
   }
@@ -55,7 +68,7 @@ export function InquiryForm({
         aria-hidden="true"
       />
 
-      {selectedRange?.start && (
+      {selectedRange?.start ? (
         <p className="text-sm">
           Wybrany termin: <strong>{selectedRange.start}</strong>
           {selectedRange.end ? (
@@ -67,23 +80,11 @@ export function InquiryForm({
             " (kliknij drugi dzień, aby zaznaczyć koniec terminu)"
           )}
         </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Zaznacz w kalendarzu termin, o który chcesz zapytać.
+        </p>
       )}
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="name">Imię</Label>
-          <Input id="name" name="name" required />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="email">E-mail</Label>
-          <Input id="email" name="email" type="email" required />
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="phone">Telefon (opcjonalnie)</Label>
-        <Input id="phone" name="phone" type="tel" />
-      </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="message">Wiadomość</Label>
@@ -92,14 +93,18 @@ export function InquiryForm({
           name="message"
           rows={4}
           required
-          placeholder="Np. terminy, w których chciałbyś wynająć auto."
+          placeholder="Np. dodatkowe pytania dotyczące wynajmu."
         />
       </div>
 
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
 
-      <Button type="submit" className="w-full" disabled={isPending}>
-        {isPending ? "Chwileczkę…" : "Zapytaj o dostępność"}
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={isPending || !selectedRange?.start || !selectedRange?.end}
+      >
+        {isPending ? "Chwileczkę…" : "Zapytaj o wynajem"}
       </Button>
     </form>
   );

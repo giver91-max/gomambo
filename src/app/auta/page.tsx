@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/back-button";
+import { FavoriteButton } from "@/components/favorite-button";
 
 export const metadata: Metadata = {
   title: "Wypożyczalnia aut — wynajmij auto od sąsiada",
@@ -47,6 +48,19 @@ export default async function AutaPage({
   }
 
   const { data: cars } = await query;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let favoriteCarIds = new Set<string>();
+  if (user) {
+    const { data: favorites } = await supabase
+      .from("favorites")
+      .select("car_id")
+      .eq("user_id", user.id);
+    favoriteCarIds = new Set((favorites ?? []).map((f) => f.car_id));
+  }
 
   return (
     <div className="space-y-8">
@@ -113,6 +127,11 @@ export default async function AutaPage({
               <Link key={car.id} href={`/auta/${car.id}`}>
                 <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
                   <div className="relative aspect-video w-full bg-muted">
+                    <FavoriteButton
+                      carId={car.id}
+                      initialFavorited={favoriteCarIds.has(car.id)}
+                      isLoggedIn={!!user}
+                    />
                     {thumbnail && (
                       <Image
                         src={thumbnail}
