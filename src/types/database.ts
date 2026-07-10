@@ -86,6 +86,21 @@ export type SiteSettings = {
   updated_at: string;
 };
 
+export type AdminMessage = {
+  id: string;
+  sender_id: string;
+  recipient_id: string | null;
+  body: string;
+  created_at: string;
+};
+
+export type AdminMessageRead = {
+  id: string;
+  message_id: string;
+  user_id: string;
+  read_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -211,6 +226,26 @@ export type Database = {
         Insert: Partial<SiteSettings> & { id: number };
         Update: Partial<SiteSettings>;
         Relationships: [];
+      };
+      admin_messages: {
+        Row: AdminMessage;
+        Insert: Partial<AdminMessage> & { sender_id: string; body: string };
+        Update: Partial<AdminMessage>;
+        Relationships: [];
+      };
+      admin_message_reads: {
+        Row: AdminMessageRead;
+        Insert: Partial<AdminMessageRead> & { message_id: string; user_id: string };
+        Update: Partial<AdminMessageRead>;
+        Relationships: [
+          {
+            foreignKeyName: "admin_message_reads_message_id_fkey";
+            columns: ["message_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_messages";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
     Views: Record<string, never>;

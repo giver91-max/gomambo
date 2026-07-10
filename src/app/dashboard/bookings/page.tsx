@@ -76,13 +76,18 @@ export default async function OwnerBookingsPage() {
                   Termin: {booking.start_date} – {booking.end_date}
                 </p>
                 <div className="flex flex-wrap items-center gap-4">
-                  {booking.status === "requested" && <BookingActions bookingId={booking.id} />}
+                  {(booking.status === "requested" || booking.status === "accepted") && (
+                    <BookingActions bookingId={booking.id} status={booking.status} />
+                  )}
                   <Link
                     href={`/dashboard/messages`}
                     className="text-sm text-primary hover:underline"
                   >
                     Wiadomości →
                   </Link>
+                  {(booking.status === "completed" ||
+                    booking.status === "declined" ||
+                    booking.status === "cancelled") && <span>Czat zamknięty</span>}
                 </div>
               </CardContent>
             </Card>

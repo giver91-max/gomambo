@@ -6,11 +6,13 @@ export function SiteHeader({
   fullName,
   role,
   unreadMessages = 0,
+  unreadNotifications = 0,
 }: {
   email: string;
   fullName?: string;
   role: "owner" | "admin";
   unreadMessages?: number;
+  unreadNotifications?: number;
 }) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b px-4 py-4 sm:px-6">
@@ -25,6 +27,7 @@ export function SiteHeader({
           displayName={fullName || email}
           role={role}
           unreadMessages={unreadMessages}
+          unreadNotifications={unreadNotifications}
         />
       </nav>
     </header>

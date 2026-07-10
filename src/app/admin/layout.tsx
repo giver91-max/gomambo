@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SiteHeader } from "@/components/site-header";
+import { getUnreadCounts } from "@/lib/notifications";
 
 export default async function AdminLayout({
   children,
@@ -26,22 +27,7 @@ export default async function AdminLayout({
     redirect("/dashboard");
   }
 
-  const { data: myConversations } = await supabase
-    .from("conversations")
-    .select("id")
-    .or(`owner_id.eq.${user.id},renter_id.eq.${user.id}`);
-  const conversationIds = (myConversations ?? []).map((c) => c.id);
-
-  let unreadMessages = 0;
-  if (conversationIds.length > 0) {
-    const { count } = await supabase
-      .from("messages")
-      .select("id", { count: "exact", head: true })
-      .in("conversation_id", conversationIds)
-      .neq("sender_id", user.id)
-      .is("read_at", null);
-    unreadMessages = count ?? 0;
-  }
+  const { unreadMessages, unreadNotifications } = await getUnreadCounts(supabase, user.id);
 
   return (
     <div className="min-h-screen">
@@ -50,6 +36,7 @@ export default async function AdminLayout({
         fullName={profile?.full_name ?? ""}
         role="admin"
         unreadMessages={unreadMessages}
+        unreadNotifications={unreadNotifications}
       />
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
     </div>

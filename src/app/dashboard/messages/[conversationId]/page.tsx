@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import { BackButton } from "@/components/back-button";
 import { markConversationRead } from "../actions";
+import { isConversationActive } from "@/lib/conversation-status";
 import { ReplyForm } from "./reply-form";
 
 export default async function ConversationPage({
@@ -21,7 +22,7 @@ export default async function ConversationPage({
 
   const { data: conversation } = await supabase
     .from("conversations")
-    .select("id, owner_id, renter_id, cars(brand, model)")
+    .select("id, car_id, owner_id, renter_id, cars(brand, model)")
     .eq("id", params.conversationId)
     .single();
 
@@ -30,6 +31,8 @@ export default async function ConversationPage({
   }
 
   await markConversationRead(params.conversationId);
+
+  const active = await isConversationActive(supabase, conversation.car_id, conversation.renter_id);
 
   const { data: messages } = await supabase
     .from("messages")
@@ -65,7 +68,13 @@ export default async function ConversationPage({
         })}
       </div>
 
-      <ReplyForm conversationId={conversation.id} />
+      {active ? (
+        <ReplyForm conversationId={conversation.id} />
+      ) : (
+        <p className="rounded-lg border p-3 text-sm text-muted-foreground">
+          Czat jest zamknięty — wypożyczenie zostało zakończone.
+        </p>
+      )}
     </div>
   );
 }

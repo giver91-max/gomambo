@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  BellIcon,
   CalendarCheckIcon,
   CarIcon,
   ChevronDownIcon,
@@ -7,6 +8,7 @@ import {
   InboxIcon,
   LogOutIcon,
   MessageCircleIcon,
+  SendIcon,
   ShieldIcon,
   UserIcon,
 } from "lucide-react";
@@ -21,11 +23,15 @@ export function UserMenu({
   displayName,
   role,
   unreadMessages = 0,
+  unreadNotifications = 0,
 }: {
   displayName: string;
   role: "owner" | "admin";
   unreadMessages?: number;
+  unreadNotifications?: number;
 }) {
+  const totalUnread = unreadMessages + unreadNotifications;
+
   return (
     <div className="group relative">
       <button
@@ -33,7 +39,7 @@ export function UserMenu({
         className="flex items-center gap-1.5 rounded-md px-1 py-1 text-sm hover:bg-muted"
       >
         <span className="max-w-40 truncate">{displayName}</span>
-        {unreadMessages > 0 && <Badge>{unreadMessages}</Badge>}
+        {totalUnread > 0 && <Badge>{totalUnread}</Badge>}
         <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-hover:rotate-180 group-focus-within:rotate-180" />
       </button>
 
@@ -43,6 +49,11 @@ export function UserMenu({
           "group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
         )}
       >
+        <Link href="/dashboard/notifications" className={itemClassName}>
+          <BellIcon className="size-4 text-muted-foreground" />
+          Powiadomienia
+          {unreadNotifications > 0 && <Badge className="ml-auto">{unreadNotifications}</Badge>}
+        </Link>
         <Link href="/dashboard" className={itemClassName}>
           <CarIcon className="size-4 text-muted-foreground" />
           Moje auta
@@ -75,6 +86,10 @@ export function UserMenu({
             <Link href="/admin" className={itemClassName}>
               <ShieldIcon className="size-4 text-muted-foreground" />
               Panel admina
+            </Link>
+            <Link href="/admin/messages" className={itemClassName}>
+              <SendIcon className="size-4 text-muted-foreground" />
+              Wiadomości do użytkowników
             </Link>
           </>
         )}

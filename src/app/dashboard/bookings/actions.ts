@@ -7,7 +7,7 @@ import type { BookingStatus } from "@/types/database";
 
 export async function updateBookingStatus(
   bookingId: string,
-  status: Extract<BookingStatus, "accepted" | "declined">
+  status: Extract<BookingStatus, "accepted" | "declined" | "completed">
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   const {
