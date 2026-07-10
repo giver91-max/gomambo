@@ -80,6 +80,12 @@ export type Message = {
   read_at: string | null;
 };
 
+export type SiteSettings = {
+  id: number;
+  maintenance_mode: boolean;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -199,6 +205,12 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      site_settings: {
+        Row: SiteSettings;
+        Insert: Partial<SiteSettings> & { id: number };
+        Update: Partial<SiteSettings>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

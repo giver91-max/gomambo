@@ -7,13 +7,35 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: cars } = await supabase
-    .from("cars")
-    .select("id, brand, model, year, city, price_per_day, car_images(storage_path, position)")
-    .eq("status", "approved")
-    .order("created_at", { ascending: false })
-    .order("position", { referencedTable: "car_images", ascending: true })
-    .limit(6);
+  let isAdmin = false;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    isAdmin = profile?.role === "admin";
+  }
+
+  let maintenanceMode = false;
+  if (!isAdmin) {
+    const { data: siteSettings } = await supabase
+      .from("site_settings")
+      .select("maintenance_mode")
+      .eq("id", 1)
+      .single();
+    maintenanceMode = siteSettings?.maintenance_mode ?? false;
+  }
+
+  const { data: cars } = maintenanceMode
+    ? { data: [] }
+    : await supabase
+        .from("cars")
+        .select("id, brand, model, year, city, price_per_day, car_images(storage_path, position)")
+        .eq("status", "approved")
+        .order("created_at", { ascending: false })
+        .order("position", { referencedTable: "car_images", ascending: true })
+        .limit(6);
 
   const landingCars: LandingCar[] = (cars ?? []).map((car) => {
     const images = (car.car_images ?? []) as {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CarReviewCard } from "./car-review-card";
+import { MaintenanceModeToggle } from "./maintenance-mode-toggle";
 import type { CarStatus } from "@/types/database";
 import { cn } from "@/lib/utils";
 import { BackButton } from "@/components/back-button";
@@ -23,16 +24,21 @@ export default async function AdminPage({
 
   const supabase = await createClient();
 
-  const { data: cars } = await supabase
-    .from("cars")
-    .select("*, car_images(storage_path), owner:profiles(full_name)")
-    .eq("status", status)
-    .order("created_at", { ascending: true });
+  const [{ data: cars }, { data: siteSettings }] = await Promise.all([
+    supabase
+      .from("cars")
+      .select("*, car_images(storage_path), owner:profiles(full_name)")
+      .eq("status", status)
+      .order("created_at", { ascending: true }),
+    supabase.from("site_settings").select("maintenance_mode").eq("id", 1).single(),
+  ]);
 
   return (
     <div className="space-y-6">
       <BackButton />
       <h1 className="text-2xl font-bold">Panel admina — auta</h1>
+
+      <MaintenanceModeToggle initialEnabled={siteSettings?.maintenance_mode ?? false} />
 
       <div className="flex gap-2 border-b">
         {TABS.map((tab) => (

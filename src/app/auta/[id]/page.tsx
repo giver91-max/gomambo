@@ -8,6 +8,7 @@ import { AvailabilityAndInquiry } from "./availability-and-inquiry";
 import { toISODate } from "@/lib/calendar";
 import { BackButton } from "@/components/back-button";
 import { FavoriteButton } from "@/components/favorite-button";
+import { MaintenanceNotice } from "@/components/maintenance-notice";
 
 const getCar = cache(async (id: string) => {
   const supabase = await createClient();
@@ -86,6 +87,32 @@ export default async function CarDetailPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  let isAdmin = false;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    isAdmin = profile?.role === "admin";
+  }
+
+  if (!isAdmin) {
+    const { data: siteSettings } = await supabase
+      .from("site_settings")
+      .select("maintenance_mode")
+      .eq("id", 1)
+      .single();
+    if (siteSettings?.maintenance_mode) {
+      return (
+        <div className="space-y-6">
+          <BackButton />
+          <MaintenanceNotice />
+        </div>
+      );
+    }
+  }
 
   let isFavorited = false;
   if (user) {

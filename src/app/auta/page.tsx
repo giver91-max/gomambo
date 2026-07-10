@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/back-button";
 import { FavoriteButton } from "@/components/favorite-button";
+import { MaintenanceNotice } from "@/components/maintenance-notice";
 
 export const metadata: Metadata = {
   title: "Wypożyczalnia aut — wynajmij auto od sąsiada",
@@ -22,6 +23,36 @@ export default async function AutaPage({
   searchParams: { city?: string; maxPrice?: string };
 }) {
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let isAdmin = false;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    isAdmin = profile?.role === "admin";
+  }
+
+  if (!isAdmin) {
+    const { data: siteSettings } = await supabase
+      .from("site_settings")
+      .select("maintenance_mode")
+      .eq("id", 1)
+      .single();
+    if (siteSettings?.maintenance_mode) {
+      return (
+        <div className="space-y-8">
+          <BackButton />
+          <MaintenanceNotice />
+        </div>
+      );
+    }
+  }
 
   const { data: allApproved } = await supabase
     .from("cars")
@@ -48,10 +79,6 @@ export default async function AutaPage({
   }
 
   const { data: cars } = await query;
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   let favoriteCarIds = new Set<string>();
   if (user) {
