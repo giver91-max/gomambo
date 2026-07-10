@@ -1,0 +1,92 @@
+import Link from "next/link";
+import {
+  CalendarCheckIcon,
+  CarIcon,
+  ChevronDownIcon,
+  HeartIcon,
+  InboxIcon,
+  LogOutIcon,
+  MessageCircleIcon,
+  ShieldIcon,
+  UserIcon,
+} from "lucide-react";
+import { signOut } from "@/app/(auth)/actions";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+
+const itemClassName =
+  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-foreground hover:bg-muted";
+
+export function UserMenu({
+  displayName,
+  role,
+  unreadMessages = 0,
+}: {
+  displayName: string;
+  role: "owner" | "admin";
+  unreadMessages?: number;
+}) {
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        className="flex items-center gap-1.5 rounded-md px-1 py-1 text-sm hover:bg-muted"
+      >
+        <span className="max-w-40 truncate">{displayName}</span>
+        {unreadMessages > 0 && <Badge>{unreadMessages}</Badge>}
+        <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-hover:rotate-180 group-focus-within:rotate-180" />
+      </button>
+
+      <div
+        className={cn(
+          "invisible absolute right-0 top-full z-20 w-56 rounded-lg border bg-popover p-1.5 opacity-0 shadow-md transition-opacity",
+          "group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+        )}
+      >
+        <Link href="/dashboard" className={itemClassName}>
+          <CarIcon className="size-4 text-muted-foreground" />
+          Moje auta
+        </Link>
+        <Link href="/dashboard/bookings" className={itemClassName}>
+          <InboxIcon className="size-4 text-muted-foreground" />
+          Zapytania
+        </Link>
+        <Link href="/dashboard/rentals" className={itemClassName}>
+          <CalendarCheckIcon className="size-4 text-muted-foreground" />
+          Moje rezerwacje
+        </Link>
+        <Link href="/dashboard/messages" className={itemClassName}>
+          <MessageCircleIcon className="size-4 text-muted-foreground" />
+          Wiadomości
+          {unreadMessages > 0 && <Badge className="ml-auto">{unreadMessages}</Badge>}
+        </Link>
+        <Link href="/dashboard/favorites" className={itemClassName}>
+          <HeartIcon className="size-4 text-muted-foreground" />
+          Ulubione
+        </Link>
+        <Link href="/dashboard/profile" className={itemClassName}>
+          <UserIcon className="size-4 text-muted-foreground" />
+          Mój profil
+        </Link>
+
+        {role === "admin" && (
+          <>
+            <div className="my-1.5 h-px bg-border" />
+            <Link href="/admin" className={itemClassName}>
+              <ShieldIcon className="size-4 text-muted-foreground" />
+              Panel admina
+            </Link>
+          </>
+        )}
+
+        <div className="my-1.5 h-px bg-border" />
+        <form action={signOut}>
+          <button type="submit" className={cn(itemClassName, "w-full text-left")}>
+            <LogOutIcon className="size-4 text-muted-foreground" />
+            Wyloguj
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

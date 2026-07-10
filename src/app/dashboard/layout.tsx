@@ -18,7 +18,7 @@ export default async function DashboardLayout({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, full_name")
     .eq("id", user.id)
     .single();
 
@@ -43,6 +43,7 @@ export default async function DashboardLayout({
     <div className="min-h-screen">
       <SiteHeader
         email={user.email ?? ""}
+        fullName={profile?.full_name ?? ""}
         role={profile?.role ?? "owner"}
         unreadMessages={unreadMessages}
       />
