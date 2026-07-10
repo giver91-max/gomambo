@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { approveCar, rejectCar } from "./actions";
+import { approveCar, rejectCar, revertCarToPending } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,6 +48,17 @@ export function CarReviewCard({ car, ownerName, imageUrls }: Props) {
     startTransition(async () => {
       try {
         await rejectCar(car.id, reason);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Błąd");
+      }
+    });
+  }
+
+  function handleRevertToPending() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await revertCarToPending(car.id);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Błąd");
       }
@@ -130,6 +141,19 @@ export function CarReviewCard({ car, ownerName, imageUrls }: Props) {
               variant="destructive"
             >
               Odrzuć
+            </Button>
+          </div>
+        )}
+
+        {car.status !== "pending" && (
+          <div className="pt-2">
+            <Button
+              onClick={handleRevertToPending}
+              disabled={isPending}
+              size="sm"
+              variant="outline"
+            >
+              Cofnij do oczekujących
             </Button>
           </div>
         )}

@@ -24,3 +24,14 @@ export async function rejectCar(carId: string, reason: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/admin");
 }
+
+export async function revertCarToPending(carId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("cars")
+    .update({ status: "pending", rejection_reason: null })
+    .eq("id", carId);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin");
+}
