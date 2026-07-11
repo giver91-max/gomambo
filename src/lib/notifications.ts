@@ -42,5 +42,18 @@ export async function getUnreadCounts(
     unreadNotifications = adminMessageIds.filter((id) => !readIds.has(id)).length;
   }
 
+  // Only returns rows for admins — RLS restricts admin_notifications to is_admin().
+  const { data: systemNotifications } = await supabase.from("admin_notifications").select("id");
+  const systemNotificationIds = (systemNotifications ?? []).map((n) => n.id);
+  if (systemNotificationIds.length > 0) {
+    const { data: reads } = await supabase
+      .from("admin_notification_reads")
+      .select("notification_id")
+      .eq("user_id", userId)
+      .in("notification_id", systemNotificationIds);
+    const readIds = new Set((reads ?? []).map((r) => r.notification_id));
+    unreadNotifications += systemNotificationIds.filter((id) => !readIds.has(id)).length;
+  }
+
   return { unreadMessages, unreadNotifications };
 }

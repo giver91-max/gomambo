@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
 
@@ -128,6 +129,13 @@ export async function attachCarImages(
       </ul>
       <p><a href="https://www.gomambo.pl/admin">Przejdź do panelu admina</a></p>
     `,
+  });
+
+  const admin = createAdminClient();
+  await admin.from("admin_notifications").insert({
+    type: "new_car_pending",
+    body: `Nowe auto do weryfikacji: ${car.brand} ${car.model} — ${ownerName}`,
+    link: "/admin",
   });
 
   revalidatePath("/dashboard");

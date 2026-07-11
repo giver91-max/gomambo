@@ -101,6 +101,21 @@ export type AdminMessageRead = {
   read_at: string;
 };
 
+export type AdminNotification = {
+  id: string;
+  type: "new_registration" | "new_car_pending";
+  body: string;
+  link: string | null;
+  created_at: string;
+};
+
+export type AdminNotificationRead = {
+  id: string;
+  notification_id: string;
+  user_id: string;
+  read_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -243,6 +258,26 @@ export type Database = {
             columns: ["message_id"];
             isOneToOne: false;
             referencedRelation: "admin_messages";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      admin_notifications: {
+        Row: AdminNotification;
+        Insert: Partial<AdminNotification> & { type: AdminNotification["type"]; body: string };
+        Update: Partial<AdminNotification>;
+        Relationships: [];
+      };
+      admin_notification_reads: {
+        Row: AdminNotificationRead;
+        Insert: Partial<AdminNotificationRead> & { notification_id: string; user_id: string };
+        Update: Partial<AdminNotificationRead>;
+        Relationships: [
+          {
+            foreignKeyName: "admin_notification_reads_notification_id_fkey";
+            columns: ["notification_id"];
+            isOneToOne: false;
+            referencedRelation: "admin_notifications";
             referencedColumns: ["id"];
           },
         ];

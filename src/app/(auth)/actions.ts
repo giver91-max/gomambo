@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
 
@@ -58,6 +59,13 @@ export async function signUp(
         <li><strong>Email:</strong> ${email}</li>
       </ul>
     `,
+  });
+
+  const admin = createAdminClient();
+  await admin.from("admin_notifications").insert({
+    type: "new_registration",
+    body: `Nowy użytkownik: ${fullName} (${email})`,
+    link: "/admin",
   });
 
   redirect("/register/sprawdz-email");
