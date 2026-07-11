@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import {
   BellIcon,
   CalendarCheckIcon,
@@ -31,22 +34,46 @@ export function UserMenu({
   unreadNotifications?: number;
 }) {
   const totalUnread = unreadMessages + unreadNotifications;
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent | TouchEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, []);
 
   return (
-    <div className="group relative">
+    <div className="group relative" ref={containerRef}>
       <button
         type="button"
+        onClick={() => setOpen((prev) => !prev)}
         className="flex items-center gap-1.5 rounded-md px-1 py-1 text-sm hover:bg-muted"
       >
         <span className="max-w-40 truncate">{displayName}</span>
         {totalUnread > 0 && <Badge>{totalUnread}</Badge>}
-        <ChevronDownIcon className="size-4 text-muted-foreground transition-transform group-hover:rotate-180 group-focus-within:rotate-180" />
+        <ChevronDownIcon
+          className={cn(
+            "size-4 text-muted-foreground transition-transform group-hover:rotate-180 group-focus-within:rotate-180",
+            open && "rotate-180"
+          )}
+        />
       </button>
 
       <div
+        onClick={() => setOpen(false)}
         className={cn(
           "invisible absolute right-0 top-full z-20 w-56 rounded-lg border bg-popover p-1.5 opacity-0 shadow-md transition-opacity",
-          "group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+          "group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100",
+          open && "visible opacity-100"
         )}
       >
         <Link href="/dashboard/notifications" className={itemClassName}>
