@@ -11,14 +11,28 @@ export function MonthCalendar({
   onDayClick,
   minDateIso,
   restrictToHighlighted = false,
+  month: controlledMonth,
+  onMonthChange,
 }: {
   highlightedDates: Set<string>;
   selectedRange?: { start: string; end: string | null };
   onDayClick?: (iso: string) => void;
   minDateIso?: string;
   restrictToHighlighted?: boolean;
+  month?: Date;
+  onMonthChange?: (month: Date) => void;
 }) {
-  const [month, setMonth] = useState(() => new Date());
+  const [internalMonth, setInternalMonth] = useState(() => new Date());
+  const month = controlledMonth ?? internalMonth;
+
+  function changeMonth(next: Date) {
+    if (onMonthChange) {
+      onMonthChange(next);
+    } else {
+      setInternalMonth(next);
+    }
+  }
+
   const days = getMonthGrid(month);
 
   return (
@@ -28,7 +42,7 @@ export function MonthCalendar({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setMonth((m) => addMonths(m, -1))}
+          onClick={() => changeMonth(addMonths(month, -1))}
         >
           ←
         </Button>
@@ -39,7 +53,7 @@ export function MonthCalendar({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setMonth((m) => addMonths(m, 1))}
+          onClick={() => changeMonth(addMonths(month, 1))}
         >
           →
         </Button>
