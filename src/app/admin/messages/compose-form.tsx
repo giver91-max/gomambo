@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { sendAdminMessage } from "./actions";
+import { startAdminConversation } from "./actions";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ export function ComposeForm({ users }: { users: { id: string; full_name: string 
     setError(null);
     setSuccess(false);
     startTransition(async () => {
-      const result = await sendAdminMessage(recipientId || null, body);
+      const result = await startAdminConversation(recipientId || null, body);
       if (result.error) {
         setError(result.error);
       } else {

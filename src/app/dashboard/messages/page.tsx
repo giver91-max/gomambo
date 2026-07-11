@@ -10,16 +10,38 @@ export default async function MessagesPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: rawConversations } = await supabase
-    .from("conversations")
-    .select(
-      `id, owner_id, renter_id, created_at,
-       cars(brand, model),
-       owner:profiles!conversations_owner_id_fkey(full_name),
-       renter:profiles!conversations_renter_id_fkey(full_name),
-       messages(id, body, sender_id, created_at, read_at)`
-    )
-    .or(`owner_id.eq.${user!.id},renter_id.eq.${user!.id}`);
+  const [{ data: rawConversations }, { data: rawAdminConversation }] = await Promise.all([
+    supabase
+      .from("conversations")
+      .select(
+        `id, owner_id, renter_id, created_at,
+         cars(brand, model),
+         owner:profiles!conversations_owner_id_fkey(full_name),
+         renter:profiles!conversations_renter_id_fkey(full_name),
+         messages(id, body, sender_id, created_at, read_at)`
+      )
+      .or(`owner_id.eq.${user!.id},renter_id.eq.${user!.id}`),
+    supabase
+      .from("admin_conversations")
+      .select("id, admin_chat_messages(id, body, sender_id, created_at, read_at)")
+      .eq("user_id", user!.id)
+      .maybeSingle(),
+  ]);
+
+  const adminConversation = rawAdminConversation as unknown as {
+    id: string;
+    admin_chat_messages: {
+      id: string;
+      body: string;
+      sender_id: string;
+      created_at: string;
+      read_at: string | null;
+    }[];
+  } | null;
+  const adminMessages = adminConversation?.admin_chat_messages ?? [];
+  const adminSorted = adminMessages.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const adminLastMessage = adminSorted[adminSorted.length - 1] ?? null;
+  const adminUnreadCount = adminMessages.filter((m) => m.sender_id !== user!.id && !m.read_at).length;
 
   const conversations = (rawConversations ?? []) as unknown as {
     id: string;
@@ -62,36 +84,42 @@ export default async function MessagesPage() {
       <BackButton />
       <h1 className="text-2xl font-bold">Wiadomości</h1>
 
-      {rows.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            Nie masz jeszcze żadnych wiadomości.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {rows.map(({ conversation, lastMessage, unreadCount, otherName }) => (
-            <Link key={conversation.id} href={`/dashboard/messages/${conversation.id}`}>
-              <Card className="transition-shadow hover:shadow-md">
-                <CardContent className="flex items-center justify-between gap-4 py-4">
-                  <div className="min-w-0">
-                    <p className={unreadCount > 0 ? "font-semibold" : "font-medium"}>
-                      {otherName || "Użytkownik"} ·{" "}
-                      {conversation.cars?.brand} {conversation.cars?.model}
-                    </p>
-                    {lastMessage && (
-                      <p className="truncate text-sm text-muted-foreground">
-                        {lastMessage.body}
-                      </p>
-                    )}
-                  </div>
-                  {unreadCount > 0 && <Badge>{unreadCount}</Badge>}
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
+      <div className="space-y-2">
+        <Link href="/dashboard/messages/admin">
+          <Card className="transition-shadow hover:shadow-md">
+            <CardContent className="flex items-center justify-between gap-4 py-4">
+              <div className="min-w-0">
+                <p className={adminUnreadCount > 0 ? "font-semibold" : "font-medium"}>
+                  Wiadomości od GoMambo
+                </p>
+                <p className="truncate text-sm text-muted-foreground">
+                  {adminLastMessage ? adminLastMessage.body : "Napisz do nas, jeśli masz pytanie."}
+                </p>
+              </div>
+              {adminUnreadCount > 0 && <Badge>{adminUnreadCount}</Badge>}
+            </CardContent>
+          </Card>
+        </Link>
+
+        {rows.map(({ conversation, lastMessage, unreadCount, otherName }) => (
+          <Link key={conversation.id} href={`/dashboard/messages/${conversation.id}`}>
+            <Card className="transition-shadow hover:shadow-md">
+              <CardContent className="flex items-center justify-between gap-4 py-4">
+                <div className="min-w-0">
+                  <p className={unreadCount > 0 ? "font-semibold" : "font-medium"}>
+                    {otherName || "Użytkownik"} ·{" "}
+                    {conversation.cars?.brand} {conversation.cars?.model}
+                  </p>
+                  {lastMessage && (
+                    <p className="truncate text-sm text-muted-foreground">{lastMessage.body}</p>
+                  )}
+                </div>
+                {unreadCount > 0 && <Badge>{unreadCount}</Badge>}
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

@@ -2,8 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 // Shared by dashboard/layout.tsx and admin/layout.tsx to badge the nav —
-// two independent unread counts: the owner/renter booking chat, and
-// admin-to-user announcements/direct messages.
+// two independent unread counts: chat (booking threads + the admin support
+// chat), and system notifications (admin-only: new registrations/cars).
 export async function getUnreadCounts(
   supabase: SupabaseClient<Database>,
   userId: string
@@ -25,26 +25,24 @@ export async function getUnreadCounts(
     unreadMessages = count ?? 0;
   }
 
-  const { data: adminMessages } = await supabase
-    .from("admin_messages")
-    .select("id")
-    .or(`recipient_id.eq.${userId},recipient_id.is.null`);
-  const adminMessageIds = (adminMessages ?? []).map((m) => m.id);
-
-  let unreadNotifications = 0;
-  if (adminMessageIds.length > 0) {
-    const { data: reads } = await supabase
-      .from("admin_message_reads")
-      .select("message_id")
-      .eq("user_id", userId)
-      .in("message_id", adminMessageIds);
-    const readIds = new Set((reads ?? []).map((r) => r.message_id));
-    unreadNotifications = adminMessageIds.filter((id) => !readIds.has(id)).length;
+  // RLS returns only the caller's own thread for a regular user, or every
+  // thread for an admin — same "my rows" shape as the conversations query above.
+  const { data: adminConversations } = await supabase.from("admin_conversations").select("id");
+  const adminConversationIds = (adminConversations ?? []).map((c) => c.id);
+  if (adminConversationIds.length > 0) {
+    const { count } = await supabase
+      .from("admin_chat_messages")
+      .select("id", { count: "exact", head: true })
+      .in("conversation_id", adminConversationIds)
+      .neq("sender_id", userId)
+      .is("read_at", null);
+    unreadMessages += count ?? 0;
   }
 
   // Only returns rows for admins — RLS restricts admin_notifications to is_admin().
   const { data: systemNotifications } = await supabase.from("admin_notifications").select("id");
   const systemNotificationIds = (systemNotifications ?? []).map((n) => n.id);
+  let unreadNotifications = 0;
   if (systemNotificationIds.length > 0) {
     const { data: reads } = await supabase
       .from("admin_notification_reads")
@@ -52,7 +50,7 @@ export async function getUnreadCounts(
       .eq("user_id", userId)
       .in("notification_id", systemNotificationIds);
     const readIds = new Set((reads ?? []).map((r) => r.notification_id));
-    unreadNotifications += systemNotificationIds.filter((id) => !readIds.has(id)).length;
+    unreadNotifications = systemNotificationIds.filter((id) => !readIds.has(id)).length;
   }
 
   return { unreadMessages, unreadNotifications };

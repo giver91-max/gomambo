@@ -86,19 +86,19 @@ export type SiteSettings = {
   updated_at: string;
 };
 
-export type AdminMessage = {
+export type AdminConversation = {
   id: string;
-  sender_id: string;
-  recipient_id: string | null;
-  body: string;
+  user_id: string;
   created_at: string;
 };
 
-export type AdminMessageRead = {
+export type AdminChatMessage = {
   id: string;
-  message_id: string;
-  user_id: string;
-  read_at: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  read_at: string | null;
 };
 
 export type AdminNotification = {
@@ -242,22 +242,30 @@ export type Database = {
         Update: Partial<SiteSettings>;
         Relationships: [];
       };
-      admin_messages: {
-        Row: AdminMessage;
-        Insert: Partial<AdminMessage> & { sender_id: string; body: string };
-        Update: Partial<AdminMessage>;
-        Relationships: [];
-      };
-      admin_message_reads: {
-        Row: AdminMessageRead;
-        Insert: Partial<AdminMessageRead> & { message_id: string; user_id: string };
-        Update: Partial<AdminMessageRead>;
+      admin_conversations: {
+        Row: AdminConversation;
+        Insert: Partial<AdminConversation> & { user_id: string };
+        Update: Partial<AdminConversation>;
         Relationships: [
           {
-            foreignKeyName: "admin_message_reads_message_id_fkey";
-            columns: ["message_id"];
+            foreignKeyName: "admin_conversations_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      admin_chat_messages: {
+        Row: AdminChatMessage;
+        Insert: Partial<AdminChatMessage> & { conversation_id: string; sender_id: string; body: string };
+        Update: Partial<AdminChatMessage>;
+        Relationships: [
+          {
+            foreignKeyName: "admin_chat_messages_conversation_id_fkey";
+            columns: ["conversation_id"];
             isOneToOne: false;
-            referencedRelation: "admin_messages";
+            referencedRelation: "admin_conversations";
             referencedColumns: ["id"];
           },
         ];

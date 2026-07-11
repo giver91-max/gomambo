@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { cn } from "@/lib/utils";
 import { BackButton } from "@/components/back-button";
+import { ChatThread } from "@/components/chat-thread";
 import { markConversationRead } from "../actions";
 import { isConversationActive } from "@/lib/conversation-status";
 import { ReplyForm } from "./reply-form";
@@ -47,26 +47,15 @@ export default async function ConversationPage({
         {conversation.cars?.brand} {conversation.cars?.model}
       </h1>
 
-      <div className="space-y-3 rounded-lg border p-4">
-        {(messages ?? []).map((message) => {
-          const isMine = message.sender_id === user.id;
-          return (
-            <div
-              key={message.id}
-              className={cn("flex", isMine ? "justify-end" : "justify-start")}
-            >
-              <div
-                className={cn(
-                  "max-w-[80%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm",
-                  isMine ? "bg-primary text-primary-foreground" : "bg-muted"
-                )}
-              >
-                {message.body}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <ChatThread
+        messages={(messages ?? []).map((m) => ({
+          id: m.id,
+          senderId: m.sender_id,
+          body: m.body,
+          createdAt: m.created_at,
+        }))}
+        currentUserId={user.id}
+      />
 
       {active ? (
         <ReplyForm conversationId={conversation.id} />
