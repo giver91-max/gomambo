@@ -162,11 +162,14 @@ export function LandingPage({
         <div className={styles.heroBg} />
 
         <div style={{ marginBottom: 40, display: "flex", justifyContent: "center" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src="/hero.png"
-            style={{ width: 520, maxWidth: "90vw", display: "block" }}
+            width={1672}
+            height={941}
+            sizes="(max-width: 600px) 90vw, 520px"
+            style={{ width: 520, maxWidth: "90vw", height: "auto", display: "block" }}
             alt="GoMambo"
+            priority
           />
         </div>
         <p className={styles.heroEyebrow}>Polska · Platforma P2P · Uruchomienie IV kwartał 2026</p>

@@ -17,13 +17,10 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, full_name")
-    .eq("id", user.id)
-    .single();
-
-  const { unreadMessages, unreadNotifications } = await getUnreadCounts(supabase, user.id);
+  const [{ data: profile }, { unreadMessages, unreadNotifications }] = await Promise.all([
+    supabase.from("profiles").select("role, full_name").eq("id", user.id).single(),
+    getUnreadCounts(supabase, user.id),
+  ]);
 
   return (
     <div className="min-h-screen">

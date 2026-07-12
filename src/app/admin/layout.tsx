@@ -17,17 +17,17 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, full_name")
-    .eq("id", user.id)
-    .single();
+  // Middleware already redirects non-admins away from /admin/*, so this
+  // pays off in the common case by not waiting on the profile query before
+  // starting the unread-count fetch too.
+  const [{ data: profile }, { unreadMessages, unreadNotifications }] = await Promise.all([
+    supabase.from("profiles").select("role, full_name").eq("id", user.id).single(),
+    getUnreadCounts(supabase, user.id),
+  ]);
 
   if (profile?.role !== "admin") {
     redirect("/dashboard");
   }
-
-  const { unreadMessages, unreadNotifications } = await getUnreadCounts(supabase, user.id);
 
   return (
     <div className="min-h-screen">
