@@ -40,7 +40,7 @@ export async function signUp(
   const origin = headersList.get("origin") ?? `${proto}://${host}`;
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
+  const { data: signUpData, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -69,7 +69,7 @@ export async function signUp(
   await admin.from("admin_notifications").insert({
     type: "new_registration",
     body: `Nowy użytkownik: ${fullName} (${email})`,
-    link: "/admin",
+    link: signUpData.user ? `/admin/users/${signUpData.user.id}` : "/admin/users",
   });
 
   redirect("/register/sprawdz-email");

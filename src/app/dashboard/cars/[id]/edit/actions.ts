@@ -179,6 +179,7 @@ export async function deleteCar(
 
   revalidatePath("/dashboard");
   revalidatePath("/admin");
+  revalidatePath("/admin/cars");
   redirect(redirectTo);
 }
 

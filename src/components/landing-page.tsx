@@ -147,10 +147,7 @@ export function LandingPage({
               <Link href="/login" className={styles.navLogin}>
                 Zaloguj się
               </Link>
-              <Link
-                href={{ pathname: "/register", query: { next: "/dashboard/cars/new" } }}
-                className={styles.navCta}
-              >
+              <Link href="/zostan-wlascicielem" className={styles.navCta}>
                 Zostań właścicielem
               </Link>
             </>

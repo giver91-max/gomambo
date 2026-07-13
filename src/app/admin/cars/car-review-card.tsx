@@ -167,7 +167,7 @@ export function CarReviewCard({ car, ownerName, imageUrls }: Props) {
           >
             Edytuj →
           </Link>
-          <DeleteCarButton carId={car.id} redirectTo="/admin" />
+          <DeleteCarButton carId={car.id} redirectTo="/admin/cars" />
         </div>
       </CardContent>
     </Card>

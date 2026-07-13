@@ -52,16 +52,16 @@ export default async function EditCarPage({
       <div className="flex items-center justify-between">
         <div>
           <Link
-            href={viewingAsAdmin ? "/admin" : "/dashboard"}
+            href={viewingAsAdmin ? "/admin/cars" : "/dashboard"}
             className="text-sm text-muted-foreground hover:underline"
           >
-            {viewingAsAdmin ? "← Panel admina" : "← Moje auta"}
+            {viewingAsAdmin ? "← Samochody" : "← Moje auta"}
           </Link>
           <h1 className="mt-1 text-2xl font-bold">
             Edytuj auto — {car.brand} {car.model}
           </h1>
         </div>
-        <DeleteCarButton carId={car.id} redirectTo={viewingAsAdmin ? "/admin" : undefined} />
+        <DeleteCarButton carId={car.id} redirectTo={viewingAsAdmin ? "/admin/cars" : undefined} />
       </div>
 
       {car.status === "approved" && !isAdmin && (

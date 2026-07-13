@@ -127,7 +127,7 @@ export async function attachCarImages(
         <li><strong>Cena:</strong> ${Number(car.price_per_day).toFixed(2)} zł/dzień</li>
         <li><strong>Właściciel:</strong> ${ownerName} (${user.email})</li>
       </ul>
-      <p><a href="https://www.gomambo.pl/admin">Przejdź do panelu admina</a></p>
+      <p><a href="https://www.gomambo.pl/admin/cars">Przejdź do panelu admina</a></p>
     `,
   });
 
@@ -135,7 +135,7 @@ export async function attachCarImages(
   await admin.from("admin_notifications").insert({
     type: "new_car_pending",
     body: `Nowe auto do weryfikacji: ${car.brand} ${car.model} — ${ownerName}`,
-    link: "/admin",
+    link: "/admin/cars",
   });
 
   revalidatePath("/dashboard");
