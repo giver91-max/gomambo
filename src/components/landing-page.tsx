@@ -195,7 +195,7 @@ export function LandingPage({
         </p>
 
         <div className={styles.splitCta}>
-          <Link href={addCarHref} className={`${styles.ctaCard} ${styles.owner}`}>
+          <Link href="/zostan-wlascicielem" className={`${styles.ctaCard} ${styles.owner}`}>
             <div className={styles.ctaRole}>Dla właścicieli</div>
             <div className={styles.ctaTitle}>Udostępnij auto →</div>
             <div className={styles.ctaDesc}>
