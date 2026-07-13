@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AvailabilityAndInquiry } from "./availability-and-inquiry";
 import { toISODate } from "@/lib/calendar";
 import { BackButton } from "@/components/back-button";
@@ -126,10 +127,12 @@ export default async function CarDetailPage({
     isFavorited = !!favorite;
   }
 
+  // Reviews left ABOUT the owner (as a host) — not reviews the owner left
+  // about their renters, which also carry this car's car_id.
   const { data: rawReviews } = await supabase
     .from("reviews")
     .select("id, rating, comment, created_at, reviewer:profiles!reviews_reviewer_id_fkey(full_name)")
-    .eq("car_id", car.id)
+    .eq("reviewee_id", car.owner_id)
     .order("created_at", { ascending: false });
 
   const reviews = (rawReviews ?? []) as unknown as {
@@ -142,13 +145,20 @@ export default async function CarDetailPage({
   const avgRating =
     reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : null;
 
-  const { data: ownerVerification } = await supabase
-    .from("identity_verifications")
-    .select("status")
-    .eq("user_id", car.owner_id)
-    .eq("status", "approved")
-    .maybeSingle();
+  const [{ data: ownerProfile }, { data: ownerVerification }] = await Promise.all([
+    supabase.from("profiles").select("full_name, avatar_path").eq("id", car.owner_id).single(),
+    supabase
+      .from("identity_verifications")
+      .select("status")
+      .eq("user_id", car.owner_id)
+      .eq("status", "approved")
+      .maybeSingle(),
+  ]);
   const isOwnerVerified = !!ownerVerification;
+  const ownerAvatarUrl = ownerProfile?.avatar_path
+    ? supabase.storage.from("avatars").getPublicUrl(ownerProfile.avatar_path).data.publicUrl
+    : null;
+  const ownerName = ownerProfile?.full_name || "Właściciel";
 
   return (
     <div className="space-y-6">
@@ -177,19 +187,10 @@ export default async function CarDetailPage({
       </div>
 
       <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-bold">
-            {car.brand} {car.model} ({car.year})
-          </h1>
-          {isOwnerVerified && <Badge>Zweryfikowany właściciel</Badge>}
-        </div>
+        <h1 className="text-2xl font-bold">
+          {car.brand} {car.model} ({car.year})
+        </h1>
         <p className="text-muted-foreground">{car.city}</p>
-        {avgRating !== null && (
-          <p className="text-sm text-muted-foreground">
-            <span className="text-primary">★</span> {avgRating.toFixed(1)} ({reviews.length}{" "}
-            {reviews.length === 1 ? "opinia" : "opinii"})
-          </p>
-        )}
       </div>
 
       {car.description && (
@@ -220,30 +221,51 @@ export default async function CarDetailPage({
         </CardContent>
       </Card>
 
-      {reviews.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="font-semibold">Opinie</h2>
-          {reviews.map((review) => (
-            <div key={review.id} className="rounded-lg border p-3 text-sm">
-              <div className="flex items-center justify-between">
-                <p className="font-medium">{review.reviewer?.full_name || "Użytkownik"}</p>
-                <p className="text-primary">
-                  {"★".repeat(review.rating)}
-                  <span className="text-muted-foreground/40">
-                    {"★".repeat(5 - review.rating)}
-                  </span>
-                </p>
-              </div>
-              {review.comment && (
-                <p className="mt-1 text-muted-foreground">{review.comment}</p>
-              )}
-              <p className="mt-1 text-xs text-muted-foreground">
-                {new Date(review.created_at).toLocaleDateString("pl-PL")}
+      <div className="space-y-4">
+        <h2 className="font-semibold">O właścicielu</h2>
+        <div className="flex items-center gap-3">
+          <Avatar size="lg" className="size-14">
+            <AvatarImage src={ownerAvatarUrl ?? undefined} alt={ownerName} />
+            <AvatarFallback className="text-base">
+              {ownerName.slice(0, 1).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium">{ownerName}</p>
+              {isOwnerVerified && <Badge>Zweryfikowany właściciel</Badge>}
+            </div>
+            {avgRating !== null ? (
+              <p className="text-sm text-muted-foreground">
+                <span className="text-primary">★</span> {avgRating.toFixed(1)} ({reviews.length}{" "}
+                {reviews.length === 1 ? "opinia" : "opinii"})
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Brak opinii jeszcze.</p>
+            )}
+          </div>
+        </div>
+
+        {reviews.map((review) => (
+          <div key={review.id} className="rounded-lg border p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <p className="font-medium">{review.reviewer?.full_name || "Użytkownik"}</p>
+              <p className="text-primary">
+                {"★".repeat(review.rating)}
+                <span className="text-muted-foreground/40">
+                  {"★".repeat(5 - review.rating)}
+                </span>
               </p>
             </div>
-          ))}
-        </div>
-      )}
+            {review.comment && (
+              <p className="mt-1 text-muted-foreground">{review.comment}</p>
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {new Date(review.created_at).toLocaleDateString("pl-PL")}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
