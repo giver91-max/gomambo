@@ -58,7 +58,7 @@ const RESPONSIBILITIES = [
 const FAQS = [
   {
     q: "Czy muszę mieć własne ubezpieczenie?",
-    a: "Każde auto na GoMambo ma obowiązkową polisę OC właściciela — w Polsce ubezpieczenie OC jest przypisane do pojazdu, więc obejmuje szkody wobec osób trzecich niezależnie od tego, kto prowadzi, o ile ma ważne prawo jazdy. GoMambo nie oferuje obecnie własnego ubezpieczenia AC ani pakietu ochrony od szkód własnych pojazdu — to warto mieć na uwadze i ewentualnie ustalić z właścicielem przed rezerwacją.",
+    a: "Każde auto na GoMambo ma obowiązkową polisę OC właściciela — w Polsce ubezpieczenie OC jest przypisane do pojazdu, więc obejmuje szkody wobec osób trzecich niezależnie od tego, kto prowadzi, o ile ma ważne prawo jazdy. Dodatkowo GoMambo wprowadza własne ubezpieczenie na czas wynajmu — szczegóły ogłosimy, gdy tylko zostaną ustalone.",
   },
   {
     q: "Kto odpowiada za uszkodzenia auta w trakcie wynajmu?",
@@ -181,10 +181,10 @@ export default async function RentACarInfoPage() {
             ważne prawo jazdy.
           </p>
           <p className="text-muted-foreground">
-            GoMambo nie oferuje obecnie własnego ubezpieczenia od szkód własnych pojazdu
-            (AC) ani pakietu ochrony na wzór dużych wypożyczalni. Umowę najmu zawieracie
-            bezpośrednio Ty i właściciel — dlatego przy odbiorze i zwrocie warto
-            udokumentować stan auta zdjęciami w panelu rezerwacji.
+            Dodatkowo GoMambo wprowadza własne ubezpieczenie obejmujące okres wynajmu —
+            szczegółowe warunki ogłosimy, gdy tylko zostaną ustalone z naszym brokerem.
+            Niezależnie od tego, przy odbiorze i zwrocie warto udokumentować stan auta
+            zdjęciami w panelu rezerwacji — to podstawa w razie jakiegokolwiek sporu.
           </p>
         </section>
 
