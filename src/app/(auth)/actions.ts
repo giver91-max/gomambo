@@ -18,6 +18,7 @@ export async function signUp(
   const password = String(formData.get("password") ?? "");
   const fullName = String(formData.get("fullName") ?? "").trim();
   const next = String(formData.get("next") ?? "/dashboard");
+  const acceptTerms = formData.get("acceptTerms") === "on";
   const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
 
   if (!email || !password || !fullName) {
@@ -25,6 +26,9 @@ export async function signUp(
   }
   if (password.length < 8) {
     return { error: "Hasło musi mieć co najmniej 8 znaków." };
+  }
+  if (!acceptTerms) {
+    return { error: "Musisz zaakceptować regulamin i politykę prywatności." };
   }
   if (!(await verifyRecaptcha(recaptchaToken, "register"))) {
     return { error: "Weryfikacja antyspamowa nie powiodła się. Spróbuj ponownie." };
@@ -40,7 +44,7 @@ export async function signUp(
     email,
     password,
     options: {
-      data: { full_name: fullName },
+      data: { full_name: fullName, terms_accepted_at: new Date().toISOString() },
       emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
     },
   });

@@ -1,7 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/back-button";
+import { cancelBooking } from "../bookings/actions";
+import { ReviewForm } from "../bookings/review-form";
 import type { BookingStatus } from "@/types/database";
 
 const statusLabel: Record<BookingStatus, string> = {
@@ -35,6 +38,19 @@ export default async function RentalHistoryPage() {
     .eq("renter_id", user!.id)
     .order("created_at", { ascending: false });
 
+  const completedIds = (bookings ?? [])
+    .filter((b) => b.status === "completed")
+    .map((b) => b.id);
+  let reviewedBookingIds = new Set<string>();
+  if (completedIds.length > 0) {
+    const { data: reviews } = await supabase
+      .from("reviews")
+      .select("booking_id")
+      .eq("reviewer_id", user!.id)
+      .in("booking_id", completedIds);
+    reviewedBookingIds = new Set((reviews ?? []).map((r) => r.booking_id));
+  }
+
   return (
     <div className="space-y-6">
       <BackButton />
@@ -58,11 +74,21 @@ export default async function RentalHistoryPage() {
                   {statusLabel[booking.status]}
                 </Badge>
               </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
                 <p>{booking.cars?.city}</p>
                 <p>
                   Termin: {booking.start_date} – {booking.end_date}
                 </p>
+                {(booking.status === "requested" || booking.status === "accepted") && (
+                  <form action={cancelBooking.bind(null, booking.id)}>
+                    <Button type="submit" variant="outline" size="sm">
+                      Anuluj rezerwację
+                    </Button>
+                  </form>
+                )}
+                {booking.status === "completed" && !reviewedBookingIds.has(booking.id) && (
+                  <ReviewForm bookingId={booking.id} />
+                )}
               </CardContent>
             </Card>
           ))}

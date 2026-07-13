@@ -181,3 +181,26 @@ export async function deleteCar(
   revalidatePath("/admin");
   redirect(redirectTo);
 }
+
+// Toggling between "approved" and "paused" is the one status change the
+// enforce_car_update_rules trigger lets an owner make directly (no admin
+// client needed, unlike revertToPendingIfApproved above).
+export async function toggleCarPause(carId: string): Promise<{ error: string | null }> {
+  const { supabase, car } = await requireOwnedCar(carId);
+  if (!car) {
+    return { error: "Nie masz dostępu do tego ogłoszenia." };
+  }
+  if (car.status !== "approved" && car.status !== "paused") {
+    return { error: "Można wstrzymać lub wznowić tylko zatwierdzone ogłoszenie." };
+  }
+
+  const nextStatus = car.status === "approved" ? "paused" : "approved";
+  const { error } = await supabase.from("cars").update({ status: nextStatus }).eq("id", carId);
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/auta/${carId}`);
+  return { error: null };
+}

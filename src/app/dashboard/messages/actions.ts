@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isConversationActive } from "@/lib/conversation-status";
 import { getOrCreateAdminConversation } from "@/lib/admin-chat";
+import { isSendingTooFast } from "@/lib/rate-limit";
 
 export type MessageState = { error: string | null };
 
@@ -37,6 +38,10 @@ export async function sendMessage(
   const active = await isConversationActive(supabase, conversation.car_id, conversation.renter_id);
   if (!active) {
     return { error: "Czat jest zamknięty — wypożyczenie zostało zakończone." };
+  }
+
+  if (await isSendingTooFast(supabase, "messages", user.id)) {
+    return { error: "Wysyłasz wiadomości zbyt szybko. Odczekaj chwilę." };
   }
 
   const { error } = await supabase.from("messages").insert({
@@ -85,6 +90,10 @@ export async function sendMessageToAdmin(
   const body = String(formData.get("body") ?? "").trim();
   if (!body) {
     return { error: "Napisz wiadomość." };
+  }
+
+  if (await isSendingTooFast(supabase, "admin_chat_messages", user.id)) {
+    return { error: "Wysyłasz wiadomości zbyt szybko. Odczekaj chwilę." };
   }
 
   const conversationId = await getOrCreateAdminConversation(supabase, user.id);

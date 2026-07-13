@@ -91,6 +91,30 @@ function RegisterForm() {
                 autoComplete="new-password"
               />
             </div>
+            <div className="flex items-start gap-2">
+              <input
+                id="acceptTerms"
+                name="acceptTerms"
+                type="checkbox"
+                required
+                className="mt-1 size-4 shrink-0 rounded border-input"
+              />
+              <Label htmlFor="acceptTerms" className="text-sm font-normal text-muted-foreground">
+                Akceptuję{" "}
+                <Link href="/regulamin" target="_blank" className="underline underline-offset-4">
+                  Regulamin
+                </Link>{" "}
+                i{" "}
+                <Link
+                  href="/polityka-prywatnosci"
+                  target="_blank"
+                  className="underline underline-offset-4"
+                >
+                  Politykę prywatności
+                </Link>
+                .
+              </Label>
+            </div>
             {state.error && (
               <p className="text-sm text-destructive">{state.error}</p>
             )}

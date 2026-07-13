@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/back-button";
 import { BookingActions } from "./booking-actions";
+import { ReviewForm } from "./review-form";
 import type { BookingStatus } from "@/types/database";
 
 const statusLabel: Record<BookingStatus, string> = {
@@ -48,6 +49,17 @@ export default async function OwnerBookingsPage() {
     renter: { full_name: string } | null;
   }[];
 
+  const completedIds = bookings.filter((b) => b.status === "completed").map((b) => b.id);
+  let reviewedBookingIds = new Set<string>();
+  if (completedIds.length > 0) {
+    const { data: reviews } = await supabase
+      .from("reviews")
+      .select("booking_id")
+      .eq("reviewer_id", user!.id)
+      .in("booking_id", completedIds);
+    reviewedBookingIds = new Set((reviews ?? []).map((r) => r.booking_id));
+  }
+
   return (
     <div className="space-y-6">
       <BackButton />
@@ -89,6 +101,9 @@ export default async function OwnerBookingsPage() {
                     booking.status === "declined" ||
                     booking.status === "cancelled") && <span>Czat zamknięty</span>}
                 </div>
+                {booking.status === "completed" && !reviewedBookingIds.has(booking.id) && (
+                  <ReviewForm bookingId={booking.id} />
+                )}
               </CardContent>
             </Card>
           ))}

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
 import { AvatarManager } from "@/components/avatar-manager";
+import { IdentityVerificationManager } from "@/components/identity-verification-manager";
 import { ProfileForm } from "./profile-form";
 import { EmailForm } from "./email-form";
 import { NotificationForm } from "./notification-form";
@@ -31,6 +32,20 @@ export default async function ProfilePage() {
     ? supabase.storage.from("avatars").getPublicUrl(profile.avatar_path).data.publicUrl
     : null;
   const fallbackLabel = (profile.full_name || user.email || "?").slice(0, 1).toUpperCase();
+
+  const { data: verification } = await supabase
+    .from("identity_verifications")
+    .select("status, rejection_reason, document_path")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  let documentUrl: string | null = null;
+  if (verification?.document_path) {
+    const { data: signed } = await supabase.storage
+      .from("id-documents")
+      .createSignedUrl(verification.document_path, 60 * 5);
+    documentUrl = signed?.signedUrl ?? null;
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -70,6 +85,20 @@ export default async function ProfilePage() {
         </CardHeader>
         <CardContent>
           <NotificationForm initialEmailEnabled={profile.notify_email} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Weryfikacja tożsamości</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <IdentityVerificationManager
+            userId={user.id}
+            initialStatus={verification?.status ?? null}
+            initialRejectionReason={verification?.rejection_reason ?? null}
+            initialDocumentUrl={documentUrl}
+          />
         </CardContent>
       </Card>
     </div>

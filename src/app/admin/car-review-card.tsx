@@ -90,7 +90,9 @@ export function CarReviewCard({ car, ownerName, imageUrls }: Props) {
             ? "Oczekuje"
             : car.status === "approved"
               ? "Zatwierdzone"
-              : "Odrzucone"}
+              : car.status === "paused"
+                ? "Wstrzymane"
+                : "Odrzucone"}
         </Badge>
       </CardHeader>
       <CardContent className="space-y-4">

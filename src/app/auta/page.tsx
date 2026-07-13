@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/back-button";
 import { FavoriteButton } from "@/components/favorite-button";
 import { MaintenanceNotice } from "@/components/maintenance-notice";
+import { eachDateInRange, toISODate } from "@/lib/calendar";
 
 export const metadata: Metadata = {
   title: "Wypożyczalnia aut — wynajmij auto od sąsiada",
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 export default async function AutaPage({
   searchParams,
 }: {
-  searchParams: { city?: string; maxPrice?: string };
+  searchParams: { city?: string; maxPrice?: string; startDate?: string; endDate?: string };
 }) {
   const supabase = await createClient();
 
@@ -78,6 +79,34 @@ export default async function AutaPage({
     query = query.lte("price_per_day", maxPrice);
   }
 
+  const todayIso = toISODate(new Date());
+  const { startDate, endDate } = searchParams;
+  if (startDate && endDate && startDate >= todayIso && endDate >= startDate) {
+    const wantedDates = eachDateInRange(startDate, endDate);
+    const { data: availabilityRows } = await supabase
+      .from("car_availability")
+      .select("car_id, date")
+      .gte("date", startDate)
+      .lte("date", endDate);
+
+    const datesByCarId = new Map<string, Set<string>>();
+    for (const row of availabilityRows ?? []) {
+      const set = datesByCarId.get(row.car_id) ?? new Set<string>();
+      set.add(row.date);
+      datesByCarId.set(row.car_id, set);
+    }
+    const availableCarIds = Array.from(datesByCarId.entries())
+      .filter(([, dates]) => wantedDates.every((d) => dates.has(d)))
+      .map(([carId]) => carId);
+
+    // No car is available for the range — pass an id that can't match
+    // instead of skipping the filter, so the listing correctly shows nothing.
+    query = query.in(
+      "id",
+      availableCarIds.length > 0 ? availableCarIds : ["00000000-0000-0000-0000-000000000000"]
+    );
+  }
+
   const { data: cars } = await query;
 
   let favoriteCarIds = new Set<string>();
@@ -125,6 +154,28 @@ export default async function AutaPage({
             min={1}
             placeholder="np. 200"
             defaultValue={searchParams.maxPrice ?? ""}
+            className="w-40"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="startDate">Od</Label>
+          <Input
+            id="startDate"
+            name="startDate"
+            type="date"
+            min={todayIso}
+            defaultValue={searchParams.startDate ?? ""}
+            className="w-40"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="endDate">Do</Label>
+          <Input
+            id="endDate"
+            name="endDate"
+            type="date"
+            min={searchParams.startDate ?? todayIso}
+            defaultValue={searchParams.endDate ?? ""}
             className="w-40"
           />
         </div>

@@ -1,5 +1,5 @@
 export type ProfileRole = "owner" | "admin";
-export type CarStatus = "pending" | "approved" | "rejected";
+export type CarStatus = "pending" | "approved" | "rejected" | "paused";
 
 export type Profile = {
   id: string;
@@ -63,6 +63,17 @@ export type Booking = {
   updated_at: string;
 };
 
+export type Review = {
+  id: string;
+  booking_id: string;
+  car_id: string;
+  reviewer_id: string;
+  reviewee_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+};
+
 export type Conversation = {
   id: string;
   car_id: string;
@@ -103,10 +114,22 @@ export type AdminChatMessage = {
 
 export type AdminNotification = {
   id: string;
-  type: "new_registration" | "new_car_pending";
+  type: "new_registration" | "new_car_pending" | "new_identity_verification";
   body: string;
   link: string | null;
   created_at: string;
+};
+
+export type IdentityVerificationStatus = "pending" | "approved" | "rejected";
+
+export type IdentityVerification = {
+  id: string;
+  user_id: string;
+  document_path: string;
+  status: IdentityVerificationStatus;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type AdminNotificationRead = {
@@ -208,6 +231,25 @@ export type Database = {
           },
         ];
       };
+      reviews: {
+        Row: Review;
+        Insert: Partial<Review> & {
+          booking_id: string;
+          reviewer_id: string;
+          reviewee_id: string;
+          rating: number;
+        };
+        Update: Partial<Review>;
+        Relationships: [
+          {
+            foreignKeyName: "reviews_car_id_fkey";
+            columns: ["car_id"];
+            isOneToOne: false;
+            referencedRelation: "cars";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       conversations: {
         Row: Conversation;
         Insert: Partial<Conversation> & { car_id: string; owner_id: string; renter_id: string };
@@ -286,6 +328,20 @@ export type Database = {
             columns: ["notification_id"];
             isOneToOne: false;
             referencedRelation: "admin_notifications";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      identity_verifications: {
+        Row: IdentityVerification;
+        Insert: Partial<IdentityVerification> & { user_id: string; document_path: string };
+        Update: Partial<IdentityVerification>;
+        Relationships: [
+          {
+            foreignKeyName: "identity_verifications_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];

@@ -5,17 +5,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { CarStatus } from "@/types/database";
 import { BackButton } from "@/components/back-button";
+import { PauseToggleButton } from "./cars/pause-toggle-button";
 
 const statusLabel: Record<CarStatus, string> = {
   pending: "Oczekuje na zatwierdzenie",
   approved: "Zatwierdzone",
   rejected: "Odrzucone",
+  paused: "Wstrzymane",
 };
 
 const statusVariant: Record<CarStatus, "secondary" | "default" | "destructive"> = {
   pending: "secondary",
   approved: "default",
   rejected: "destructive",
+  paused: "secondary",
 };
 
 export default async function DashboardPage() {
@@ -80,6 +83,9 @@ export default async function DashboardPage() {
                     Zarządzaj dostępnością →
                   </Link>
                 </div>
+                {(car.status === "approved" || car.status === "paused") && (
+                  <PauseToggleButton carId={car.id} status={car.status} />
+                )}
               </CardContent>
             </Card>
           ))}

@@ -10,6 +10,7 @@ const TABS: { value: CarStatus; label: string }[] = [
   { value: "pending", label: "Oczekujące" },
   { value: "approved", label: "Zatwierdzone" },
   { value: "rejected", label: "Odrzucone" },
+  { value: "paused", label: "Wstrzymane" },
 ];
 
 export default async function AdminPage({
@@ -18,7 +19,9 @@ export default async function AdminPage({
   searchParams: { status?: string };
 }) {
   const status: CarStatus =
-    searchParams.status === "approved" || searchParams.status === "rejected"
+    searchParams.status === "approved" ||
+    searchParams.status === "rejected" ||
+    searchParams.status === "paused"
       ? searchParams.status
       : "pending";
 

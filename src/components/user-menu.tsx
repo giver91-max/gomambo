@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
+  BadgeCheckIcon,
   BellIcon,
   CalendarCheckIcon,
   CarIcon,
@@ -117,6 +118,10 @@ export function UserMenu({
             <Link href="/admin/messages" className={itemClassName}>
               <SendIcon className="size-4 text-muted-foreground" />
               Wiadomości do użytkowników
+            </Link>
+            <Link href="/admin/verifications" className={itemClassName}>
+              <BadgeCheckIcon className="size-4 text-muted-foreground" />
+              Weryfikacja tożsamości
             </Link>
           </>
         )}
