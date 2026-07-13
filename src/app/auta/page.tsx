@@ -10,6 +10,13 @@ import { BackButton } from "@/components/back-button";
 import { FavoriteButton } from "@/components/favorite-button";
 import { MaintenanceNotice } from "@/components/maintenance-notice";
 import { eachDateInRange, toISODate } from "@/lib/calendar";
+import { firstNameOnly } from "@/lib/utils";
+import {
+  FUEL_TYPE_LABELS,
+  TRANSMISSION_LABELS,
+  VEHICLE_TYPE_LABELS,
+} from "@/lib/car-options";
+import type { FuelType, Transmission, VehicleType } from "@/types/database";
 
 export const metadata: Metadata = {
   title: "Wypożyczalnia aut — wynajmij auto od sąsiada",
@@ -21,7 +28,16 @@ export const metadata: Metadata = {
 export default async function AutaPage({
   searchParams,
 }: {
-  searchParams: { city?: string; maxPrice?: string; startDate?: string; endDate?: string };
+  searchParams: {
+    city?: string;
+    maxPrice?: string;
+    startDate?: string;
+    endDate?: string;
+    vehicleType?: string;
+    fuelType?: string;
+    transmission?: string;
+    minSeats?: string;
+  };
 }) {
   const supabase = await createClient();
 
@@ -78,6 +94,19 @@ export default async function AutaPage({
   if (searchParams.maxPrice && Number.isFinite(maxPrice) && maxPrice > 0) {
     query = query.lte("price_per_day", maxPrice);
   }
+  if (searchParams.vehicleType) {
+    query = query.eq("vehicle_type", searchParams.vehicleType as VehicleType);
+  }
+  if (searchParams.fuelType) {
+    query = query.eq("fuel_type", searchParams.fuelType as FuelType);
+  }
+  if (searchParams.transmission) {
+    query = query.eq("transmission", searchParams.transmission as Transmission);
+  }
+  const minSeats = Number(searchParams.minSeats);
+  if (searchParams.minSeats && Number.isFinite(minSeats) && minSeats > 0) {
+    query = query.gte("seats", minSeats);
+  }
 
   const todayIso = toISODate(new Date());
   const { startDate, endDate } = searchParams;
@@ -116,6 +145,29 @@ export default async function AutaPage({
       .select("car_id")
       .eq("user_id", user.id);
     favoriteCarIds = new Set((favorites ?? []).map((f) => f.car_id));
+  }
+
+  const ownerIds = Array.from(new Set((cars ?? []).map((car) => car.owner_id)));
+  const ratingByOwnerId = new Map<string, { avg: number; count: number }>();
+  const ownerNameById = new Map<string, string>();
+  if (ownerIds.length > 0) {
+    const [{ data: ownerProfiles }, { data: ownerReviews }] = await Promise.all([
+      supabase.from("profiles").select("id, full_name").in("id", ownerIds),
+      supabase.from("reviews").select("reviewee_id, rating").in("reviewee_id", ownerIds),
+    ]);
+    for (const profile of ownerProfiles ?? []) {
+      ownerNameById.set(profile.id, firstNameOnly(profile.full_name || "Właściciel"));
+    }
+    const sums = new Map<string, { sum: number; count: number }>();
+    for (const review of ownerReviews ?? []) {
+      const entry = sums.get(review.reviewee_id) ?? { sum: 0, count: 0 };
+      entry.sum += review.rating;
+      entry.count += 1;
+      sums.set(review.reviewee_id, entry);
+    }
+    Array.from(sums.entries()).forEach(([ownerId, { sum, count }]) => {
+      ratingByOwnerId.set(ownerId, { avg: sum / count, count });
+    });
   }
 
   return (
@@ -179,6 +231,71 @@ export default async function AutaPage({
             className="w-40"
           />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="vehicleType">Typ pojazdu</Label>
+          <select
+            id="vehicleType"
+            name="vehicleType"
+            defaultValue={searchParams.vehicleType ?? ""}
+            className="h-8 w-40 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="">Wszystkie typy</option>
+            {(Object.entries(VEHICLE_TYPE_LABELS) as [VehicleType, string][]).map(
+              ([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              )
+            )}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="fuelType">Paliwo</Label>
+          <select
+            id="fuelType"
+            name="fuelType"
+            defaultValue={searchParams.fuelType ?? ""}
+            className="h-8 w-36 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="">Dowolne</option>
+            {(Object.entries(FUEL_TYPE_LABELS) as [FuelType, string][]).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="transmission">Skrzynia</Label>
+          <select
+            id="transmission"
+            name="transmission"
+            defaultValue={searchParams.transmission ?? ""}
+            className="h-8 w-36 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="">Dowolna</option>
+            {(Object.entries(TRANSMISSION_LABELS) as [Transmission, string][]).map(
+              ([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              )
+            )}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="minSeats">Min. miejsc</Label>
+          <Input
+            id="minSeats"
+            name="minSeats"
+            type="number"
+            min={1}
+            max={9}
+            placeholder="np. 5"
+            defaultValue={searchParams.minSeats ?? ""}
+            className="w-28"
+          />
+        </div>
         <Button type="submit">Filtruj</Button>
       </form>
 
@@ -227,9 +344,35 @@ export default async function AutaPage({
                   </CardHeader>
                   <CardContent className="space-y-1 text-sm text-muted-foreground">
                     <p>{car.city}</p>
+                    <p className="flex flex-wrap gap-x-2 text-xs">
+                      {car.vehicle_type && <span>{VEHICLE_TYPE_LABELS[car.vehicle_type]}</span>}
+                      {car.fuel_type && <span>· {FUEL_TYPE_LABELS[car.fuel_type]}</span>}
+                      {car.seats && <span>· {car.seats} miejsc</span>}
+                    </p>
+                    {(() => {
+                      const rating = ratingByOwnerId.get(car.owner_id);
+                      const ownerName = ownerNameById.get(car.owner_id);
+                      return (
+                        <p className="text-xs">
+                          {ownerName && <span>{ownerName}</span>}
+                          {rating && (
+                            <span>
+                              {ownerName ? " · " : ""}
+                              <span className="text-primary">★</span> {rating.avg.toFixed(1)} (
+                              {rating.count})
+                            </span>
+                          )}
+                        </p>
+                      );
+                    })()}
                     <p className="font-semibold text-foreground">
                       {Number(car.price_per_day).toFixed(2)} zł / dzień
                     </p>
+                    {car.price_per_month && (
+                      <p className="text-xs">
+                        {Number(car.price_per_month).toFixed(2)} zł / miesiąc
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               </Link>

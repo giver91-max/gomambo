@@ -13,6 +13,21 @@ export type Profile = {
   created_at: string;
 };
 
+export type VehicleType =
+  | "sedan"
+  | "kombi"
+  | "hatchback"
+  | "suv"
+  | "van"
+  | "dostawczy"
+  | "sportowe"
+  | "kabriolet"
+  | "elektryczne"
+  | "inne";
+export type FuelType = "benzyna" | "diesel" | "hybryda" | "elektryczny" | "lpg";
+export type Transmission = "manualna" | "automatyczna";
+export type CancellationPolicy = "flexible" | "moderate" | "strict";
+
 export type Car = {
   id: string;
   owner_id: string;
@@ -26,6 +41,15 @@ export type Car = {
   rejection_reason: string | null;
   registration_number: string | null;
   insurance_document_path: string | null;
+  vehicle_type: VehicleType | null;
+  fuel_type: FuelType | null;
+  transmission: Transmission | null;
+  seats: number | null;
+  mileage_limit_km: number | null;
+  price_per_month: number | null;
+  delivery_available: boolean;
+  delivery_info: string | null;
+  cancellation_policy: CancellationPolicy;
   created_at: string;
   updated_at: string;
 };
@@ -64,6 +88,17 @@ export type Booking = {
   status: BookingStatus;
   created_at: string;
   updated_at: string;
+};
+
+export type TripPhotoStage = "pickup" | "return";
+
+export type TripPhoto = {
+  id: string;
+  booking_id: string;
+  uploader_id: string;
+  stage: TripPhotoStage;
+  storage_path: string;
+  created_at: string;
 };
 
 export type Review = {
@@ -231,6 +266,25 @@ export type Database = {
             columns: ["car_id"];
             isOneToOne: false;
             referencedRelation: "cars";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      trip_photos: {
+        Row: TripPhoto;
+        Insert: Partial<TripPhoto> & {
+          booking_id: string;
+          uploader_id: string;
+          stage: TripPhotoStage;
+          storage_path: string;
+        };
+        Update: Partial<TripPhoto>;
+        Relationships: [
+          {
+            foreignKeyName: "trip_photos_booking_id_fkey";
+            columns: ["booking_id"];
+            isOneToOne: false;
+            referencedRelation: "bookings";
             referencedColumns: ["id"];
           },
         ];

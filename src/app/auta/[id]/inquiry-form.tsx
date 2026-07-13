@@ -8,17 +8,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { getRecaptchaToken } from "@/lib/recaptcha-client";
 import type { SelectedRange } from "./availability-view";
+import { eachDateInRange } from "@/lib/calendar";
 
 const initialState: InquiryState = { error: null };
+const MONTHLY_THRESHOLD_NIGHTS = 28;
 
 export function InquiryForm({
   carId,
   selectedRange,
   isLoggedIn,
+  pricePerDay,
+  pricePerMonth,
 }: {
   carId: string;
   selectedRange?: SelectedRange;
   isLoggedIn: boolean;
+  pricePerDay: number;
+  pricePerMonth: number | null;
 }) {
   const [state, setState] = useState<InquiryState>(initialState);
   const [isPending, startTransition] = useTransition();
@@ -69,17 +75,35 @@ export function InquiryForm({
       />
 
       {selectedRange?.start ? (
-        <p className="text-sm">
-          Wybrany termin: <strong>{selectedRange.start}</strong>
-          {selectedRange.end ? (
-            <>
-              {" "}
-              – <strong>{selectedRange.end}</strong>
-            </>
-          ) : (
-            " (kliknij drugi dzień, aby zaznaczyć koniec terminu)"
-          )}
-        </p>
+        <div className="space-y-1">
+          <p className="text-sm">
+            Wybrany termin: <strong>{selectedRange.start}</strong>
+            {selectedRange.end ? (
+              <>
+                {" "}
+                – <strong>{selectedRange.end}</strong>
+              </>
+            ) : (
+              " (kliknij drugi dzień, aby zaznaczyć koniec terminu)"
+            )}
+          </p>
+          {selectedRange.end &&
+            (() => {
+              const nights = eachDateInRange(selectedRange.start, selectedRange.end).length;
+              const useMonthly = pricePerMonth !== null && nights >= MONTHLY_THRESHOLD_NIGHTS;
+              const months = useMonthly ? Math.round((nights / 30) * 10) / 10 : null;
+              const estimatedTotal = useMonthly
+                ? (pricePerMonth as number) * (months as number)
+                : pricePerDay * nights;
+              return (
+                <p className="text-sm text-muted-foreground">
+                  {nights} {nights === 1 ? "dzień" : "dni"}
+                  {useMonthly ? " · stawka miesięczna" : ""} — szacunkowo{" "}
+                  <strong className="text-foreground">{estimatedTotal.toFixed(2)} zł</strong>
+                </p>
+              );
+            })()}
+        </div>
       ) : (
         <p className="text-sm text-muted-foreground">
           Zaznacz w kalendarzu termin, o który chcesz zapytać.

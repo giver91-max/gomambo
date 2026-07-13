@@ -12,6 +12,13 @@ import { BackButton } from "@/components/back-button";
 import { FavoriteButton } from "@/components/favorite-button";
 import { MaintenanceNotice } from "@/components/maintenance-notice";
 import { firstNameOnly } from "@/lib/utils";
+import {
+  CANCELLATION_POLICY_DESCRIPTIONS,
+  CANCELLATION_POLICY_LABELS,
+  FUEL_TYPE_LABELS,
+  TRANSMISSION_LABELS,
+  VEHICLE_TYPE_LABELS,
+} from "@/lib/car-options";
 
 const getCar = cache(async (id: string) => {
   const supabase = await createClient();
@@ -194,6 +201,22 @@ export default async function CarDetailPage({
         <p className="text-muted-foreground">{car.city}</p>
       </div>
 
+      {(car.vehicle_type || car.fuel_type || car.transmission || car.seats) && (
+        <div className="flex flex-wrap gap-2">
+          {car.vehicle_type && (
+            <Badge variant="secondary">{VEHICLE_TYPE_LABELS[car.vehicle_type]}</Badge>
+          )}
+          {car.fuel_type && <Badge variant="secondary">{FUEL_TYPE_LABELS[car.fuel_type]}</Badge>}
+          {car.transmission && (
+            <Badge variant="secondary">{TRANSMISSION_LABELS[car.transmission]}</Badge>
+          )}
+          {car.seats && <Badge variant="secondary">{car.seats} miejsc</Badge>}
+          <Badge variant="secondary">
+            {car.mileage_limit_km ? `${car.mileage_limit_km} km / dzień` : "Bez limitu km"}
+          </Badge>
+        </div>
+      )}
+
       {car.description && (
         <div>
           <h2 className="mb-2 font-semibold">Opis</h2>
@@ -207,17 +230,39 @@ export default async function CarDetailPage({
         <CardContent className="space-y-3 py-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">Dostępność i zapytanie</h2>
-            <p className="text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">
-                {Number(car.price_per_day).toFixed(2)} zł
-              </span>{" "}
-              / dzień
-            </p>
+            <div className="text-right text-sm text-muted-foreground">
+              <p>
+                <span className="font-semibold text-foreground">
+                  {Number(car.price_per_day).toFixed(2)} zł
+                </span>{" "}
+                / dzień
+              </p>
+              {car.price_per_month && (
+                <p>
+                  <span className="font-semibold text-foreground">
+                    {Number(car.price_per_month).toFixed(2)} zł
+                  </span>{" "}
+                  / miesiąc (28+ dni)
+                </p>
+              )}
+            </div>
           </div>
+          {car.delivery_available && (
+            <p className="text-sm text-muted-foreground">
+              🚗 Właściciel oferuje dowóz auta.
+              {car.delivery_info ? ` ${car.delivery_info}` : ""}
+            </p>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Anulowanie: {CANCELLATION_POLICY_LABELS[car.cancellation_policy]} —{" "}
+            {CANCELLATION_POLICY_DESCRIPTIONS[car.cancellation_policy]}
+          </p>
           <AvailabilityAndInquiry
             carId={car.id}
             availableDates={availableDates}
             isLoggedIn={!!user}
+            pricePerDay={Number(car.price_per_day)}
+            pricePerMonth={car.price_per_month ? Number(car.price_per_month) : null}
           />
         </CardContent>
       </Card>

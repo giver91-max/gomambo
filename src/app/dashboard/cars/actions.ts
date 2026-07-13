@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
+import type { Car } from "@/types/database";
 
 export type CarFormState = { error: string | null };
 export type CarDraftResult = { error: string | null; carId?: string };
@@ -35,6 +36,17 @@ export async function createCarDraft(
   const city = String(formData.get("city") ?? "").trim();
   const registrationNumber = String(formData.get("registration_number") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
+  const vehicleType = String(formData.get("vehicle_type") ?? "").trim();
+  const fuelType = String(formData.get("fuel_type") ?? "").trim();
+  const transmission = String(formData.get("transmission") ?? "").trim();
+  const seats = Number(formData.get("seats"));
+  const mileageLimitRaw = String(formData.get("mileage_limit_km") ?? "").trim();
+  const mileageLimit = mileageLimitRaw ? Number(mileageLimitRaw) : null;
+  const pricePerMonthRaw = String(formData.get("price_per_month") ?? "").trim();
+  const pricePerMonth = pricePerMonthRaw ? Number(pricePerMonthRaw) : null;
+  const deliveryAvailable = formData.get("delivery_available") === "true";
+  const deliveryInfo = String(formData.get("delivery_info") ?? "").trim();
+  const cancellationPolicy = String(formData.get("cancellation_policy") ?? "moderate").trim();
   const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
 
   if (!brand || !model || !city) {
@@ -48,6 +60,18 @@ export async function createCarDraft(
   }
   if (!(pricePerDay > 0)) {
     return { error: "Cena za dzień musi być większa od zera." };
+  }
+  if (!vehicleType || !fuelType || !transmission) {
+    return { error: "Wybierz typ pojazdu, rodzaj paliwa i skrzynię biegów." };
+  }
+  if (!Number.isInteger(seats) || seats < 1 || seats > 9) {
+    return { error: "Podaj prawidłową liczbę miejsc (1–9)." };
+  }
+  if (mileageLimit !== null && !(mileageLimit > 0)) {
+    return { error: "Limit kilometrów musi być większy od zera." };
+  }
+  if (pricePerMonth !== null && !(pricePerMonth > 0)) {
+    return { error: "Cena za miesiąc musi być większa od zera." };
   }
   if (!(await verifyRecaptcha(recaptchaToken, "add_car"))) {
     return { error: "Weryfikacja antyspamowa nie powiodła się. Spróbuj ponownie." };
@@ -64,6 +88,15 @@ export async function createCarDraft(
       city,
       registration_number: registrationNumber,
       description: description || null,
+      vehicle_type: vehicleType as Car["vehicle_type"],
+      fuel_type: fuelType as Car["fuel_type"],
+      transmission: transmission as Car["transmission"],
+      seats,
+      mileage_limit_km: mileageLimit,
+      price_per_month: pricePerMonth,
+      delivery_available: deliveryAvailable,
+      delivery_info: deliveryAvailable && deliveryInfo ? deliveryInfo : null,
+      cancellation_policy: cancellationPolicy as Car["cancellation_policy"],
     })
     .select("id")
     .single();

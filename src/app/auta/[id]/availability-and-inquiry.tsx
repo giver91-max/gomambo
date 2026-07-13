@@ -8,17 +8,27 @@ export function AvailabilityAndInquiry({
   carId,
   availableDates,
   isLoggedIn,
+  pricePerDay,
+  pricePerMonth,
 }: {
   carId: string;
   availableDates: string[];
   isLoggedIn: boolean;
+  pricePerDay: number;
+  pricePerMonth: number | null;
 }) {
   const [range, setRange] = useState<SelectedRange>({ start: "", end: null });
 
   return (
     <div className="grid gap-6 sm:grid-cols-2 sm:items-start">
       <AvailabilityView availableDates={availableDates} onRangeChange={setRange} />
-      <InquiryForm carId={carId} selectedRange={range} isLoggedIn={isLoggedIn} />
+      <InquiryForm
+        carId={carId}
+        selectedRange={range}
+        isLoggedIn={isLoggedIn}
+        pricePerDay={pricePerDay}
+        pricePerMonth={pricePerMonth}
+      />
     </div>
   );
 }

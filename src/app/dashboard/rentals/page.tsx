@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/back-button";
 import { cancelBooking } from "../bookings/actions";
 import { ReviewForm } from "../bookings/review-form";
-import type { BookingStatus } from "@/types/database";
+import { TripPhotosManager, type TripPhotoItem } from "@/components/trip-photos-manager";
+import type { BookingStatus, CancellationPolicy } from "@/types/database";
+import { CANCELLATION_POLICY_FREE_HOURS, CANCELLATION_POLICY_LABELS } from "@/lib/car-options";
 
 const statusLabel: Record<BookingStatus, string> = {
   requested: "Oczekuje na potwierdzenie",
@@ -33,7 +35,7 @@ export default async function RentalHistoryPage() {
     .from("bookings")
     .select(
       `id, start_date, end_date, status, created_at,
-       cars(id, brand, model, city)`
+       cars(id, brand, model, city, cancellation_policy)`
     )
     .eq("renter_id", user!.id)
     .order("created_at", { ascending: false });
@@ -49,6 +51,31 @@ export default async function RentalHistoryPage() {
       .eq("reviewer_id", user!.id)
       .in("booking_id", completedIds);
     reviewedBookingIds = new Set((reviews ?? []).map((r) => r.booking_id));
+  }
+
+  const activeBookingIds = (bookings ?? [])
+    .filter((b) => b.status === "accepted" || b.status === "completed")
+    .map((b) => b.id);
+  const tripPhotosByBooking = new Map<string, { pickup: TripPhotoItem[]; return: TripPhotoItem[] }>();
+  if (activeBookingIds.length > 0) {
+    const { data: photos } = await supabase
+      .from("trip_photos")
+      .select("id, booking_id, uploader_id, stage, storage_path")
+      .in("booking_id", activeBookingIds);
+    for (const photo of photos ?? []) {
+      const { data: signed } = await supabase.storage
+        .from("trip-photos")
+        .createSignedUrl(photo.storage_path, 60 * 5);
+      if (!signed?.signedUrl) continue;
+      const entry = tripPhotosByBooking.get(photo.booking_id) ?? { pickup: [], return: [] };
+      entry[photo.stage].push({
+        id: photo.id,
+        url: signed.signedUrl,
+        storagePath: photo.storage_path,
+        uploaderId: photo.uploader_id,
+      });
+      tripPhotosByBooking.set(photo.booking_id, entry);
+    }
   }
 
   return (
@@ -79,12 +106,39 @@ export default async function RentalHistoryPage() {
                 <p>
                   Termin: {booking.start_date} – {booking.end_date}
                 </p>
-                {(booking.status === "requested" || booking.status === "accepted") && (
-                  <form action={cancelBooking.bind(null, booking.id)}>
-                    <Button type="submit" variant="outline" size="sm">
-                      Anuluj rezerwację
-                    </Button>
-                  </form>
+                {(booking.status === "requested" || booking.status === "accepted") &&
+                  (() => {
+                    const policy: CancellationPolicy =
+                      booking.cars?.cancellation_policy ?? "moderate";
+                    const freeHours = CANCELLATION_POLICY_FREE_HOURS[policy];
+                    const deadline = new Date(
+                      new Date(`${booking.start_date}T00:00:00`).getTime() -
+                        freeHours * 60 * 60 * 1000
+                    );
+                    const withinFreeWindow = new Date() < deadline;
+                    return (
+                      <div className="space-y-2">
+                        <p className="text-xs">
+                          Polityka anulowania: {CANCELLATION_POLICY_LABELS[policy]} —{" "}
+                          {withinFreeWindow
+                            ? `darmowe anulowanie do ${deadline.toLocaleDateString("pl-PL")}`
+                            : "termin darmowego anulowania minął"}
+                        </p>
+                        <form action={cancelBooking.bind(null, booking.id)}>
+                          <Button type="submit" variant="outline" size="sm">
+                            Anuluj rezerwację
+                          </Button>
+                        </form>
+                      </div>
+                    );
+                  })()}
+                {(booking.status === "accepted" || booking.status === "completed") && (
+                  <TripPhotosManager
+                    bookingId={booking.id}
+                    currentUserId={user!.id}
+                    pickupPhotos={tripPhotosByBooking.get(booking.id)?.pickup ?? []}
+                    returnPhotos={tripPhotosByBooking.get(booking.id)?.return ?? []}
+                  />
                 )}
                 {booking.status === "completed" && !reviewedBookingIds.has(booking.id) && (
                   <ReviewForm bookingId={booking.id} />

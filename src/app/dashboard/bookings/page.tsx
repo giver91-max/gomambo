@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/back-button";
 import { BookingActions } from "./booking-actions";
 import { ReviewForm } from "./review-form";
+import { TripPhotosManager, type TripPhotoItem } from "@/components/trip-photos-manager";
 import type { BookingStatus } from "@/types/database";
 
 const statusLabel: Record<BookingStatus, string> = {
@@ -60,6 +61,31 @@ export default async function OwnerBookingsPage() {
     reviewedBookingIds = new Set((reviews ?? []).map((r) => r.booking_id));
   }
 
+  const activeBookingIds = bookings
+    .filter((b) => b.status === "accepted" || b.status === "completed")
+    .map((b) => b.id);
+  const tripPhotosByBooking = new Map<string, { pickup: TripPhotoItem[]; return: TripPhotoItem[] }>();
+  if (activeBookingIds.length > 0) {
+    const { data: photos } = await supabase
+      .from("trip_photos")
+      .select("id, booking_id, uploader_id, stage, storage_path")
+      .in("booking_id", activeBookingIds);
+    for (const photo of photos ?? []) {
+      const { data: signed } = await supabase.storage
+        .from("trip-photos")
+        .createSignedUrl(photo.storage_path, 60 * 5);
+      if (!signed?.signedUrl) continue;
+      const entry = tripPhotosByBooking.get(photo.booking_id) ?? { pickup: [], return: [] };
+      entry[photo.stage].push({
+        id: photo.id,
+        url: signed.signedUrl,
+        storagePath: photo.storage_path,
+        uploaderId: photo.uploader_id,
+      });
+      tripPhotosByBooking.set(photo.booking_id, entry);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <BackButton />
@@ -101,6 +127,14 @@ export default async function OwnerBookingsPage() {
                     booking.status === "declined" ||
                     booking.status === "cancelled") && <span>Czat zamknięty</span>}
                 </div>
+                {(booking.status === "accepted" || booking.status === "completed") && (
+                  <TripPhotosManager
+                    bookingId={booking.id}
+                    currentUserId={user!.id}
+                    pickupPhotos={tripPhotosByBooking.get(booking.id)?.pickup ?? []}
+                    returnPhotos={tripPhotosByBooking.get(booking.id)?.return ?? []}
+                  />
+                )}
                 {booking.status === "completed" && !reviewedBookingIds.has(booking.id) && (
                   <ReviewForm bookingId={booking.id} />
                 )}
