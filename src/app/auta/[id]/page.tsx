@@ -11,6 +11,7 @@ import { toISODate } from "@/lib/calendar";
 import { BackButton } from "@/components/back-button";
 import { FavoriteButton } from "@/components/favorite-button";
 import { MaintenanceNotice } from "@/components/maintenance-notice";
+import { firstNameOnly } from "@/lib/utils";
 
 const getCar = cache(async (id: string) => {
   const supabase = await createClient();
@@ -158,7 +159,7 @@ export default async function CarDetailPage({
   const ownerAvatarUrl = ownerProfile?.avatar_path
     ? supabase.storage.from("avatars").getPublicUrl(ownerProfile.avatar_path).data.publicUrl
     : null;
-  const ownerName = ownerProfile?.full_name || "Właściciel";
+  const ownerName = firstNameOnly(ownerProfile?.full_name || "Właściciel");
 
   return (
     <div className="space-y-6">

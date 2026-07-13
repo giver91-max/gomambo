@@ -14,6 +14,16 @@ export default async function AutaLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
+  let displayName = "Panel";
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .single();
+    displayName = profile?.full_name || "Panel";
+  }
+
   return (
     <div className="min-h-screen">
       <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b px-4 py-4 sm:px-6">
@@ -25,8 +35,11 @@ export default async function AutaLayout({
             Przeglądaj auta
           </Link>
           {user ? (
-            <Link href="/dashboard" className={buttonVariants({ size: "sm" })}>
-              Panel
+            <Link
+              href="/dashboard"
+              className={cn(buttonVariants({ size: "sm" }), "max-w-40 truncate")}
+            >
+              {displayName}
             </Link>
           ) : (
             <>

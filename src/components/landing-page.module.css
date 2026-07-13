@@ -76,6 +76,9 @@ a.navCta {
   border-radius: 6px;
   text-decoration: none;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
   transition: background 0.2s;
 }
 a.navCta:hover {

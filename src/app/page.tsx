@@ -8,13 +8,15 @@ export default async function Home() {
   } = await supabase.auth.getUser();
 
   let isAdmin = false;
+  let displayName = "Panel";
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, full_name")
       .eq("id", user.id)
       .single();
     isAdmin = profile?.role === "admin";
+    displayName = profile?.full_name || "Panel";
   }
 
   let maintenanceMode = false;
@@ -58,5 +60,5 @@ export default async function Home() {
     };
   });
 
-  return <LandingPage cars={landingCars} isLoggedIn={!!user} />;
+  return <LandingPage cars={landingCars} isLoggedIn={!!user} displayName={displayName} />;
 }

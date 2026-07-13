@@ -26,9 +26,11 @@ export type LandingCar = {
 export function LandingPage({
   cars,
   isLoggedIn,
+  displayName,
 }: {
   cars: LandingCar[];
   isLoggedIn: boolean;
+  displayName: string;
 }) {
   const addCarHref = isLoggedIn
     ? "/dashboard/cars/new"
@@ -140,7 +142,7 @@ export function LandingPage({
         <div className={styles.navActions}>
           {isLoggedIn ? (
             <Link href="/dashboard" className={styles.navCta}>
-              Panel
+              {displayName}
             </Link>
           ) : (
             <>
