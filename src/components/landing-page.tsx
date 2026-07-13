@@ -202,7 +202,7 @@ export function LandingPage({
               Zarabiaj gdy Twój samochód stoi. Ty ustalasz ceny i dostępność.
             </div>
           </Link>
-          <Link href="/auta" className={`${styles.ctaCard} ${styles.renter}`}>
+          <Link href="/wynajmij-auto" className={`${styles.ctaCard} ${styles.renter}`}>
             <div className={styles.ctaRole}>Dla najemców</div>
             <div className={styles.ctaTitle}>Wynajmij auto →</div>
             <div className={styles.ctaDesc}>
