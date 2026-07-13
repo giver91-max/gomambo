@@ -8,13 +8,14 @@ export default async function AdminVerificationsPage() {
   const { data: rawVerifications } = await supabase
     .from("identity_verifications")
     .select(
-      "id, document_path, status, rejection_reason, user:profiles!identity_verifications_user_id_fkey(full_name)"
+      "id, document_path, selfie_path, status, rejection_reason, user:profiles!identity_verifications_user_id_fkey(full_name)"
     )
     .order("created_at", { ascending: false });
 
   const verifications = (rawVerifications ?? []) as unknown as {
     id: string;
     document_path: string;
+    selfie_path: string | null;
     status: IdentityVerificationStatus;
     rejection_reason: string | null;
     user: { full_name: string } | null;
@@ -25,7 +26,11 @@ export default async function AdminVerificationsPage() {
       const { data: signed } = await supabase.storage
         .from("id-documents")
         .createSignedUrl(v.document_path, 60 * 5);
-      return { ...v, documentUrl: signed?.signedUrl ?? null };
+      const selfieUrl = v.selfie_path
+        ? (await supabase.storage.from("id-documents").createSignedUrl(v.selfie_path, 60 * 5)).data
+            ?.signedUrl ?? null
+        : null;
+      return { ...v, documentUrl: signed?.signedUrl ?? null, selfieUrl };
     })
   );
 
@@ -44,6 +49,7 @@ export default async function AdminVerificationsPage() {
               verification={v}
               userName={v.user?.full_name || "Użytkownik"}
               documentUrl={v.documentUrl}
+              selfieUrl={v.selfieUrl}
             />
           ))}
         </div>

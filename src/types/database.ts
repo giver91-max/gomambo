@@ -24,6 +24,8 @@ export type Car = {
   description: string | null;
   status: CarStatus;
   rejection_reason: string | null;
+  registration_number: string | null;
+  insurance_document_path: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -127,6 +129,7 @@ export type IdentityVerification = {
   id: string;
   user_id: string;
   document_path: string;
+  selfie_path: string | null;
   status: IdentityVerificationStatus;
   rejection_reason: string | null;
   created_at: string;

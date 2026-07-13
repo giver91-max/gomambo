@@ -22,12 +22,21 @@ type Props = {
     description: string | null;
     status: CarStatus;
     rejection_reason: string | null;
+    registration_number: string | null;
   };
   ownerName: string;
   imageUrls: string[];
+  insuranceUrl: string | null;
+  insuranceIsPdf: boolean;
 };
 
-export function CarReviewCard({ car, ownerName, imageUrls }: Props) {
+export function CarReviewCard({
+  car,
+  ownerName,
+  imageUrls,
+  insuranceUrl,
+  insuranceIsPdf,
+}: Props) {
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +108,54 @@ export function CarReviewCard({ car, ownerName, imageUrls }: Props) {
         {car.description && (
           <p className="text-sm text-muted-foreground">{car.description}</p>
         )}
+
+        <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <p>
+            <span className="text-muted-foreground">Nr rejestracyjny: </span>
+            <span className="font-medium">{car.registration_number ?? "brak"}</span>
+            {car.registration_number && (
+              <>
+                {" "}
+                ·{" "}
+                <a
+                  href="https://www.ufg.pl"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  Sprawdź OC w UFG →
+                </a>
+              </>
+            )}
+          </p>
+          <div className="mt-2">
+            {insuranceUrl ? (
+              insuranceIsPdf ? (
+                <a
+                  href={insuranceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  Zobacz polisę OC (PDF) →
+                </a>
+              ) : (
+                <div className="relative h-40 w-full max-w-xs overflow-hidden rounded-md border">
+                  <Image
+                    src={insuranceUrl}
+                    alt="Polisa OC"
+                    fill
+                    sizes="320px"
+                    className="object-contain"
+                    unoptimized
+                  />
+                </div>
+              )
+            ) : (
+              <p className="text-muted-foreground">Brak wgranej polisy OC.</p>
+            )}
+          </div>
+        </div>
 
         {imageUrls.length > 0 && (
           <div className="grid grid-cols-4 gap-2">

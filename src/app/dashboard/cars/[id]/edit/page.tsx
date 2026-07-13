@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { EditCarForm } from "./edit-car-form";
 import { PhotoManager } from "./photo-manager";
+import { InsuranceManager } from "./insurance-manager";
 import { DeleteCarButton } from "./delete-car-button";
 
 export default async function EditCarPage({
@@ -47,6 +48,15 @@ export default async function EditCarPage({
       url: supabase.storage.from("car-images").getPublicUrl(img.storage_path).data.publicUrl,
     }));
 
+  let insuranceUrl: string | null = null;
+  if (car.insurance_document_path) {
+    const { data: signed } = await supabase.storage
+      .from("car-insurance")
+      .createSignedUrl(car.insurance_document_path, 60 * 5);
+    insuranceUrl = signed?.signedUrl ?? null;
+  }
+  const insuranceIsPdf = car.insurance_document_path?.toLowerCase().endsWith(".pdf") ?? false;
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
@@ -74,6 +84,16 @@ export default async function EditCarPage({
       <div className="space-y-3">
         <h2 className="font-semibold">Zdjęcia</h2>
         <PhotoManager carId={car.id} images={images} />
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="font-semibold">Polisa OC</h2>
+        <InsuranceManager
+          carId={car.id}
+          ownerId={car.owner_id}
+          initialUrl={insuranceUrl}
+          initialIsPdf={insuranceIsPdf}
+        />
       </div>
 
       <div className="space-y-3">

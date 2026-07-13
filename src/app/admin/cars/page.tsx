@@ -60,23 +60,37 @@ export default async function AdminCarsPage({
         </p>
       ) : (
         <div className="space-y-4">
-          {cars.map((car) => {
-            const imageUrls = (car.car_images ?? []).map(
-              (img: { storage_path: string }) =>
-                supabase.storage.from("car-images").getPublicUrl(img.storage_path)
-                  .data.publicUrl
-            );
-            const owner = car.owner as { full_name: string } | null;
+          {await Promise.all(
+            cars.map(async (car) => {
+              const imageUrls = (car.car_images ?? []).map(
+                (img: { storage_path: string }) =>
+                  supabase.storage.from("car-images").getPublicUrl(img.storage_path)
+                    .data.publicUrl
+              );
+              const owner = car.owner as { full_name: string } | null;
 
-            return (
-              <CarReviewCard
-                key={car.id}
-                car={car}
-                ownerName={owner?.full_name ?? ""}
-                imageUrls={imageUrls}
-              />
-            );
-          })}
+              let insuranceUrl: string | null = null;
+              if (car.insurance_document_path) {
+                const { data: signed } = await supabase.storage
+                  .from("car-insurance")
+                  .createSignedUrl(car.insurance_document_path, 60 * 5);
+                insuranceUrl = signed?.signedUrl ?? null;
+              }
+              const insuranceIsPdf =
+                car.insurance_document_path?.toLowerCase().endsWith(".pdf") ?? false;
+
+              return (
+                <CarReviewCard
+                  key={car.id}
+                  car={car}
+                  ownerName={owner?.full_name ?? ""}
+                  imageUrls={imageUrls}
+                  insuranceUrl={insuranceUrl}
+                  insuranceIsPdf={insuranceIsPdf}
+                />
+              );
+            })
+          )}
         </div>
       )}
     </div>

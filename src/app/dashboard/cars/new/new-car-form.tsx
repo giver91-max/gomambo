@@ -13,14 +13,22 @@ import { DEFAULT_STICKER, flattenImageWithSticker, type StickerRect } from "@/li
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 8;
+const MAX_INSURANCE_BYTES = 8 * 1024 * 1024;
 
 export function NewCarForm() {
   const [previews, setPreviews] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [stickers, setStickers] = useState<(StickerRect | null)[]>([]);
+  const [insuranceFile, setInsuranceFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function handleInsuranceChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setInsuranceFile(file);
+  }
 
   function handleFilesChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? []);
@@ -62,14 +70,25 @@ export function NewCarForm() {
         return;
       }
     }
+    if (!insuranceFile) {
+      setError("Dodaj skan lub zdjęcie polisy OC.");
+      return;
+    }
+    if (insuranceFile.size > MAX_INSURANCE_BYTES) {
+      setError("Plik polisy OC przekracza 8 MB.");
+      return;
+    }
 
     const formData = new FormData(e.currentTarget);
-    // The "images" field still holds the raw File objects from the file
-    // input (FormData captures every named control in the form) — strip it
-    // so this request stays tiny; photos upload directly to Storage below.
+    // The "images"/"insurance" fields still hold raw File objects from the
+    // file inputs (FormData captures every named control in the form) —
+    // strip them so this request stays tiny; files upload directly to
+    // Storage below.
     formData.delete("images");
+    formData.delete("insurance");
     const filesToUpload = files;
     const stickersToUpload = stickers;
+    const insuranceToUpload = insuranceFile;
 
     startTransition(async () => {
       setStatus("Zapisywanie danych auta…");
@@ -120,8 +139,25 @@ export function NewCarForm() {
         uploaded.push({ path, position: index });
       }
 
+      setStatus("Wgrywanie polisy OC…");
+      const insuranceExt = insuranceToUpload.name.split(".").pop() || "jpg";
+      const insurancePath = `${user.id}/${carId}/${crypto.randomUUID()}.${insuranceExt}`;
+      const { error: insuranceUploadError } = await supabase.storage
+        .from("car-insurance")
+        .upload(insurancePath, insuranceToUpload, { contentType: insuranceToUpload.type });
+
+      if (insuranceUploadError) {
+        setError(`Błąd wgrywania polisy OC: ${insuranceUploadError.message}`);
+        setStatus(null);
+        if (uploaded.length > 0) {
+          await supabase.storage.from("car-images").remove(uploaded.map((u) => u.path));
+        }
+        await deleteCarDraft(carId);
+        return;
+      }
+
       setStatus("Finalizowanie…");
-      const finalize = await attachCarImages(carId, uploaded);
+      const finalize = await attachCarImages(carId, uploaded, insurancePath);
       // attachCarImages redirects on success instead of returning a value —
       // only handle the result on failure, otherwise the page is navigating away.
       if (finalize?.error) {
@@ -174,6 +210,31 @@ export function NewCarForm() {
       <div className="space-y-2">
         <Label htmlFor="city">Miasto</Label>
         <Input id="city" name="city" required placeholder="Warszawa" />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="registration_number">Numer rejestracyjny</Label>
+        <Input
+          id="registration_number"
+          name="registration_number"
+          required
+          placeholder="WX 12345"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="insurance">Polisa OC (zdjęcie lub PDF, do 8 MB)</Label>
+        <Input
+          id="insurance"
+          name="insurance"
+          type="file"
+          accept="image/*,application/pdf"
+          required
+          onChange={handleInsuranceChange}
+        />
+        <p className="text-xs text-muted-foreground">
+          Dokument widzi tylko nasz zespół podczas weryfikacji ogłoszenia.
+        </p>
       </div>
 
       <div className="space-y-2">

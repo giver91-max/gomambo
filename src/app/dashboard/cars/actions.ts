@@ -33,11 +33,15 @@ export async function createCarDraft(
   const year = Number(formData.get("year"));
   const pricePerDay = Number(formData.get("price_per_day"));
   const city = String(formData.get("city") ?? "").trim();
+  const registrationNumber = String(formData.get("registration_number") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
 
   if (!brand || !model || !city) {
     return { error: "Wypełnij markę, model i miasto." };
+  }
+  if (!registrationNumber) {
+    return { error: "Podaj numer rejestracyjny." };
   }
   if (!Number.isInteger(year) || year < 1990 || year > new Date().getFullYear() + 1) {
     return { error: "Podaj prawidłowy rok produkcji." };
@@ -58,6 +62,7 @@ export async function createCarDraft(
       year,
       price_per_day: pricePerDay,
       city,
+      registration_number: registrationNumber,
       description: description || null,
     })
     .select("id")
@@ -77,7 +82,8 @@ export async function deleteCarDraft(carId: string): Promise<void> {
 
 export async function attachCarImages(
   carId: string,
-  images: { path: string; position: number }[]
+  images: { path: string; position: number }[],
+  insuranceDocumentPath: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   const {
@@ -91,6 +97,9 @@ export async function attachCarImages(
   if (images.length === 0) {
     return { error: "Dodaj przynajmniej jedno zdjęcie auta." };
   }
+  if (!insuranceDocumentPath) {
+    return { error: "Dodaj polisę OC." };
+  }
 
   const { data: car, error: carFetchError } = await supabase
     .from("cars")
@@ -100,6 +109,15 @@ export async function attachCarImages(
 
   if (carFetchError || !car) {
     return { error: carFetchError?.message ?? "Nie znaleziono auta." };
+  }
+
+  const { error: insuranceError } = await supabase
+    .from("cars")
+    .update({ insurance_document_path: insuranceDocumentPath })
+    .eq("id", carId);
+
+  if (insuranceError) {
+    return { error: insuranceError.message };
   }
 
   const { error: imagesError } = await supabase.from("car_images").insert(

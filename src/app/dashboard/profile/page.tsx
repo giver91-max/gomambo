@@ -35,7 +35,7 @@ export default async function ProfilePage() {
 
   const { data: verification } = await supabase
     .from("identity_verifications")
-    .select("status, rejection_reason, document_path")
+    .select("status, rejection_reason, document_path, selfie_path")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -45,6 +45,14 @@ export default async function ProfilePage() {
       .from("id-documents")
       .createSignedUrl(verification.document_path, 60 * 5);
     documentUrl = signed?.signedUrl ?? null;
+  }
+
+  let selfieUrl: string | null = null;
+  if (verification?.selfie_path) {
+    const { data: signed } = await supabase.storage
+      .from("id-documents")
+      .createSignedUrl(verification.selfie_path, 60 * 5);
+    selfieUrl = signed?.signedUrl ?? null;
   }
 
   return (
@@ -98,6 +106,7 @@ export default async function ProfilePage() {
             initialStatus={verification?.status ?? null}
             initialRejectionReason={verification?.rejection_reason ?? null}
             initialDocumentUrl={documentUrl}
+            initialSelfieUrl={selfieUrl}
           />
         </CardContent>
       </Card>

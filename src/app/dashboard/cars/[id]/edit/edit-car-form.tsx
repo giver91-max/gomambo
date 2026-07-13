@@ -60,6 +60,17 @@ export function EditCarForm({ car }: { car: Car }) {
       </div>
 
       <div className="space-y-2">
+        <Label htmlFor="registration_number">Numer rejestracyjny</Label>
+        <Input
+          id="registration_number"
+          name="registration_number"
+          required
+          defaultValue={car.registration_number ?? ""}
+          placeholder="WX 12345"
+        />
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="description">Opis (opcjonalnie)</Label>
         <Textarea
           id="description"

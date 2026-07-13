@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { submitIdentityVerification } from "@/app/dashboard/profile/identity-actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SelfieCapture } from "@/components/selfie-capture";
 import type { IdentityVerificationStatus } from "@/types/database";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -26,15 +27,19 @@ export function IdentityVerificationManager({
   initialStatus,
   initialRejectionReason,
   initialDocumentUrl,
+  initialSelfieUrl,
 }: {
   userId: string;
   initialStatus: IdentityVerificationStatus | null;
   initialRejectionReason: string | null;
   initialDocumentUrl: string | null;
+  initialSelfieUrl: string | null;
 }) {
   const [status, setStatus] = useState(initialStatus);
   const [rejectionReason, setRejectionReason] = useState(initialRejectionReason);
   const [documentUrl, setDocumentUrl] = useState(initialDocumentUrl);
+  const [selfieUrl, setSelfieUrl] = useState(initialSelfieUrl);
+  const [pendingDocument, setPendingDocument] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,40 +60,71 @@ export function IdentityVerificationManager({
       return;
     }
 
+    setPendingDocument(file);
+  }
+
+  function finish(documentFile: File, selfieBlob: Blob | null) {
+    setError(null);
     startTransition(async () => {
       const supabase = createClient();
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+      const ext = documentFile.name.split(".").pop() || "jpg";
+      const documentPath = `${userId}/${crypto.randomUUID()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("id-documents")
-        .upload(path, file, { contentType: file.type });
+        .upload(documentPath, documentFile, { contentType: documentFile.type });
 
       if (uploadError) {
-        setError(`Błąd wgrywania pliku: ${uploadError.message}`);
+        setError(`Błąd wgrywania dokumentu: ${uploadError.message}`);
+        setPendingDocument(null);
         return;
       }
 
-      const result = await submitIdentityVerification(path);
+      let selfiePath: string | null = null;
+      if (selfieBlob) {
+        selfiePath = `${userId}/${crypto.randomUUID()}-selfie.jpg`;
+        const { error: selfieUploadError } = await supabase.storage
+          .from("id-documents")
+          .upload(selfiePath, selfieBlob, { contentType: "image/jpeg" });
+        if (selfieUploadError) {
+          setError(`Błąd wgrywania selfie: ${selfieUploadError.message}`);
+          setPendingDocument(null);
+          return;
+        }
+      }
+
+      const result = await submitIdentityVerification(documentPath, selfiePath);
       if (result.error) {
         setError(result.error);
+        setPendingDocument(null);
         return;
       }
 
-      const { data: signed } = await supabase.storage
+      const { data: signedDoc } = await supabase.storage
         .from("id-documents")
-        .createSignedUrl(path, 60 * 5);
-      setDocumentUrl(signed?.signedUrl ?? null);
+        .createSignedUrl(documentPath, 60 * 5);
+      setDocumentUrl(signedDoc?.signedUrl ?? null);
+
+      if (selfiePath) {
+        const { data: signedSelfie } = await supabase.storage
+          .from("id-documents")
+          .createSignedUrl(selfiePath, 60 * 5);
+        setSelfieUrl(signedSelfie?.signedUrl ?? null);
+      } else {
+        setSelfieUrl(null);
+      }
+
       setStatus("pending");
       setRejectionReason(null);
+      setPendingDocument(null);
     });
   }
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        Dodaj zdjęcie dowodu osobistego lub prawa jazdy. Dokument widzi tylko nasz zespół podczas
-        weryfikacji.
+        Dodaj zdjęcie dowodu osobistego lub prawa jazdy oraz zrób selfie na żywo. Dokumenty widzi
+        tylko nasz zespół podczas weryfikacji.
       </p>
 
       {status && <Badge variant={statusVariant[status]}>{statusLabel[status]}</Badge>}
@@ -97,33 +133,55 @@ export function IdentityVerificationManager({
         <p className="text-sm text-destructive">Powód odrzucenia: {rejectionReason}</p>
       )}
 
-      {documentUrl && (
-        // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
-        <img
-          src={documentUrl}
-          alt="Wgrany dokument"
-          className="max-h-48 rounded-lg border object-contain"
-        />
+      <div className="flex flex-wrap gap-3">
+        {documentUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
+          <img
+            src={documentUrl}
+            alt="Wgrany dokument"
+            className="max-h-48 rounded-lg border object-contain"
+          />
+        )}
+        {selfieUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
+          <img
+            src={selfieUrl}
+            alt="Wgrane selfie"
+            className="max-h-48 rounded-lg border object-contain"
+          />
+        )}
+      </div>
+
+      {!pendingDocument && (
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isPending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {isPending ? "Wgrywanie…" : documentUrl ? "Wgraj nowy dokument" : "Wgraj dokument"}
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        </div>
       )}
 
-      <div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={isPending}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {isPending ? "Wgrywanie…" : documentUrl ? "Wgraj nowy dokument" : "Wgraj dokument"}
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-      </div>
+      {pendingDocument && !isPending && (
+        <div className="space-y-2 rounded-lg border p-3">
+          <p className="text-sm font-medium">Krok 2: zrób selfie</p>
+          <SelfieCapture
+            onCapture={(blob) => finish(pendingDocument, blob)}
+            onSkip={() => finish(pendingDocument, null)}
+          />
+        </div>
+      )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>

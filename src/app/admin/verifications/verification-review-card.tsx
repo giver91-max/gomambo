@@ -16,9 +16,15 @@ type Props = {
   };
   userName: string;
   documentUrl: string | null;
+  selfieUrl: string | null;
 };
 
-export function VerificationReviewCard({ verification, userName, documentUrl }: Props) {
+export function VerificationReviewCard({
+  verification,
+  userName,
+  documentUrl,
+  selfieUrl,
+}: Props) {
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -66,14 +72,28 @@ export function VerificationReviewCard({ verification, userName, documentUrl }: 
         </Badge>
       </CardHeader>
       <CardContent className="space-y-3">
-        {documentUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
-          <img
-            src={documentUrl}
-            alt="Dokument tożsamości"
-            className="max-h-64 rounded-lg border object-contain"
-          />
-        )}
+        <div className="flex flex-wrap gap-3">
+          {documentUrl && (
+            // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
+            <img
+              src={documentUrl}
+              alt="Dokument tożsamości"
+              className="max-h-64 rounded-lg border object-contain"
+            />
+          )}
+          {selfieUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
+            <img
+              src={selfieUrl}
+              alt="Selfie"
+              className="max-h-64 rounded-lg border object-contain"
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Brak selfie — użytkownik nie mógł go zrobić (np. brak dostępu do kamery).
+            </p>
+          )}
+        </div>
 
         {verification.status === "rejected" && verification.rejection_reason && (
           <p className="text-sm text-destructive">

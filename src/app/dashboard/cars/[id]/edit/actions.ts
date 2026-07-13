@@ -63,10 +63,14 @@ export async function updateCarDetails(
   const year = Number(formData.get("year"));
   const pricePerDay = Number(formData.get("price_per_day"));
   const city = String(formData.get("city") ?? "").trim();
+  const registrationNumber = String(formData.get("registration_number") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
 
   if (!brand || !model || !city) {
     return { error: "Wypełnij markę, model i miasto." };
+  }
+  if (!registrationNumber) {
+    return { error: "Podaj numer rejestracyjny." };
   }
   if (!Number.isInteger(year) || year < 1990 || year > new Date().getFullYear() + 1) {
     return { error: "Podaj prawidłowy rok produkcji." };
@@ -85,6 +89,7 @@ export async function updateCarDetails(
       year,
       price_per_day: pricePerDay,
       city,
+      registration_number: registrationNumber,
       description: description || null,
       ...(wasApproved && !isAdmin ? { status: "pending", rejection_reason: null } : {}),
     })
@@ -98,6 +103,42 @@ export async function updateCarDetails(
   revalidatePath(`/dashboard/cars/${carId}/edit`);
   revalidatePath(`/auta/${carId}`);
   return { error: null, success: true };
+}
+
+export async function setCarInsuranceDocument(
+  carId: string,
+  path: string
+): Promise<{ error: string | null }> {
+  const { supabase, user, car, isAdmin } = await requireOwnedCar(carId);
+  if (!user) redirect("/login");
+  if (!car) {
+    return { error: "Nie masz dostępu do tego ogłoszenia." };
+  }
+
+  const { data: existing } = await supabase
+    .from("cars")
+    .select("insurance_document_path")
+    .eq("id", carId)
+    .single();
+
+  const { error } = await supabase
+    .from("cars")
+    .update({ insurance_document_path: path })
+    .eq("id", carId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (existing?.insurance_document_path && existing.insurance_document_path !== path) {
+    await supabase.storage.from("car-insurance").remove([existing.insurance_document_path]);
+  }
+
+  await revertToPendingIfApproved(carId, car.status === "approved", isAdmin);
+
+  revalidatePath(`/dashboard/cars/${carId}/edit`);
+  revalidatePath("/dashboard");
+  return { error: null };
 }
 
 export async function addCarPhoto(
