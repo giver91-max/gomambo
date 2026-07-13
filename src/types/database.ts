@@ -9,6 +9,7 @@ export type Profile = {
   avatar_path: string | null;
   notify_email: boolean;
   notify_sms: boolean;
+  terms_accepted_at: string | null;
   created_at: string;
 };
 

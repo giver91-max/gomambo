@@ -15,6 +15,7 @@ import {
   SendIcon,
   ShieldIcon,
   UserIcon,
+  UsersIcon,
 } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { Badge } from "@/components/ui/badge";
@@ -114,6 +115,10 @@ export function UserMenu({
             <Link href="/admin" className={itemClassName}>
               <ShieldIcon className="size-4 text-muted-foreground" />
               Panel admina
+            </Link>
+            <Link href="/admin/users" className={itemClassName}>
+              <UsersIcon className="size-4 text-muted-foreground" />
+              Użytkownicy
             </Link>
             <Link href="/admin/messages" className={itemClassName}>
               <SendIcon className="size-4 text-muted-foreground" />
