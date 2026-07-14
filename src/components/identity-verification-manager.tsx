@@ -178,8 +178,9 @@ export function IdentityVerificationManager({
         <div className="space-y-2 rounded-lg border p-3">
           <p className="text-sm font-medium">Krok 2: zrób selfie</p>
           <SelfieCapture
-            onCapture={(blob) => finish(pendingDocument, blob)}
+            onConfirm={(blob) => finish(pendingDocument, blob)}
             onSkip={() => finish(pendingDocument, null)}
+            isSubmitting={isPending}
           />
         </div>
       )}

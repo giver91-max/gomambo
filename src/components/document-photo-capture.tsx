@@ -8,16 +8,22 @@ const MAX_ATTEMPTS = 3;
 // Generalizes selfie-capture.tsx's getUserMedia+canvas pattern for photos
 // of a physical document. Uses the rear camera (facingMode: "environment")
 // and, unlike a selfie, has no skip affordance — a license photo can't be
-// omitted the way an optional selfie can.
+// omitted the way an optional selfie can. Capture and upload are separate
+// steps: taking a photo only shows a preview, the caller's onConfirm only
+// fires once the user explicitly taps "Dalej", so retaking never involves
+// a wasted upload.
 export function DocumentPhotoCapture({
   label,
-  onCapture,
+  onConfirm,
+  isSubmitting = false,
 }: {
   label: string;
-  onCapture: (blob: Blob) => void;
+  onConfirm: (blob: Blob) => void;
+  isSubmitting?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const capturedBlobRef = useRef<Blob | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [attempts, setAttempts] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -75,9 +81,9 @@ export function DocumentPhotoCapture({
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
+        capturedBlobRef.current = blob;
         setPreviewUrl(URL.createObjectURL(blob));
         stopCamera();
-        onCapture(blob);
       },
       "image/jpeg",
       0.9
@@ -87,17 +93,34 @@ export function DocumentPhotoCapture({
   function retake() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
+    capturedBlobRef.current = null;
     startCamera();
+  }
+
+  function confirm() {
+    if (capturedBlobRef.current) onConfirm(capturedBlobRef.current);
   }
 
   if (previewUrl) {
     return (
-      <div className="flex flex-col items-center gap-4">
+      <div className="flex w-full flex-col items-center gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
         <img src={previewUrl} alt={label} className="w-full max-w-sm rounded-2xl border" />
-        <Button type="button" variant="outline" size="lg" onClick={retake}>
-          Zrób ponownie
-        </Button>
+        <div className="flex w-full max-w-sm gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="flex-1"
+            onClick={retake}
+            disabled={isSubmitting}
+          >
+            Zrób ponownie
+          </Button>
+          <Button type="button" size="lg" className="flex-1" onClick={confirm} disabled={isSubmitting}>
+            {isSubmitting ? "Przesyłanie…" : "Dalej"}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -113,8 +136,14 @@ export function DocumentPhotoCapture({
           muted
           className="absolute inset-0 h-full w-full object-cover"
         />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-8">
+          <div
+            className="aspect-[1.586/1] w-full max-w-sm rounded-2xl border-2 border-white"
+            style={{ boxShadow: "0 0 0 2000px rgba(0,0,0,0.55)" }}
+          />
+        </div>
         <div className="relative z-10 mx-6 mt-4 rounded-xl bg-black/50 px-4 py-2 text-center text-sm text-white">
-          {label}
+          Wyrównaj dokument w ramce
         </div>
         <div className="relative z-10 flex items-center gap-6 pb-4">
           <Button type="button" variant="secondary" size="lg" onClick={stopCamera}>

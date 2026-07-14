@@ -17,6 +17,18 @@ function stepFromStatus(status: HandoffStatus): Step {
   return "done";
 }
 
+function toErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Coś poszło nie tak. Spróbuj ponownie.";
+}
+
+function IndeterminateProgressBar() {
+  return (
+    <div className="h-2 w-full max-w-xs overflow-hidden rounded-full bg-muted">
+      <div className="h-full w-1/3 animate-indeterminate-progress rounded-full bg-primary" />
+    </div>
+  );
+}
+
 export function HandoffPhoneFlow({
   token,
   initialStatus,
@@ -30,50 +42,92 @@ export function HandoffPhoneFlow({
   const [consentGiven, setConsentGiven] = useState(false);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSendCode() {
     setError(null);
     startTransition(async () => {
-      const result = await sendHandoffCode(token);
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = await sendHandoffCode(token);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setStep("enter_code");
+      } catch (err) {
+        setError(toErrorMessage(err));
       }
-      setStep("enter_code");
     });
   }
 
   function handleClaim() {
     setError(null);
     startTransition(async () => {
-      const result = await claimHandoff(token, code);
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = await claimHandoff(token, code);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setStep("consent");
+      } catch (err) {
+        setError(toErrorMessage(err));
       }
-      setStep("consent");
     });
   }
 
-  function uploadPhoto(kind: "front" | "back" | "selfie", blob: Blob, nextStep: Step) {
+  function uploadDocumentPhoto(kind: "front" | "back", blob: Blob, nextStep: Step) {
     setError(null);
     startTransition(async () => {
-      const formData = new FormData();
-      formData.append("file", blob, `${kind}.jpg`);
-      const result = await uploadHandoffPhoto(token, kind, consentGiven, formData);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      if (nextStep === "finalizing") {
-        const finalizeResult = await finalizeHandoff(token);
-        if (finalizeResult.error) {
-          setError(finalizeResult.error);
+      try {
+        const formData = new FormData();
+        formData.append("file", blob, `${kind}.jpg`);
+        const result = await uploadHandoffPhoto(token, kind, consentGiven, formData);
+        if (result.error) {
+          setError(result.error);
           return;
         }
+        setStep(nextStep);
+      } catch (err) {
+        setError(toErrorMessage(err));
       }
-      setStep(nextStep);
+    });
+  }
+
+  function runFinalize() {
+    setFinalizeError(null);
+    startTransition(async () => {
+      try {
+        const result = await finalizeHandoff(token);
+        if (result.error) {
+          setFinalizeError(result.error);
+          return;
+        }
+        setStep("done");
+      } catch (err) {
+        setFinalizeError(toErrorMessage(err));
+      }
+    });
+  }
+
+  function uploadSelfieThenFinalize(blob: Blob) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.append("file", blob, "selfie.jpg");
+        const result = await uploadHandoffPhoto(token, "selfie", consentGiven, formData);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+      } catch (err) {
+        setError(toErrorMessage(err));
+        return;
+      }
+      setStep("finalizing");
+      runFinalize();
     });
   }
 
@@ -159,7 +213,8 @@ export function HandoffPhoneFlow({
         {error && <p className="text-sm text-destructive">{error}</p>}
         <DocumentPhotoCapture
           label="Zrób zdjęcie przodu prawa jazdy"
-          onCapture={(blob) => uploadPhoto("front", blob, "back")}
+          isSubmitting={isPending}
+          onConfirm={(blob) => uploadDocumentPhoto("front", blob, "back")}
         />
       </div>
     );
@@ -172,7 +227,8 @@ export function HandoffPhoneFlow({
         {error && <p className="text-sm text-destructive">{error}</p>}
         <DocumentPhotoCapture
           label="Zrób zdjęcie tyłu prawa jazdy"
-          onCapture={(blob) => uploadPhoto("back", blob, "selfie")}
+          isSubmitting={isPending}
+          onConfirm={(blob) => uploadDocumentPhoto("back", blob, "selfie")}
         />
       </div>
     );
@@ -184,7 +240,8 @@ export function HandoffPhoneFlow({
         <h1 className="text-2xl font-bold">Krok 3 z 3: selfie</h1>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <SelfieCapture
-          onCapture={(blob) => uploadPhoto("selfie", blob, "finalizing")}
+          isSubmitting={isPending}
+          onConfirm={uploadSelfieThenFinalize}
           onSkip={() => setError("Selfie jest wymagane do automatycznego porównania — zrób zdjęcie, żeby kontynuować.")}
         />
       </div>
@@ -193,8 +250,18 @@ export function HandoffPhoneFlow({
 
   if (step === "finalizing") {
     return (
-      <div className="flex flex-col items-center gap-3 text-center">
-        <p className="text-lg text-muted-foreground">Przetwarzanie…</p>
+      <div className="flex flex-col items-center gap-4 text-center">
+        <h1 className="text-2xl font-bold">Analizujemy zdjęcia</h1>
+        <p className="text-base text-muted-foreground">To może potrwać do minuty. Nie zamykaj tej strony.</p>
+        <IndeterminateProgressBar />
+        {finalizeError && (
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-sm text-destructive">{finalizeError}</p>
+            <Button type="button" size="lg" disabled={isPending} onClick={runFinalize}>
+              {isPending ? "Ponawianie…" : "Spróbuj ponownie"}
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
