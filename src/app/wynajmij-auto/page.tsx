@@ -87,15 +87,37 @@ const CANCELLATION_ORDER: CancellationPolicy[] = ["flexible", "moderate", "stric
 export default async function RentACarInfoPage() {
   const supabase = await createClient();
 
-  const { data: rawCars } = await supabase
-    .from("cars")
-    .select(
-      "id, brand, model, year, city, price_per_day, vehicle_type, fuel_type, seats, car_images(storage_path, position)"
-    )
-    .eq("status", "approved")
-    .order("created_at", { ascending: false })
-    .order("position", { referencedTable: "car_images", ascending: true })
-    .limit(6);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let isAdmin = false;
+  if (user) {
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    isAdmin = profile?.role === "admin";
+  }
+
+  let maintenanceMode = false;
+  if (!isAdmin) {
+    const { data: siteSettings } = await supabase
+      .from("site_settings")
+      .select("maintenance_mode")
+      .eq("id", 1)
+      .single();
+    maintenanceMode = siteSettings?.maintenance_mode ?? false;
+  }
+
+  const { data: rawCars } = maintenanceMode
+    ? { data: [] }
+    : await supabase
+        .from("cars")
+        .select(
+          "id, brand, model, year, city, price_per_day, vehicle_type, fuel_type, seats, car_images(storage_path, position)"
+        )
+        .eq("status", "approved")
+        .order("created_at", { ascending: false })
+        .order("position", { referencedTable: "car_images", ascending: true })
+        .limit(6);
 
   const cars = (rawCars ?? []).map((car) => {
     const images = (car.car_images ?? []) as { storage_path: string; position: number }[];
