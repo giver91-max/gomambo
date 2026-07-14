@@ -141,7 +141,7 @@ export function LandingPage({
         </Link>
         <div className={styles.navActions}>
           {isLoggedIn ? (
-            <Link href="/dashboard" className={styles.navCta}>
+            <Link href="/dashboard" className={`${styles.navCta} ${styles.navCtaName}`}>
               {displayName}
             </Link>
           ) : (
