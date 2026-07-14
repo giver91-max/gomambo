@@ -394,6 +394,10 @@ export function NewCarForm() {
 
       <div className="space-y-2">
         <Label htmlFor="images">Zdjęcia auta (max 8, do 5 MB każde)</Label>
+        <p className="text-xs text-muted-foreground">
+          Dobre zdjęcia realnie zwiększają liczbę zapytań: rób je w świetle dziennym, pokaż
+          auto z czterech stron, dodaj wnętrze i deskę rozdzielczą, i posprzątaj przed sesją.
+        </p>
         <Input
           id="images"
           name="images"

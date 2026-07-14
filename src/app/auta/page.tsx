@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -37,8 +38,10 @@ export default async function AutaPage({
     fuelType?: string;
     transmission?: string;
     minSeats?: string;
+    sortBy?: string;
   };
 }) {
+  const sortBy = searchParams.sortBy ?? "newest";
   const supabase = await createClient();
 
   const {
@@ -84,8 +87,17 @@ export default async function AutaPage({
     .from("cars")
     .select("*, car_images(storage_path, position)")
     .eq("status", "approved")
-    .order("created_at", { ascending: false })
     .order("position", { referencedTable: "car_images", ascending: true });
+
+  if (sortBy === "price_asc") {
+    query = query.order("price_per_day", { ascending: true });
+  } else if (sortBy === "price_desc") {
+    query = query.order("price_per_day", { ascending: false });
+  } else {
+    // "newest" and "rating" (rating is sorted client-side after ratings
+    // are computed below, since it's aggregated from reviews, not a column).
+    query = query.order("created_at", { ascending: false });
+  }
 
   if (searchParams.city) {
     query = query.eq("city", searchParams.city);
@@ -168,6 +180,23 @@ export default async function AutaPage({
     Array.from(sums.entries()).forEach(([ownerId, { sum, count }]) => {
       ratingByOwnerId.set(ownerId, { avg: sum / count, count });
     });
+  }
+
+  let verifiedOwnerIds = new Set<string>();
+  if (ownerIds.length > 0) {
+    const { data: verifications } = await supabase
+      .from("identity_verifications")
+      .select("user_id")
+      .eq("status", "approved")
+      .in("user_id", ownerIds);
+    verifiedOwnerIds = new Set((verifications ?? []).map((v) => v.user_id));
+  }
+
+  const sortedCars = [...(cars ?? [])];
+  if (sortBy === "rating") {
+    sortedCars.sort(
+      (a, b) => (ratingByOwnerId.get(b.owner_id)?.avg ?? -1) - (ratingByOwnerId.get(a.owner_id)?.avg ?? -1)
+    );
   }
 
   return (
@@ -296,10 +325,24 @@ export default async function AutaPage({
             className="w-28"
           />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="sortBy">Sortuj</Label>
+          <select
+            id="sortBy"
+            name="sortBy"
+            defaultValue={sortBy}
+            className="h-8 w-40 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="newest">Najnowsze</option>
+            <option value="price_asc">Cena: od najniższej</option>
+            <option value="price_desc">Cena: od najwyższej</option>
+            <option value="rating">Ocena właściciela</option>
+          </select>
+        </div>
         <Button type="submit">Filtruj</Button>
       </form>
 
-      {!cars || cars.length === 0 ? (
+      {sortedCars.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
             Brak aut spełniających kryteria.
@@ -307,7 +350,7 @@ export default async function AutaPage({
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {cars.map((car) => {
+          {sortedCars.map((car) => {
             const images = (car.car_images ?? []) as {
               storage_path: string;
               position: number;
@@ -352,8 +395,9 @@ export default async function AutaPage({
                     {(() => {
                       const rating = ratingByOwnerId.get(car.owner_id);
                       const ownerName = ownerNameById.get(car.owner_id);
+                      const isVerified = verifiedOwnerIds.has(car.owner_id);
                       return (
-                        <p className="text-xs">
+                        <p className="flex flex-wrap items-center gap-1 text-xs">
                           {ownerName && <span>{ownerName}</span>}
                           {rating && (
                             <span>
@@ -361,6 +405,9 @@ export default async function AutaPage({
                               <span className="text-primary">★</span> {rating.avg.toFixed(1)} (
                               {rating.count})
                             </span>
+                          )}
+                          {isVerified && (
+                            <Badge className="h-4 px-1.5 text-[10px]">Zweryfikowany</Badge>
                           )}
                         </p>
                       );
