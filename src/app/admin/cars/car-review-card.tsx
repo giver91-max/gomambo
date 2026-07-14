@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { approveCar, rejectCar, revertCarToPending } from "./actions";
@@ -40,12 +41,14 @@ export function CarReviewCard({
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   function handleApprove() {
     setError(null);
     startTransition(async () => {
       try {
         await approveCar(car.id);
+        router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Błąd");
       }
@@ -57,6 +60,7 @@ export function CarReviewCard({
     startTransition(async () => {
       try {
         await rejectCar(car.id, reason);
+        router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Błąd");
       }
@@ -68,6 +72,7 @@ export function CarReviewCard({
     startTransition(async () => {
       try {
         await revertCarToPending(car.id);
+        router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Błąd");
       }
