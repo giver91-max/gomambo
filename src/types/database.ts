@@ -185,6 +185,18 @@ export type AdminNotificationRead = {
   read_at: string;
 };
 
+export type NotificationType = "car_approved" | "car_rejected";
+
+export type Notification = {
+  id: string;
+  user_id: string;
+  type: NotificationType;
+  body: string;
+  link: string | null;
+  read_at: string | null;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -393,6 +405,20 @@ export type Database = {
             columns: ["notification_id"];
             isOneToOne: false;
             referencedRelation: "admin_notifications";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notifications: {
+        Row: Notification;
+        Insert: Partial<Notification> & { user_id: string; type: NotificationType; body: string };
+        Update: Partial<Notification>;
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];

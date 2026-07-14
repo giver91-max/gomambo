@@ -19,3 +19,22 @@ export async function markAdminNotificationsRead(notificationIds: string[]): Pro
 
   revalidatePath("/dashboard/notifications");
 }
+
+export async function markNotificationsRead(notificationIds: string[]): Promise<void> {
+  if (notificationIds.length === 0) return;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("user_id", user.id)
+    .in("id", notificationIds)
+    .is("read_at", null);
+
+  revalidatePath("/dashboard/notifications");
+}

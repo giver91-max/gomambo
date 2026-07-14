@@ -10,18 +10,28 @@ export async function getUnreadCounts(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<{ unreadMessages: number; unreadNotifications: number }> {
-  const [{ data: myConversations }, { data: adminConversations }, { data: systemNotifications }] =
-    await Promise.all([
-      supabase
-        .from("conversations")
-        .select("id")
-        .or(`owner_id.eq.${userId},renter_id.eq.${userId}`),
-      // RLS returns only the caller's own thread for a regular user, or
-      // every thread for an admin — same "my rows" shape as above.
-      supabase.from("admin_conversations").select("id"),
-      // Only returns rows for admins — RLS restricts admin_notifications to is_admin().
-      supabase.from("admin_notifications").select("id"),
-    ]);
+  const [
+    { data: myConversations },
+    { data: adminConversations },
+    { data: systemNotifications },
+    { count: unreadPersonalCount },
+  ] = await Promise.all([
+    supabase
+      .from("conversations")
+      .select("id")
+      .or(`owner_id.eq.${userId},renter_id.eq.${userId}`),
+    // RLS returns only the caller's own thread for a regular user, or
+    // every thread for an admin — same "my rows" shape as above.
+    supabase.from("admin_conversations").select("id"),
+    // Only returns rows for admins — RLS restricts admin_notifications to is_admin().
+    supabase.from("admin_notifications").select("id"),
+    // Per-user notifications (e.g. car approved/rejected) — everyone gets these.
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .is("read_at", null),
+  ]);
 
   const conversationIds = (myConversations ?? []).map((c) => c.id);
   const adminConversationIds = (adminConversations ?? []).map((c) => c.id);
@@ -56,7 +66,8 @@ export async function getUnreadCounts(
   const unreadMessages = (messagesCount.count ?? 0) + (adminChatCount.count ?? 0);
 
   const readSystemIds = new Set((systemReads.data ?? []).map((r) => r.notification_id));
-  const unreadNotifications = systemNotificationIds.filter((id) => !readSystemIds.has(id)).length;
+  const unreadSystemCount = systemNotificationIds.filter((id) => !readSystemIds.has(id)).length;
+  const unreadNotifications = unreadSystemCount + (unreadPersonalCount ?? 0);
 
   return { unreadMessages, unreadNotifications };
 }
