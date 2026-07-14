@@ -166,14 +166,54 @@ export type Referral = {
 };
 
 export type IdentityVerificationStatus = "pending" | "approved" | "rejected";
+export type FaceMatchResult = "not_run" | "match" | "no_match" | "error";
+export type VerificationMethod = "manual" | "phone_handoff";
 
 export type IdentityVerification = {
   id: string;
   user_id: string;
   document_path: string;
+  document_back_path: string | null;
   selfie_path: string | null;
   status: IdentityVerificationStatus;
   rejection_reason: string | null;
+  face_match_score: number | null;
+  face_match_result: FaceMatchResult;
+  verification_method: VerificationMethod;
+  biometric_consent_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HandoffStatus =
+  | "pending"
+  | "code_sent"
+  | "claimed"
+  | "photos_uploaded"
+  | "completed"
+  | "expired"
+  | "cancelled";
+
+export type IdentityVerificationHandoff = {
+  id: string;
+  user_id: string;
+  token: string;
+  email: string;
+  code_hash: string | null;
+  code_expires_at: string | null;
+  code_attempts: number;
+  code_send_count: number;
+  code_last_sent_at: string | null;
+  status: HandoffStatus;
+  claimed_at: string | null;
+  handoff_expires_at: string;
+  document_front_path: string | null;
+  document_back_path: string | null;
+  selfie_path: string | null;
+  document_front_uploaded_at: string | null;
+  document_back_uploaded_at: string | null;
+  selfie_uploaded_at: string | null;
+  result_identity_verification_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -433,6 +473,27 @@ export type Database = {
             columns: ["user_id"];
             isOneToOne: true;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      identity_verification_handoffs: {
+        Row: IdentityVerificationHandoff;
+        Insert: Partial<IdentityVerificationHandoff> & { user_id: string; token: string; email: string };
+        Update: Partial<IdentityVerificationHandoff>;
+        Relationships: [
+          {
+            foreignKeyName: "identity_verification_handoffs_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "identity_verification_handoffs_result_identity_verification_id_fkey";
+            columns: ["result_identity_verification_id"];
+            isOneToOne: false;
+            referencedRelation: "identity_verifications";
             referencedColumns: ["id"];
           },
         ];

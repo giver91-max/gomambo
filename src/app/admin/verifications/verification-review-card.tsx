@@ -6,23 +6,38 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { IdentityVerificationStatus } from "@/types/database";
+import type { FaceMatchResult, IdentityVerificationStatus, VerificationMethod } from "@/types/database";
 
 type Props = {
   verification: {
     id: string;
     status: IdentityVerificationStatus;
     rejection_reason: string | null;
+    verification_method: VerificationMethod;
+    face_match_result: FaceMatchResult;
+    face_match_score: number | null;
   };
   userName: string;
   documentUrl: string | null;
+  documentBackUrl: string | null;
   selfieUrl: string | null;
+};
+
+const faceMatchContext: Record<FaceMatchResult, (score: number | null) => string | null> = {
+  not_run: () => null,
+  match: (score) => `Automatyczne dopasowanie: ${score}% — zatwierdzone automatycznie.`,
+  no_match: (score) =>
+    score !== null
+      ? `Automatyczne dopasowanie: ${score}% — poniżej progu, wymaga ręcznej weryfikacji.`
+      : "Automatyczne dopasowanie: brak jednoznacznego wyniku, wymaga ręcznej weryfikacji.",
+  error: () => "Sprawdzanie automatyczne niedostępne — wymaga ręcznej weryfikacji.",
 };
 
 export function VerificationReviewCard({
   verification,
   userName,
   documentUrl,
+  documentBackUrl,
   selfieUrl,
 }: Props) {
   const [reason, setReason] = useState("");
@@ -54,7 +69,12 @@ export function VerificationReviewCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between space-y-0">
-        <CardTitle className="text-base">{userName}</CardTitle>
+        <div className="space-y-1">
+          <CardTitle className="text-base">{userName}</CardTitle>
+          {verification.verification_method === "phone_handoff" && (
+            <Badge variant="outline">Weryfikacja przez telefon</Badge>
+          )}
+        </div>
         <Badge
           variant={
             verification.status === "approved"
@@ -72,12 +92,25 @@ export function VerificationReviewCard({
         </Badge>
       </CardHeader>
       <CardContent className="space-y-3">
+        {faceMatchContext[verification.face_match_result](verification.face_match_score) && (
+          <p className="text-sm text-muted-foreground">
+            {faceMatchContext[verification.face_match_result](verification.face_match_score)}
+          </p>
+        )}
         <div className="flex flex-wrap gap-3">
           {documentUrl && (
             // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
             <img
               src={documentUrl}
-              alt="Dokument tożsamości"
+              alt="Dokument tożsamości — przód"
+              className="max-h-64 rounded-lg border object-contain"
+            />
+          )}
+          {documentBackUrl && (
+            // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
+            <img
+              src={documentBackUrl}
+              alt="Dokument tożsamości — tył"
               className="max-h-64 rounded-lg border object-contain"
             />
           )}

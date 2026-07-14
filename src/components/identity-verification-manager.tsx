@@ -6,6 +6,7 @@ import { submitIdentityVerification } from "@/app/dashboard/profile/identity-act
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SelfieCapture } from "@/components/selfie-capture";
+import { VerificationQrPanel } from "@/components/verification-qr-panel";
 import type { IdentityVerificationStatus } from "@/types/database";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -184,6 +185,16 @@ export function IdentityVerificationManager({
       )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {!pendingDocument && (
+        <div className="space-y-2 border-t pt-3">
+          <p className="text-sm text-muted-foreground">
+            Wolisz zrobić zdjęcia telefonem? Zeskanuj kod QR — dostaniesz zdjęcia przodu, tyłu i
+            selfie w jednym kroku, z automatycznym porównaniem.
+          </p>
+          <VerificationQrPanel />
+        </div>
+      )}
     </div>
   );
 }
