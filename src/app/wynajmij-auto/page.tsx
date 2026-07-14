@@ -15,9 +15,9 @@ import {
 import type { CancellationPolicy } from "@/types/database";
 
 export const metadata: Metadata = {
-  title: "Wynajmij auto — jak to działa na GoMambo",
+  title: "Jak wynająć auto bez wypożyczalni — zasady i FAQ",
   description:
-    "Zasady wynajmu auta od prywatnego właściciela na GoMambo: wymagania, odpowiedzialność najemcy, ubezpieczenie i polityka anulowania.",
+    "Alternatywa dla tradycyjnej wypożyczalni aut: wynajmij auto od prywatnego właściciela na GoMambo. Wymagania, odpowiedzialność najemcy, ubezpieczenie i polityka anulowania.",
   alternates: { canonical: "/wynajmij-auto" },
 };
 
@@ -127,8 +127,22 @@ export default async function RentACarInfoPage() {
     return { ...car, imageUrl };
   });
 
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: FAQS.map((faq) => ({
+      "@type": "Question",
+      name: faq.q,
+      acceptedAnswer: { "@type": "Answer", text: faq.a },
+    })),
+  };
+
   return (
     <div className="min-h-screen">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       <header className="flex items-center justify-between border-b px-4 py-4 sm:px-6">
         <Link href="/" className="text-lg font-black tracking-tight">
           Go<span className="text-primary">Mambo</span>

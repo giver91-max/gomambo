@@ -167,7 +167,7 @@ export function LandingPage({
             height={941}
             sizes="(max-width: 600px) 90vw, 520px"
             style={{ width: 520, maxWidth: "90vw", height: "auto", display: "block" }}
-            alt="GoMambo"
+            alt="GoMambo — wypożyczalnia samochodów peer-to-peer"
             priority
           />
         </div>
