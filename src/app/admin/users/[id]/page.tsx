@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/back-button";
 import { startConversationWithUser } from "../actions";
+import { DeleteUserButton } from "./delete-user-button";
 import type { CarStatus } from "@/types/database";
 
 const carStatusLabel: Record<CarStatus, string> = {
@@ -77,9 +78,12 @@ export default async function AdminUserDetailPage({
         </div>
       </div>
 
-      <form action={startConversationWithUser.bind(null, params.id)}>
-        <Button type="submit">Napisz wiadomość</Button>
-      </form>
+      <div className="flex flex-wrap gap-2">
+        <form action={startConversationWithUser.bind(null, params.id)}>
+          <Button type="submit">Napisz wiadomość</Button>
+        </form>
+        <DeleteUserButton userId={params.id} userName={profile.full_name || "ten użytkownik"} />
+      </div>
 
       <Card>
         <CardHeader>
