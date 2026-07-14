@@ -33,6 +33,7 @@ function RegisterForm() {
   const [isPending, startTransition] = useTransition();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/dashboard";
+  const ref = searchParams.get("ref") ?? "";
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -73,6 +74,7 @@ function RegisterForm() {
         <CardContent>
           <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4">
             <input type="hidden" name="next" value={next} />
+            <input type="hidden" name="ref" value={ref} />
             <div className="space-y-2">
               <Label htmlFor="fullName">Imię i nazwisko</Label>
               <Input id="fullName" name="fullName" required autoComplete="name" />

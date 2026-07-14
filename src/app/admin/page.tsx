@@ -9,6 +9,7 @@ const notificationTypeLabel: Record<AdminNotification["type"], string> = {
   new_registration: "Nowa rejestracja",
   new_car_pending: "Nowe auto do weryfikacji",
   new_identity_verification: "Zgłoszenie weryfikacji tożsamości",
+  new_referral: "Rejestracja z polecenia",
 };
 
 export default async function AdminOverviewPage() {

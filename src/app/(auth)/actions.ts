@@ -20,6 +20,9 @@ export async function signUp(
   const next = String(formData.get("next") ?? "/dashboard");
   const acceptTerms = formData.get("acceptTerms") === "on";
   const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
+  const refRaw = String(formData.get("ref") ?? "").trim();
+  const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(refRaw);
+  const referredBy = isValidUuid ? refRaw : null;
 
   if (!email || !password || !fullName) {
     return { error: "Wypełnij wszystkie pola." };
@@ -44,7 +47,11 @@ export async function signUp(
     email,
     password,
     options: {
-      data: { full_name: fullName, terms_accepted_at: new Date().toISOString() },
+      data: {
+        full_name: fullName,
+        terms_accepted_at: new Date().toISOString(),
+        ...(referredBy ? { referred_by: referredBy } : {}),
+      },
       emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
     },
   });
@@ -71,6 +78,19 @@ export async function signUp(
     body: `Nowy użytkownik: ${fullName} (${email})`,
     link: signUpData.user ? `/admin/users/${signUpData.user.id}` : "/admin/users",
   });
+
+  if (referredBy) {
+    const { data: referrerProfile } = await admin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", referredBy)
+      .single();
+    await admin.from("admin_notifications").insert({
+      type: "new_referral",
+      body: `${fullName} zarejestrował się z polecenia: ${referrerProfile?.full_name || "nieznany użytkownik"}`,
+      link: `/admin/users/${referredBy}`,
+    });
+  }
 
   redirect("/register/sprawdz-email");
 }

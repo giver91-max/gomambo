@@ -152,9 +152,16 @@ export type AdminChatMessage = {
 
 export type AdminNotification = {
   id: string;
-  type: "new_registration" | "new_car_pending" | "new_identity_verification";
+  type: "new_registration" | "new_car_pending" | "new_identity_verification" | "new_referral";
   body: string;
   link: string | null;
+  created_at: string;
+};
+
+export type Referral = {
+  id: string;
+  referrer_id: string;
+  referred_id: string;
   created_at: string;
 };
 
@@ -399,6 +406,20 @@ export type Database = {
             foreignKeyName: "identity_verifications_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      referrals: {
+        Row: Referral;
+        Insert: Partial<Referral> & { referrer_id: string; referred_id: string };
+        Update: Partial<Referral>;
+        Relationships: [
+          {
+            foreignKeyName: "referrals_referrer_id_fkey";
+            columns: ["referrer_id"];
+            isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];
           },

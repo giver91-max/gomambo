@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/back-button";
 import { FavoriteButton } from "@/components/favorite-button";
 import { MaintenanceNotice } from "@/components/maintenance-notice";
+import { ResultsViewToggle } from "@/components/results-view-toggle";
 import { eachDateInRange, toISODate } from "@/lib/calendar";
 import { firstNameOnly } from "@/lib/utils";
 import {
@@ -199,6 +200,14 @@ export default async function AutaPage({
     );
   }
 
+  const mapCars = sortedCars.map((car) => ({
+    id: car.id,
+    brand: car.brand,
+    model: car.model,
+    city: car.city,
+    pricePerDay: Number(car.price_per_day),
+  }));
+
   return (
     <div className="space-y-8">
       <BackButton />
@@ -342,6 +351,7 @@ export default async function AutaPage({
         <Button type="submit">Filtruj</Button>
       </form>
 
+      <ResultsViewToggle mapCars={mapCars}>
       {sortedCars.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
@@ -427,6 +437,7 @@ export default async function AutaPage({
           })}
         </div>
       )}
+      </ResultsViewToggle>
     </div>
   );
 }

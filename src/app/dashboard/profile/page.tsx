@@ -7,6 +7,8 @@ import { IdentityVerificationManager } from "@/components/identity-verification-
 import { ProfileForm } from "./profile-form";
 import { EmailForm } from "./email-form";
 import { NotificationForm } from "./notification-form";
+import { ReferralLink } from "@/components/referral-link";
+import { SITE_URL } from "@/lib/site";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
@@ -55,6 +57,12 @@ export default async function ProfilePage() {
     selfieUrl = signed?.signedUrl ?? null;
   }
 
+  const { count: referralCount } = await supabase
+    .from("referrals")
+    .select("id", { count: "exact", head: true })
+    .eq("referrer_id", user.id);
+  const referralLink = `${SITE_URL}/register?ref=${user.id}`;
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <BackButton />
@@ -93,6 +101,21 @@ export default async function ProfilePage() {
         </CardHeader>
         <CardContent>
           <NotificationForm initialEmailEnabled={profile.notify_email} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Program poleceń</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Poleć GoMambo znajomym. Poleciłeś już{" "}
+            <span className="font-semibold text-foreground">{referralCount ?? 0}</span>{" "}
+            {referralCount === 1 ? "osobę" : "osób"}. Nagrody za polecenia ustalamy na razie
+            ręcznie — napisz do nas na czacie po pierwszym poleceniu.
+          </p>
+          <ReferralLink link={referralLink} />
         </CardContent>
       </Card>
 

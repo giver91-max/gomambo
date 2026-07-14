@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import type { CarStatus } from "@/types/database";
 import { BackButton } from "@/components/back-button";
 import { PauseToggleButton } from "./cars/pause-toggle-button";
+import { eachDateInRange } from "@/lib/calendar";
 
 const statusLabel: Record<CarStatus, string> = {
   pending: "Oczekuje na zatwierdzenie",
@@ -27,11 +28,37 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: cars } = await supabase
-    .from("cars")
-    .select("*")
-    .eq("owner_id", user!.id)
-    .order("created_at", { ascending: false });
+  const [{ data: cars }, { data: bookings }, { data: reviews }] = await Promise.all([
+    supabase.from("cars").select("*").eq("owner_id", user!.id).order("created_at", { ascending: false }),
+    supabase
+      .from("bookings")
+      .select("status, start_date, end_date, cars(price_per_day)")
+      .eq("owner_id", user!.id),
+    supabase.from("reviews").select("rating").eq("reviewee_id", user!.id),
+  ]);
+
+  const activeListings = (cars ?? []).filter(
+    (c) => c.status === "approved" || c.status === "paused"
+  ).length;
+  const pendingRequests = (bookings ?? []).filter((b) => b.status === "requested").length;
+  const completedBookings = (bookings ?? []).filter((b) => b.status === "completed");
+  const estimatedRevenue = completedBookings.reduce((sum, b) => {
+    const nights = eachDateInRange(b.start_date, b.end_date).length;
+    const pricePerDay = Number((b.cars as { price_per_day: number } | null)?.price_per_day ?? 0);
+    return sum + nights * pricePerDay;
+  }, 0);
+  const avgRating =
+    reviews && reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : null;
+
+  const stats: { label: string; value: string }[] = [
+    { label: "Aktywne ogłoszenia", value: String(activeListings) },
+    { label: "Zapytania oczekujące", value: String(pendingRequests) },
+    { label: "Zakończone wynajmy", value: String(completedBookings.length) },
+    { label: "Szacowany przychód", value: `${estimatedRevenue.toFixed(0)} zł` },
+    { label: "Średnia ocena", value: avgRating !== null ? `★ ${avgRating.toFixed(1)}` : "brak ocen" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -42,6 +69,23 @@ export default async function DashboardPage() {
           + Dodaj auto
         </Link>
       </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {stats.map((stat) => (
+          <Card key={stat.label}>
+            <CardContent className="py-4">
+              <p className="text-2xl font-bold">{stat.value}</p>
+              <p className="text-sm text-muted-foreground">{stat.label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      {completedBookings.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Szacowany przychód liczony jest z aktualnej ceny za dzień auta, nie z ceny
+          obowiązującej w momencie rezerwacji.
+        </p>
+      )}
 
       {!cars || cars.length === 0 ? (
         <Card>
