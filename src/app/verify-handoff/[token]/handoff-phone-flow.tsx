@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DocumentPhotoCapture } from "@/components/document-photo-capture";
 import { SelfieCapture } from "@/components/selfie-capture";
@@ -80,142 +79,133 @@ export function HandoffPhoneFlow({
 
   if (step === "send_code") {
     return (
-      <Card>
-        <CardContent className="space-y-3 py-8">
-          <h1 className="text-lg font-semibold">Weryfikacja tożsamości</h1>
-          <p className="text-sm text-muted-foreground">
-            Wyślemy jednorazowy kod na Twój adres e-mail: <strong>{maskedEmail}</strong>
-          </p>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="button" disabled={isPending} onClick={handleSendCode}>
-            {isPending ? "Wysyłanie…" : "Wyślij kod e-mail"}
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center gap-4 text-center">
+        <h1 className="text-2xl font-bold">Weryfikacja tożsamości</h1>
+        <p className="text-base text-muted-foreground">
+          Wyślemy jednorazowy kod na Twój adres e-mail: <strong>{maskedEmail}</strong>
+        </p>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <Button type="button" size="lg" className="w-full" disabled={isPending} onClick={handleSendCode}>
+          {isPending ? "Wysyłanie…" : "Wyślij kod e-mail"}
+        </Button>
+      </div>
     );
   }
 
   if (step === "enter_code") {
     return (
-      <Card>
-        <CardContent className="space-y-3 py-8">
-          <h1 className="text-lg font-semibold">Wpisz kod z e-maila</h1>
-          <p className="text-sm text-muted-foreground">
-            Kod wysłaliśmy na <strong>{maskedEmail}</strong>.
-          </p>
-          <Input
-            inputMode="numeric"
-            maxLength={6}
-            placeholder="123456"
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-          />
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={isPending || code.length !== 6} onClick={handleClaim}>
-              {isPending ? "Sprawdzanie…" : "Potwierdź"}
-            </Button>
-            <Button type="button" variant="ghost" disabled={isPending} onClick={handleSendCode}>
-              Wyślij kod ponownie
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center gap-4 text-center">
+        <h1 className="text-2xl font-bold">Wpisz kod z e-maila</h1>
+        <p className="text-base text-muted-foreground">
+          Kod wysłaliśmy na <strong>{maskedEmail}</strong>.
+        </p>
+        <Input
+          inputMode="numeric"
+          maxLength={6}
+          placeholder="123456"
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          className="h-14 text-center text-2xl tracking-[0.3em]"
+        />
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <Button
+          type="button"
+          size="lg"
+          className="w-full"
+          disabled={isPending || code.length !== 6}
+          onClick={handleClaim}
+        >
+          {isPending ? "Sprawdzanie…" : "Potwierdź"}
+        </Button>
+        <Button type="button" variant="ghost" disabled={isPending} onClick={handleSendCode}>
+          Wyślij kod ponownie
+        </Button>
+      </div>
     );
   }
 
   if (step === "consent") {
     return (
-      <Card>
-        <CardContent className="space-y-3 py-8">
-          <h1 className="text-lg font-semibold">Zgoda na przetwarzanie wizerunku</h1>
-          <p className="text-sm text-muted-foreground">
-            Za chwilę zrobisz zdjęcia prawa jazdy (przód i tył) oraz selfie. Selfie zostanie
-            automatycznie porównane ze zdjęciem dokumentu w celu potwierdzenia Twojej tożsamości.
-          </p>
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={consentGiven}
-              onChange={(e) => setConsentGiven(e.target.checked)}
-              className="mt-1 size-4 shrink-0 rounded border-input"
-            />
-            <span>
-              Wyrażam zgodę na przetworzenie mojego wizerunku (zdjęcia dokumentu i selfie) w celu
-              weryfikacji tożsamości na GoMambo.
-            </span>
-          </label>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="button" disabled={!consentGiven} onClick={() => setStep("front")}>
-            Dalej
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center gap-4 text-center">
+        <h1 className="text-2xl font-bold">Zgoda na przetwarzanie wizerunku</h1>
+        <p className="text-base text-muted-foreground">
+          Za chwilę zrobisz zdjęcia prawa jazdy (przód i tył) oraz selfie. Selfie zostanie
+          automatycznie porównane ze zdjęciem dokumentu w celu potwierdzenia Twojej tożsamości.
+        </p>
+        <label className="flex items-start gap-3 text-left text-sm">
+          <input
+            type="checkbox"
+            checked={consentGiven}
+            onChange={(e) => setConsentGiven(e.target.checked)}
+            className="mt-1 size-5 shrink-0 rounded border-input"
+          />
+          <span>
+            Wyrażam zgodę na przetworzenie mojego wizerunku (zdjęcia dokumentu i selfie) w celu
+            weryfikacji tożsamości na GoMambo.
+          </span>
+        </label>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <Button type="button" size="lg" className="w-full" disabled={!consentGiven} onClick={() => setStep("front")}>
+          Dalej
+        </Button>
+      </div>
     );
   }
 
   if (step === "front") {
     return (
-      <Card>
-        <CardContent className="space-y-3 py-8">
-          <h1 className="text-lg font-semibold">Krok 1 z 3: przód prawa jazdy</h1>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <DocumentPhotoCapture
-            label="Zrób zdjęcie przodu prawa jazdy"
-            onCapture={(blob) => uploadPhoto("front", blob, "back")}
-          />
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center gap-4 text-center">
+        <h1 className="text-2xl font-bold">Krok 1 z 3: przód prawa jazdy</h1>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <DocumentPhotoCapture
+          label="Zrób zdjęcie przodu prawa jazdy"
+          onCapture={(blob) => uploadPhoto("front", blob, "back")}
+        />
+      </div>
     );
   }
 
   if (step === "back") {
     return (
-      <Card>
-        <CardContent className="space-y-3 py-8">
-          <h1 className="text-lg font-semibold">Krok 2 z 3: tył prawa jazdy</h1>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <DocumentPhotoCapture
-            label="Zrób zdjęcie tyłu prawa jazdy"
-            onCapture={(blob) => uploadPhoto("back", blob, "selfie")}
-          />
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center gap-4 text-center">
+        <h1 className="text-2xl font-bold">Krok 2 z 3: tył prawa jazdy</h1>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <DocumentPhotoCapture
+          label="Zrób zdjęcie tyłu prawa jazdy"
+          onCapture={(blob) => uploadPhoto("back", blob, "selfie")}
+        />
+      </div>
     );
   }
 
   if (step === "selfie") {
     return (
-      <Card>
-        <CardContent className="space-y-3 py-8">
-          <h1 className="text-lg font-semibold">Krok 3 z 3: selfie</h1>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <SelfieCapture
-            onCapture={(blob) => uploadPhoto("selfie", blob, "finalizing")}
-            onSkip={() => setError("Selfie jest wymagane do automatycznego porównania — zrób zdjęcie, żeby kontynuować.")}
-          />
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center gap-4 text-center">
+        <h1 className="text-2xl font-bold">Krok 3 z 3: selfie</h1>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <SelfieCapture
+          onCapture={(blob) => uploadPhoto("selfie", blob, "finalizing")}
+          onSkip={() => setError("Selfie jest wymagane do automatycznego porównania — zrób zdjęcie, żeby kontynuować.")}
+        />
+      </div>
     );
   }
 
   if (step === "finalizing") {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">Przetwarzanie…</CardContent>
-      </Card>
+      <div className="flex flex-col items-center gap-3 text-center">
+        <p className="text-lg text-muted-foreground">Przetwarzanie…</p>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-2 py-8 text-center">
-        <h1 className="text-lg font-semibold">Gotowe ✓</h1>
-        <p className="text-sm text-muted-foreground">
-          Zdjęcia zostały przesłane. Wróć do urządzenia, na którym zeskanowałeś kod QR, żeby zobaczyć wynik
-          weryfikacji.
-        </p>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col items-center gap-4 text-center">
+      <h1 className="text-2xl font-bold">Gotowe ✓</h1>
+      <p className="text-base text-muted-foreground">
+        Zdjęcia zostały przesłane. Wróć do urządzenia, na którym zeskanowałeś kod QR, żeby zobaczyć
+        wynik weryfikacji.
+      </p>
+    </div>
   );
 }

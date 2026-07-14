@@ -25,6 +25,15 @@ export function SelfieCapture({
     };
   }, []);
 
+  // The <video> element only mounts once isStreaming flips to true, so it
+  // doesn't exist yet at the point startCamera() resolves — srcObject has
+  // to be attached here, after the element has actually committed to the DOM.
+  useEffect(() => {
+    if (isStreaming && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [isStreaming]);
+
   async function startCamera() {
     setError(null);
     try {
@@ -32,9 +41,6 @@ export function SelfieCapture({
         video: { facingMode: "user" },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
       setIsStreaming(true);
     } catch {
       const next = attempts + 1;
@@ -82,49 +88,52 @@ export function SelfieCapture({
 
   if (previewUrl) {
     return (
-      <div className="space-y-2">
+      <div className="flex flex-col items-center gap-4">
         {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
-        <img src={previewUrl} alt="Zrobione selfie" className="max-h-48 rounded-lg border" />
-        <Button type="button" variant="outline" size="sm" onClick={retake}>
+        <img src={previewUrl} alt="Zrobione selfie" className="w-full max-w-sm rounded-2xl border" />
+        <Button type="button" variant="outline" size="lg" onClick={retake}>
           Zrób ponownie
         </Button>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-2">
-      {isStreaming ? (
-        <>
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="max-h-64 w-full max-w-xs rounded-lg border"
-          />
-          <div className="flex gap-2">
-            <Button type="button" size="sm" onClick={takePhoto}>
-              Zrób zdjęcie
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={stopCamera}>
-              Anuluj
-            </Button>
-          </div>
-        </>
-      ) : (
-        <>
-          <Button type="button" variant="outline" size="sm" onClick={startCamera}>
-            Zrób selfie
+  if (isStreaming) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-end bg-black py-6">
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute inset-0 h-full w-full scale-x-[-1] object-cover"
+        />
+        <div className="relative z-10 flex items-center gap-6 pb-4">
+          <Button type="button" variant="secondary" size="lg" onClick={stopCamera}>
+            Anuluj
           </Button>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          {attempts >= MAX_ATTEMPTS && (
-            <Button type="button" variant="ghost" size="sm" onClick={onSkip}>
-              Kontynuuj bez selfie →
-            </Button>
-          )}
-        </>
+          <button
+            type="button"
+            onClick={takePhoto}
+            aria-label="Zrób zdjęcie"
+            className="size-18 rounded-full border-4 border-white bg-white/20 active:bg-white/40"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3 text-center">
+      <Button type="button" size="lg" className="w-full max-w-xs" onClick={startCamera}>
+        Zrób selfie
+      </Button>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      {attempts >= MAX_ATTEMPTS && (
+        <Button type="button" variant="ghost" onClick={onSkip}>
+          Kontynuuj bez selfie →
+        </Button>
       )}
     </div>
   );

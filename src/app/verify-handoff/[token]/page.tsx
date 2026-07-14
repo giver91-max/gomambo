@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getHandoffByToken } from "@/lib/verification-handoff";
-import { Card, CardContent } from "@/components/ui/card";
 import { HandoffPhoneFlow } from "./handoff-phone-flow";
 
 export const metadata: Metadata = {
@@ -20,23 +19,25 @@ export default async function VerifyHandoffPage({ params }: { params: { token: s
 
   if (!handoff || ["expired", "cancelled"].includes(handoff.status)) {
     return (
-      <div className="mx-auto flex min-h-screen max-w-md items-center justify-center px-6">
-        <Card>
-          <CardContent className="space-y-2 py-8 text-center">
-            <h1 className="text-lg font-semibold">Link wygasł</h1>
-            <p className="text-sm text-muted-foreground">
-              Ta sesja weryfikacji nie jest już aktywna. Wygeneruj nowy kod QR na koncie, z którego
-              rozpocząłeś weryfikację.
-            </p>
-          </CardContent>
-        </Card>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <h1 className="text-2xl font-bold">Link wygasł</h1>
+        <p className="max-w-sm text-base text-muted-foreground">
+          Ta sesja weryfikacji nie jest już aktywna. Wygeneruj nowy kod QR na koncie, z którego
+          rozpocząłeś weryfikację.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto min-h-screen max-w-md px-6 py-10">
-      <HandoffPhoneFlow token={params.token} initialStatus={handoff.status} maskedEmail={maskEmail(handoff.email)} />
+    <div className="flex min-h-screen flex-col items-center justify-center px-6 py-10">
+      <div className="w-full max-w-sm">
+        <HandoffPhoneFlow
+          token={params.token}
+          initialStatus={handoff.status}
+          maskedEmail={maskEmail(handoff.email)}
+        />
+      </div>
     </div>
   );
 }
