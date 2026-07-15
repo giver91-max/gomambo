@@ -15,6 +15,11 @@ const systemTypeLabel: Record<AdminNotification["type"], string> = {
 const personalTypeLabel: Record<Notification["type"], string> = {
   car_approved: "Auto zatwierdzone",
   car_rejected: "Auto odrzucone",
+  booking_accepted: "Rezerwacja zaakceptowana",
+  booking_declined: "Rezerwacja odrzucona",
+  booking_cancelled: "Rezerwacja anulowana",
+  identity_verification_approved: "Tożsamość zweryfikowana",
+  identity_verification_rejected: "Weryfikacja tożsamości odrzucona",
 };
 
 type FeedItem = {

@@ -225,7 +225,14 @@ export type AdminNotificationRead = {
   read_at: string;
 };
 
-export type NotificationType = "car_approved" | "car_rejected";
+export type NotificationType =
+  | "car_approved"
+  | "car_rejected"
+  | "booking_accepted"
+  | "booking_declined"
+  | "booking_cancelled"
+  | "identity_verification_approved"
+  | "identity_verification_rejected";
 
 export type Notification = {
   id: string;

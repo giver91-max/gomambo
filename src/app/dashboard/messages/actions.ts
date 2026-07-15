@@ -3,9 +3,11 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isConversationActive } from "@/lib/conversation-status";
 import { getOrCreateAdminConversation } from "@/lib/admin-chat";
 import { isSendingTooFast } from "@/lib/rate-limit";
+import { sendNotificationEmail } from "@/lib/email";
 
 export type MessageState = { error: string | null };
 
@@ -27,7 +29,7 @@ export async function sendMessage(
 
   const { data: conversation } = await supabase
     .from("conversations")
-    .select("car_id, renter_id")
+    .select("car_id, owner_id, renter_id, cars(brand, model)")
     .eq("id", conversationId)
     .single();
 
@@ -55,6 +57,34 @@ export async function sendMessage(
 
   revalidatePath(`/dashboard/messages/${conversationId}`);
   revalidatePath("/dashboard/messages");
+
+  // Chat's own unread-count badge already covers in-app awareness — the
+  // gap this closes is the recipient finding out at all if they aren't
+  // actively checking the site.
+  const recipientId = conversation.owner_id === user.id ? conversation.renter_id : conversation.owner_id;
+  const admin = createAdminClient();
+  const { data: recipientProfile } = await admin
+    .from("profiles")
+    .select("notify_email")
+    .eq("id", recipientId)
+    .single();
+  if (recipientProfile?.notify_email !== false) {
+    const { data: recipientAuth } = await admin.auth.admin.getUserById(recipientId);
+    const recipientEmail = recipientAuth?.user?.email;
+    if (recipientEmail) {
+      const car = conversation.cars as unknown as { brand: string; model: string } | null;
+      await sendNotificationEmail({
+        to: recipientEmail,
+        subject: car ? `Nowa wiadomość: ${car.brand} ${car.model}` : "Nowa wiadomość na GoMambo",
+        html: `
+          <p>Masz nową wiadomość na GoMambo${car ? ` w sprawie ${car.brand} ${car.model}` : ""}:</p>
+          <p>${body.replace(/\n/g, "<br>")}</p>
+          <p><a href="https://www.gomambo.pl/dashboard/messages/${conversationId}">Odpowiedz →</a></p>
+        `,
+      });
+    }
+  }
+
   return { error: null };
 }
 

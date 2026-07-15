@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { notifyUser } from "@/lib/notify-user";
 import type { BookingStatus } from "@/types/database";
 
 export async function updateBookingStatus(
@@ -17,7 +18,7 @@ export async function updateBookingStatus(
 
   const { data: booking } = await supabase
     .from("bookings")
-    .select("owner_id")
+    .select("owner_id, renter_id, start_date, end_date, cars(brand, model, year)")
     .eq("id", bookingId)
     .single();
 
@@ -28,6 +29,43 @@ export async function updateBookingStatus(
   const { error } = await supabase.from("bookings").update({ status }).eq("id", bookingId);
   if (error) {
     return { error: error.message };
+  }
+
+  if (status === "accepted" || status === "declined") {
+    const car = booking.cars as unknown as { brand: string; model: string; year: number } | null;
+    const carLabel = car ? `${car.brand} ${car.model} (${car.year})` : "auto";
+    await notifyUser({
+      userId: booking.renter_id,
+      type: status === "accepted" ? "booking_accepted" : "booking_declined",
+      subject:
+        status === "accepted"
+          ? `Rezerwacja zaakceptowana: ${carLabel}`
+          : `Rezerwacja odrzucona: ${carLabel}`,
+      body:
+        status === "accepted"
+          ? `Właściciel zaakceptował Twoje zapytanie o ${carLabel} (${booking.start_date} – ${booking.end_date}).`
+          : `Właściciel odrzucił Twoje zapytanie o ${carLabel} (${booking.start_date} – ${booking.end_date}).`,
+      emailHtml:
+        status === "accepted"
+          ? `
+            <p>Właściciel zaakceptował Twoje zapytanie o wynajem na GoMambo.</p>
+            <ul>
+              <li><strong>Auto:</strong> ${carLabel}</li>
+              <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
+            </ul>
+            <p><a href="https://www.gomambo.pl/dashboard/rentals">Zobacz szczegóły →</a></p>
+          `
+          : `
+            <p>Właściciel odrzucił Twoje zapytanie o wynajem na GoMambo.</p>
+            <ul>
+              <li><strong>Auto:</strong> ${carLabel}</li>
+              <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
+            </ul>
+            <p>Przejrzyj inne dostępne auta w Twojej okolicy.</p>
+            <p><a href="https://www.gomambo.pl/auta">Przeglądaj auta →</a></p>
+          `,
+      link: "/dashboard/rentals",
+    });
   }
 
   revalidatePath("/dashboard/bookings");
@@ -44,7 +82,7 @@ export async function cancelBooking(bookingId: string): Promise<void> {
 
   const { data: booking } = await supabase
     .from("bookings")
-    .select("renter_id, status")
+    .select("renter_id, owner_id, status, start_date, end_date, cars(brand, model, year)")
     .eq("id", bookingId)
     .single();
 
@@ -52,6 +90,24 @@ export async function cancelBooking(bookingId: string): Promise<void> {
   if (booking.status !== "requested" && booking.status !== "accepted") return;
 
   await supabase.from("bookings").update({ status: "cancelled" }).eq("id", bookingId);
+
+  const car = booking.cars as unknown as { brand: string; model: string; year: number } | null;
+  const carLabel = car ? `${car.brand} ${car.model} (${car.year})` : "auto";
+  await notifyUser({
+    userId: booking.owner_id,
+    type: "booking_cancelled",
+    subject: `Rezerwacja anulowana: ${carLabel}`,
+    body: `Najemca anulował rezerwację ${carLabel} (${booking.start_date} – ${booking.end_date}).`,
+    emailHtml: `
+      <p>Najemca anulował rezerwację na GoMambo.</p>
+      <ul>
+        <li><strong>Auto:</strong> ${carLabel}</li>
+        <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
+      </ul>
+      <p><a href="https://www.gomambo.pl/dashboard/bookings">Zobacz rezerwacje →</a></p>
+    `,
+    link: "/dashboard/bookings",
+  });
 
   revalidatePath("/dashboard/bookings");
   revalidatePath("/dashboard/rentals");
