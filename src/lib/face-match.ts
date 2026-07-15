@@ -1,5 +1,5 @@
 import "server-only";
-import { RekognitionClient, CompareFacesCommand, DetectFacesCommand } from "@aws-sdk/client-rekognition";
+import { RekognitionClient, CompareFacesCommand, DetectFacesCommand, DetectTextCommand } from "@aws-sdk/client-rekognition";
 import type { FaceMatchResult } from "@/types/database";
 
 // Auto-approve threshold, deliberately conservative: we own the risk of
@@ -79,6 +79,30 @@ export async function detectSingleFace(imageBytes: Buffer): Promise<FaceDetectio
     return { ok: true };
   } catch (error) {
     console.error("detectSingleFace: Rekognition call failed", error);
+    return { ok: true };
+  }
+}
+
+export type LegibilityOutcome = { ok: boolean };
+
+// A real license photo — even a mediocre one — has plenty of printed text
+// (name, dates, document number, category table). A blurry, dark, or badly
+// cropped shot detects very few lines, if any, so a low count is a cheap
+// proxy for "unreadable" without having to actually interpret what the
+// text says. Deliberately conservative (low bar) since there's no real
+// license imagery to calibrate against — same missing-credentials/error
+// graceful degrade as the other checks, this never blocks on our own account.
+const MIN_TEXT_LINES = 3;
+
+export async function checkDocumentLegibility(imageBytes: Buffer): Promise<LegibilityOutcome> {
+  if (!client) return { ok: true };
+
+  try {
+    const response = await client.send(new DetectTextCommand({ Image: { Bytes: imageBytes } }));
+    const lineCount = (response.TextDetections ?? []).filter((d) => d.Type === "LINE").length;
+    return { ok: lineCount >= MIN_TEXT_LINES };
+  } catch (error) {
+    console.error("checkDocumentLegibility: Rekognition call failed", error);
     return { ok: true };
   }
 }

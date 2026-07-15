@@ -3,7 +3,12 @@
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendCodeEmail } from "@/lib/email";
-import { compareFaces, detectSingleFace, FACE_MATCH_AUTO_APPROVE_THRESHOLD } from "@/lib/face-match";
+import {
+  checkDocumentLegibility,
+  compareFaces,
+  detectSingleFace,
+  FACE_MATCH_AUTO_APPROVE_THRESHOLD,
+} from "@/lib/face-match";
 import {
   codeMatches,
   generateEmailCode,
@@ -152,6 +157,18 @@ export async function uploadHandoffPhoto(
           detection.reason === "multiple_faces"
             ? "Na zdjęciu wykryto więcej niż jedną osobę. Zrób zdjęcie ponownie, upewniając się, że w kadrze jest tylko dokument."
             : "Nie wykryto wyraźnej twarzy na zdjęciu. Sprawdź oświetlenie i ostrość i spróbuj ponownie.",
+      };
+    }
+  }
+
+  // Same idea for legibility — both sides of the document carry printed
+  // text, the selfie doesn't, so this only applies to front/back.
+  if (kind === "front" || kind === "back") {
+    const legibility = await checkDocumentLegibility(buffer);
+    if (!legibility.ok) {
+      return {
+        error:
+          "Zdjęcie jest nieczytelne. Sprawdź oświetlenie i ostrość, upewnij się że cały dokument jest widoczny, i spróbuj ponownie.",
       };
     }
   }
