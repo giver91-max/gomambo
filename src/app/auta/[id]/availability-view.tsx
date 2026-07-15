@@ -30,29 +30,30 @@ export function AvailabilityView({
   }
 
   const todayIso = toISODate(new Date());
-
-  if (availableDates.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Właściciel nie oznaczył jeszcze żadnych dostępnych terminów. Napisz
-        wiadomość poniżej, aby zapytać o dostępność.
-      </p>
-    );
-  }
+  const hasAvailability = availableDates.length > 0;
 
   return (
     <div className="space-y-2">
+      {!hasAvailability && (
+        <p className="text-sm text-muted-foreground">
+          Właściciel nie oznaczył jeszcze konkretnych dostępnych terminów. Zaznacz w
+          kalendarzu termin, o który chcesz zapytać — właściciel potwierdzi
+          dostępność.
+        </p>
+      )}
       <MonthCalendar
         highlightedDates={available}
         selectedRange={range}
         onDayClick={handleDayClick}
         minDateIso={todayIso}
-        restrictToHighlighted
+        restrictToHighlighted={hasAvailability}
       />
-      <p className="text-xs text-muted-foreground">
-        Podświetlone dni są dostępne. Kliknij dzień początkowy i końcowy, aby
-        zaznaczyć termin — zostanie dołączony do zapytania.
-      </p>
+      {hasAvailability && (
+        <p className="text-xs text-muted-foreground">
+          Podświetlone dni są dostępne. Kliknij dzień początkowy i końcowy, aby
+          zaznaczyć termin — zostanie dołączony do zapytania.
+        </p>
+      )}
     </div>
   );
 }
