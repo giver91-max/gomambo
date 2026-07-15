@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { getFrameCropRect } from "@/lib/camera-crop";
 
 const MAX_ATTEMPTS = 3;
 
@@ -16,12 +17,15 @@ export function DocumentPhotoCapture({
   label,
   onConfirm,
   isSubmitting = false,
+  autoStart = false,
 }: {
   label: string;
   onConfirm: (blob: Blob) => void;
   isSubmitting?: boolean;
+  autoStart?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const capturedBlobRef = useRef<Blob | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -63,6 +67,13 @@ export function DocumentPhotoCapture({
     }
   }
 
+  // Auto-continue straight into the next capture instead of making the
+  // user tap "start camera" again right after finishing the previous shot.
+  useEffect(() => {
+    if (autoStart) startCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function stopCamera() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -71,13 +82,27 @@ export function DocumentPhotoCapture({
 
   function takePhoto() {
     const video = videoRef.current;
-    if (!video) return;
+    const frame = frameRef.current;
+    if (!video || !frame) return;
+
+    const crop = getFrameCropRect(video, frame, false);
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
+
+    // Only the area inside the guide frame is kept — not the full,
+    // uncropped camera view — so the uploaded photo matches what the user
+    // actually lined up.
+    if (crop) {
+      canvas.width = crop.sWidth;
+      canvas.height = crop.sHeight;
+      ctx.drawImage(video, crop.sx, crop.sy, crop.sWidth, crop.sHeight, 0, 0, crop.sWidth, crop.sHeight);
+    } else {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+    }
+
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
@@ -138,6 +163,7 @@ export function DocumentPhotoCapture({
         />
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-8">
           <div
+            ref={frameRef}
             className="aspect-[1.586/1] w-full max-w-sm rounded-2xl border-2 border-white"
             style={{ boxShadow: "0 0 0 2000px rgba(0,0,0,0.55)" }}
           />

@@ -5,10 +5,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DocumentPhotoCapture } from "@/components/document-photo-capture";
 import { SelfieCapture } from "@/components/selfie-capture";
-import { claimHandoff, finalizeHandoff, sendHandoffCode, uploadHandoffPhoto } from "./actions";
+import {
+  claimHandoff,
+  finalizeHandoff,
+  retrySelfieVerification,
+  sendHandoffCode,
+  uploadHandoffPhoto,
+} from "./actions";
 import type { FaceMatchResult, HandoffStatus } from "@/types/database";
 
-type Step = "send_code" | "enter_code" | "consent" | "front" | "back" | "selfie" | "finalizing" | "done";
+type Step =
+  | "send_code"
+  | "enter_code"
+  | "consent"
+  | "front"
+  | "back"
+  | "selfie"
+  | "finalizing"
+  | "review_needed"
+  | "done";
 
 function stepFromStatus(status: HandoffStatus): Step {
   if (status === "pending") return "send_code";
@@ -43,6 +58,7 @@ export function HandoffPhoneFlow({
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const [finalResult, setFinalResult] = useState<FaceMatchResult | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -106,7 +122,7 @@ export function HandoffPhoneFlow({
           return;
         }
         setFinalResult(result.result ?? null);
-        setStep("done");
+        setStep(result.result === "match" ? "done" : "review_needed");
       } catch (err) {
         setFinalizeError(toErrorMessage(err));
       }
@@ -130,6 +146,22 @@ export function HandoffPhoneFlow({
       }
       setStep("finalizing");
       runFinalize();
+    });
+  }
+
+  function retrySelfie() {
+    setRetryError(null);
+    startTransition(async () => {
+      try {
+        const result = await retrySelfieVerification(token);
+        if (result.error) {
+          setRetryError(result.error);
+          return;
+        }
+        setStep("selfie");
+      } catch (err) {
+        setRetryError(toErrorMessage(err));
+      }
     });
   }
 
@@ -230,6 +262,7 @@ export function HandoffPhoneFlow({
         <DocumentPhotoCapture
           label="Zrób zdjęcie tyłu prawa jazdy"
           isSubmitting={isPending}
+          autoStart
           onConfirm={(blob) => uploadDocumentPhoto("back", blob, "selfie")}
         />
       </div>
@@ -243,6 +276,7 @@ export function HandoffPhoneFlow({
         {error && <p className="text-sm text-destructive">{error}</p>}
         <SelfieCapture
           isSubmitting={isPending}
+          autoStart
           onConfirm={uploadSelfieThenFinalize}
           onSkip={() => setError("Selfie jest wymagane do automatycznego porównania — zrób zdjęcie, żeby kontynuować.")}
         />
@@ -268,6 +302,26 @@ export function HandoffPhoneFlow({
     );
   }
 
+  if (step === "review_needed") {
+    return (
+      <div className="flex flex-col items-center gap-4 text-center">
+        <h1 className="text-2xl font-bold">Nie udało się potwierdzić automatycznie</h1>
+        <p className="text-base text-muted-foreground">
+          Selfie i zdjęcie dokumentu nie zostały dopasowane z wystarczającą pewnością — to często
+          kwestia oświetlenia lub kąta, nie musi oznaczać problemu. Możesz spróbować zrobić selfie
+          jeszcze raz albo wysłać zgłoszenie do ręcznej weryfikacji przez naszych administratorów.
+        </p>
+        {retryError && <p className="text-sm text-destructive">{retryError}</p>}
+        <Button type="button" size="lg" className="w-full" disabled={isPending} onClick={retrySelfie}>
+          {isPending ? "Przygotowanie…" : "Spróbuj jeszcze raz"}
+        </Button>
+        <Button type="button" variant="outline" size="lg" className="w-full" disabled={isPending} onClick={() => setStep("done")}>
+          Wyślij do weryfikacji przez administratora
+        </Button>
+      </div>
+    );
+  }
+
   if (finalResult === "match") {
     return (
       <div className="flex flex-col items-center gap-4 text-center">
@@ -284,9 +338,8 @@ export function HandoffPhoneFlow({
     <div className="flex flex-col items-center gap-4 text-center">
       <h1 className="text-2xl font-bold">Zdjęcia przesłane ✓</h1>
       <p className="text-base text-muted-foreground">
-        Automatyczne porównanie nie dało pewnego wyniku — to nie musi oznaczać problemu, często
-        wystarczy inne oświetlenie. Nasz zespół sprawdzi zdjęcia ręcznie, zwykle w ciągu 24 godzin.
-        Możesz wrócić do urządzenia, z którego zeskanowałeś kod QR.
+        Nasz zespół sprawdzi zdjęcia ręcznie, zwykle w ciągu 24 godzin. Możesz wrócić do
+        urządzenia, z którego zeskanowałeś kod QR.
       </p>
     </div>
   );

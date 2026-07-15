@@ -190,6 +190,26 @@ export async function uploadHandoffPhoto(
   return { error: null };
 }
 
+// Called when the user chooses "try again" after an inconclusive automated
+// match — resets just the selfie so uploadHandoffPhoto/finalizeHandoff can
+// run again without redoing the (already-gated, already-uploaded) document
+// photos.
+export async function retrySelfieVerification(token: string): Promise<{ error: string | null }> {
+  const admin = createAdminClient();
+  const handoff = await getHandoffByToken(token);
+  if (!handoff) return { error: "Link jest nieprawidłowy lub wygasł." };
+  if (handoff.status !== "completed") {
+    return { error: "Ta sesja weryfikacji nie jest jeszcze zakończona." };
+  }
+
+  const { error } = await admin
+    .from("identity_verification_handoffs")
+    .update({ status: "photos_uploaded", selfie_path: null, selfie_uploaded_at: null })
+    .eq("id", handoff.id);
+
+  return { error: error?.message ?? null };
+}
+
 export async function finalizeHandoff(
   token: string
 ): Promise<{ error: string | null; result?: FaceMatchResult }> {
