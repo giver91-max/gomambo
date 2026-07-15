@@ -3,7 +3,7 @@
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendCodeEmail } from "@/lib/email";
-import { compareFaces, FACE_MATCH_AUTO_APPROVE_THRESHOLD } from "@/lib/face-match";
+import { compareFaces, detectSingleFace, FACE_MATCH_AUTO_APPROVE_THRESHOLD } from "@/lib/face-match";
 import {
   codeMatches,
   generateEmailCode,
@@ -139,6 +139,23 @@ export async function uploadHandoffPhoto(
   if (file.size > MAX_FILE_BYTES) return { error: "Plik przekracza 8 MB." };
 
   const buffer = Buffer.from(await file.arrayBuffer());
+
+  // Catch an obviously unusable shot (no face, or two people in frame)
+  // right away instead of only discovering it once compareFaces() runs at
+  // the very end of the flow. The back of a license has no photo on it, so
+  // this only applies to the front (document photo) and the selfie.
+  if (kind === "front" || kind === "selfie") {
+    const detection = await detectSingleFace(buffer);
+    if (!detection.ok) {
+      return {
+        error:
+          detection.reason === "multiple_faces"
+            ? "Na zdjęciu wykryto więcej niż jedną osobę. Zrób zdjęcie ponownie, upewniając się, że w kadrze jest tylko dokument."
+            : "Nie wykryto wyraźnej twarzy na zdjęciu. Sprawdź oświetlenie i ostrość i spróbuj ponownie.",
+      };
+    }
+  }
+
   const path = `${handoff.user_id}/${crypto.randomUUID()}-${kind}.jpg`;
 
   const { error: uploadError } = await admin.storage
@@ -173,11 +190,20 @@ export async function uploadHandoffPhoto(
   return { error: null };
 }
 
-export async function finalizeHandoff(token: string): Promise<{ error: string | null }> {
+export async function finalizeHandoff(
+  token: string
+): Promise<{ error: string | null; result?: FaceMatchResult }> {
   const admin = createAdminClient();
   const handoff = await getHandoffByToken(token);
   if (!handoff) return { error: "Link jest nieprawidłowy lub wygasł." };
-  if (handoff.status === "completed") return { error: null };
+  if (handoff.status === "completed") {
+    const { data: existing } = await admin
+      .from("identity_verifications")
+      .select("face_match_result")
+      .eq("user_id", handoff.user_id)
+      .maybeSingle();
+    return { error: null, result: existing?.face_match_result };
+  }
   if (handoff.status !== "photos_uploaded") {
     return { error: "Prześlij wszystkie zdjęcia przed zakończeniem." };
   }
@@ -258,5 +284,5 @@ export async function finalizeHandoff(token: string): Promise<{ error: string | 
     .update({ status: "completed", result_identity_verification_id: verificationId })
     .eq("id", handoff.id);
 
-  return { error: null };
+  return { error: null, result: matchOutcome.result };
 }

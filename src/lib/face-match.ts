@@ -1,5 +1,5 @@
 import "server-only";
-import { RekognitionClient, CompareFacesCommand } from "@aws-sdk/client-rekognition";
+import { RekognitionClient, CompareFacesCommand, DetectFacesCommand } from "@aws-sdk/client-rekognition";
 import type { FaceMatchResult } from "@/types/database";
 
 // Auto-approve threshold, deliberately conservative: we own the risk of
@@ -54,5 +54,31 @@ export async function compareFaces(selfieBytes: Buffer, documentFrontBytes: Buff
   } catch (error) {
     console.error("compareFaces: Rekognition call failed", error);
     return { result: "error", score: null };
+  }
+}
+
+export type FaceDetectionOutcome = { ok: boolean; reason?: "no_face" | "multiple_faces" };
+
+// A cheap pre-check run right after each photo upload, so a bad shot (no
+// face visible, or two people in frame) gets caught and the user is asked
+// to retake it immediately — instead of only finding out it was unusable
+// once compareFaces() runs at the very end of the whole flow. This is a
+// UX nicety, not a security boundary: on a missing-credentials or
+// transient-error case it lets the upload through rather than blocking the
+// user for something that isn't their fault — compareFaces() at finalize
+// time is still the authoritative check and routes to manual review if
+// anything is actually wrong.
+export async function detectSingleFace(imageBytes: Buffer): Promise<FaceDetectionOutcome> {
+  if (!client) return { ok: true };
+
+  try {
+    const response = await client.send(new DetectFacesCommand({ Image: { Bytes: imageBytes } }));
+    const count = response.FaceDetails?.length ?? 0;
+    if (count === 0) return { ok: false, reason: "no_face" };
+    if (count > 1) return { ok: false, reason: "multiple_faces" };
+    return { ok: true };
+  } catch (error) {
+    console.error("detectSingleFace: Rekognition call failed", error);
+    return { ok: true };
   }
 }

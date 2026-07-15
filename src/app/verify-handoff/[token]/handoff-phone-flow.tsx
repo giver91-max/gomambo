@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { DocumentPhotoCapture } from "@/components/document-photo-capture";
 import { SelfieCapture } from "@/components/selfie-capture";
 import { claimHandoff, finalizeHandoff, sendHandoffCode, uploadHandoffPhoto } from "./actions";
-import type { HandoffStatus } from "@/types/database";
+import type { FaceMatchResult, HandoffStatus } from "@/types/database";
 
 type Step = "send_code" | "enter_code" | "consent" | "front" | "back" | "selfie" | "finalizing" | "done";
 
@@ -43,6 +43,7 @@ export function HandoffPhoneFlow({
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [finalResult, setFinalResult] = useState<FaceMatchResult | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSendCode() {
@@ -104,6 +105,7 @@ export function HandoffPhoneFlow({
           setFinalizeError(result.error);
           return;
         }
+        setFinalResult(result.result ?? null);
         setStep("done");
       } catch (err) {
         setFinalizeError(toErrorMessage(err));
@@ -266,12 +268,25 @@ export function HandoffPhoneFlow({
     );
   }
 
+  if (finalResult === "match") {
+    return (
+      <div className="flex flex-col items-center gap-4 text-center">
+        <h1 className="text-2xl font-bold">Tożsamość potwierdzona ✓</h1>
+        <p className="text-base text-muted-foreground">
+          Zdjęcia pasują do siebie automatycznie. Twoje konto jest już zweryfikowane — możesz wrócić
+          do urządzenia, z którego zeskanowałeś kod QR.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-4 text-center">
-      <h1 className="text-2xl font-bold">Gotowe ✓</h1>
+      <h1 className="text-2xl font-bold">Zdjęcia przesłane ✓</h1>
       <p className="text-base text-muted-foreground">
-        Zdjęcia zostały przesłane. Wróć do urządzenia, na którym zeskanowałeś kod QR, żeby zobaczyć
-        wynik weryfikacji.
+        Automatyczne porównanie nie dało pewnego wyniku — to nie musi oznaczać problemu, często
+        wystarczy inne oświetlenie. Nasz zespół sprawdzi zdjęcia ręcznie, zwykle w ciągu 24 godzin.
+        Możesz wrócić do urządzenia, z którego zeskanowałeś kod QR.
       </p>
     </div>
   );
