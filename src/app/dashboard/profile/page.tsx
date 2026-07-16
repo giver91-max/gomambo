@@ -9,6 +9,7 @@ import { EmailForm } from "./email-form";
 import { NotificationForm } from "./notification-form";
 import { ReferralLink } from "@/components/referral-link";
 import { StripeConnectManager } from "@/components/stripe-connect-manager";
+import { isConnectAccountOnboarded } from "@/lib/stripe";
 import { SITE_URL } from "@/lib/site";
 
 export default async function ProfilePage() {
@@ -29,6 +30,22 @@ export default async function ProfilePage() {
 
   if (!profile) {
     redirect("/dashboard");
+  }
+
+  // Belt-and-suspenders alongside the account.updated webhook: Stripe
+  // redirects back here (return_url) once the owner finishes onboarding,
+  // so checking on load catches it immediately even if the webhook delivery
+  // is delayed, fails, or — for this specific event — arrives in the "thin"
+  // payload shape this app doesn't parse (see stripe-connect-actions.ts).
+  let stripeConnectOnboarded = profile.stripe_connect_onboarded;
+  if (profile.stripe_connect_account_id && !stripeConnectOnboarded) {
+    stripeConnectOnboarded = await isConnectAccountOnboarded(profile.stripe_connect_account_id);
+    if (stripeConnectOnboarded) {
+      await supabase
+        .from("profiles")
+        .update({ stripe_connect_onboarded: true })
+        .eq("id", user.id);
+    }
   }
 
   const avatarUrl = profile.avatar_path
@@ -110,7 +127,7 @@ export default async function ProfilePage() {
           <CardTitle>Konto do wypłat</CardTitle>
         </CardHeader>
         <CardContent>
-          <StripeConnectManager onboarded={profile.stripe_connect_onboarded} />
+          <StripeConnectManager onboarded={stripeConnectOnboarded} />
         </CardContent>
       </Card>
 
