@@ -22,7 +22,7 @@ export default function RegulaminPage() {
 
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">Regulamin serwisu GoMambo</h1>
-          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 5 lipca 2026</p>
+          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 16 lipca 2026</p>
         </div>
 
         <section className="space-y-2">
@@ -75,7 +75,41 @@ export default function RegulaminPage() {
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-lg font-semibold">4. Zasady dodawania ogłoszeń</h2>
+          <h2 className="text-lg font-semibold">4. Weryfikacja tożsamości i prawa jazdy</h2>
+          <p>
+            Wynajęcie pojazdu za pośrednictwem Serwisu wymaga ukończenia weryfikacji
+            tożsamości i uprawnień do kierowania pojazdami oraz spełniania minimalnych
+            wymagań (ukończone 21 lat, posiadanie prawa jazdy kategorii B od co najmniej
+            roku) — szczegóły opisane są na stronie{" "}
+            <Link href="/wynajmij-auto" className="underline">
+              Jak wynająć auto
+            </Link>
+            . Weryfikacja obejmuje przesłanie zdjęć dokumentu tożsamości (prawa jazdy)
+            oraz zdjęcia selfie.
+          </p>
+          <p>
+            Przesłane zdjęcia mogą zostać poddane automatycznej wstępnej weryfikacji, w
+            tym automatycznemu porównaniu wizerunku z selfie ze zdjęciem na dokumencie.
+            Niezależnie od wyniku weryfikacji automatycznej — w tym w przypadku, gdy jest
+            ona niedostępna lub niejednoznaczna — zgłoszenie podlega ostatecznej
+            weryfikacji przez administratora Serwisu. Przesłanie zdjęć w tym procesie
+            wymaga uprzedniego wyrażenia odrębnej, dobrowolnej zgody na przetwarzanie
+            danych biometrycznych, zgodnie z{" "}
+            <Link href="/polityka-prywatnosci" className="underline">
+              Polityką prywatności
+            </Link>
+            .
+          </p>
+          <p>
+            Usługodawca zastrzega sobie prawo odmowy pozytywnej weryfikacji, zawieszenia
+            lub usunięcia konta w przypadku wątpliwości co do autentyczności przesłanych
+            dokumentów, zgodności zdjęcia selfie z dokumentem lub tożsamości
+            użytkownika.
+          </p>
+        </section>
+
+        <section className="space-y-2">
+          <h2 className="text-lg font-semibold">5. Zasady dodawania ogłoszeń</h2>
           <p>
             Dodając ogłoszenie, właściciel oświadcza, że jest uprawniony do dysponowania
             pojazdem oraz że podane informacje (marka, model, rok produkcji, cena,
@@ -90,7 +124,7 @@ export default function RegulaminPage() {
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-lg font-semibold">5. Odpowiedzialność</h2>
+          <h2 className="text-lg font-semibold">6. Odpowiedzialność</h2>
           <p>
             Usługodawca udostępnia jedynie platformę ogłoszeniową i nie jest stroną
             ewentualnej umowy zawieranej pomiędzy właścicielem pojazdu a osobą
@@ -102,7 +136,7 @@ export default function RegulaminPage() {
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-lg font-semibold">6. Reklamacje</h2>
+          <h2 className="text-lg font-semibold">7. Reklamacje</h2>
           <p>
             Reklamacje dotyczące działania Serwisu można zgłaszać na adres{" "}
             <a href="mailto:kontakt@gomambo.pl" className="underline">
@@ -113,7 +147,7 @@ export default function RegulaminPage() {
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-lg font-semibold">7. Dane osobowe</h2>
+          <h2 className="text-lg font-semibold">8. Dane osobowe</h2>
           <p>
             Zasady przetwarzania danych osobowych opisane są w{" "}
             <Link href="/polityka-prywatnosci" className="underline">
@@ -124,7 +158,7 @@ export default function RegulaminPage() {
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-lg font-semibold">8. Postanowienia końcowe</h2>
+          <h2 className="text-lg font-semibold">9. Postanowienia końcowe</h2>
           <p>
             Usługodawca zastrzega sobie prawo do zmiany Regulaminu, w szczególności w
             związku z rozwojem funkcjonalności Serwisu. O zmianach użytkownicy zostaną

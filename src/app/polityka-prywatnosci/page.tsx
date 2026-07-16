@@ -22,7 +22,7 @@ export default function PolitykaPrywatnosciPage() {
 
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">Polityka prywatności</h1>
-          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 7 lipca 2026</p>
+          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 16 lipca 2026</p>
         </div>
 
         <section className="space-y-2">
@@ -44,10 +44,24 @@ export default function PolitykaPrywatnosciPage() {
         <section className="space-y-2">
           <h2 className="text-lg font-semibold">2. Jakie dane przetwarzamy</h2>
           <ul className="list-disc space-y-1 pl-6">
-            <li>dane podane przy rejestracji konta: imię i nazwisko, adres e-mail, hasło (przechowywane w formie zaszyfrowanej),</li>
-            <li>dane ogłoszeń dodawanych przez właścicieli pojazdów: marka, model, rok, cena, miasto, opis, zdjęcia,</li>
+            <li>dane podane przy rejestracji konta: imię i nazwisko, adres e-mail, hasło (przechowywane w formie zaszyfrowanej), opcjonalnie numer telefonu i zdjęcie profilowe,</li>
+            <li>dane ogłoszeń dodawanych przez właścicieli pojazdów: marka, model, rok, cena, miasto, opis, zdjęcia, a także dokumenty pojazdu wymagane do jego dodania (np. dowód rejestracyjny, polisa OC),</li>
+            <li>
+              dokument tożsamości (prawo jazdy) oraz zdjęcie selfie przesyłane w procesie
+              weryfikacji tożsamości, w tym{" "}
+              <strong>dane biometryczne</strong> — wynik automatycznego porównania
+              wizerunku z selfie ze zdjęciem na dokumencie, wykorzystywany do
+              potwierdzenia, że dokument należy do osoby zakładającej konto,
+            </li>
+            <li>zdjęcia wykonywane przy odbiorze i zwrocie pojazdu oraz treść wiadomości wymienianych w czacie między użytkownikami,</li>
+            <li>oceny i opinie wystawiane po zakończonym wynajmie,</li>
             <li>adres IP oraz dane techniczne przeglądarki — w zakresie niezbędnym do zapewnienia bezpieczeństwa i poprawnego działania Serwisu.</li>
           </ul>
+          <p>
+            Dane biometryczne przetwarzane są wyłącznie za Twoją odrębną, wyraźną zgodą,
+            udzielaną bezpośrednio przed przesłaniem zdjęć w procesie weryfikacji, i
+            wyłącznie w celu opisanym w sekcji 3 poniżej.
+          </p>
         </section>
 
         <section className="space-y-2">
@@ -64,7 +78,19 @@ export default function PolitykaPrywatnosciPage() {
             </li>
             <li>
               rozpatrywanie reklamacji i korespondencja z użytkownikiem — art. 6 ust. 1
-              lit. b i f RODO.
+              lit. b i f RODO,
+            </li>
+            <li>
+              weryfikacja tożsamości i uprawnień do kierowania pojazdami, w tym
+              automatyczne porównanie wizerunku z selfie ze zdjęciem dokumentu
+              tożsamości w celu przeciwdziałania oszustwom i kradzieży tożsamości — w
+              zakresie danych biometrycznych: art. 9 ust. 2 lit. a RODO (Twoja wyraźna,
+              odrębna zgoda), w pozostałym zakresie: art. 6 ust. 1 lit. f RODO
+              (uzasadniony interes w zapewnieniu bezpieczeństwa wynajmu). Zgodę na
+              przetwarzanie danych biometrycznych możesz w każdej chwili wycofać,
+              kontaktując się pod adresem podanym w sekcji 9 — nie wpływa to na zgodność
+              z prawem przetwarzania dokonanego przed jej wycofaniem, ale może
+              uniemożliwić korzystanie z funkcji wymagających zweryfikowanego konta.
             </li>
           </ul>
         </section>
@@ -77,7 +103,14 @@ export default function PolitykaPrywatnosciPage() {
             <li>Vercel — hosting i infrastruktura serwerowa Serwisu,</li>
             <li>Resend — wysyłka wiadomości e-mail (powiadomienia o rejestracji i nowych ogłoszeniach),</li>
             <li>Google Analytics (Google Ireland Ltd.) — wyłącznie po wyrażeniu zgody na cookies analityczne, opisane w sekcji 7,</li>
-            <li>Google reCAPTCHA (Google Ireland Ltd.) — ochrona formularzy przed botami i spamem, w oparciu o prawnie uzasadniony interes administratora (bezpieczeństwo Serwisu).</li>
+            <li>Google reCAPTCHA (Google Ireland Ltd.) — ochrona formularzy przed botami i spamem, w oparciu o prawnie uzasadniony interes administratora (bezpieczeństwo Serwisu),</li>
+            <li>
+              Amazon Web Services (AWS), usługa Amazon Rekognition — wyłącznie do
+              automatycznego porównania zdjęcia selfie ze zdjęciem dokumentu tożsamości
+              podczas weryfikacji konta; przetwarzanie odbywa się w regionie
+              zlokalizowanym w Unii Europejskiej, a przesłane zdjęcia nie są
+              wykorzystywane przez AWS do trenowania własnych modeli.
+            </li>
           </ul>
           <p>
             Dostawcy ci mogą przetwarzać dane na serwerach zlokalizowanych poza
@@ -94,6 +127,14 @@ export default function PolitykaPrywatnosciPage() {
             Dane konta i ogłoszeń przechowywane są przez czas istnienia konta w Serwisie.
             Po usunięciu konta dane są usuwane lub anonimizowane, chyba że ich dalsze
             przechowywanie jest wymagane przepisami prawa.
+          </p>
+          <p>
+            Zdjęcia dokumentu tożsamości i selfie oraz wynik ich automatycznego
+            porównania przechowywane są przez czas niezbędny do przeprowadzenia
+            weryfikacji i rozpatrzenia ewentualnej reklamacji dotyczącej jej wyniku, nie
+            dłużej jednak niż przez okres istnienia konta. Po usunięciu konta lub
+            wycofaniu zgody na przetwarzanie danych biometrycznych zdjęcia te są trwale
+            usuwane.
           </p>
         </section>
 
