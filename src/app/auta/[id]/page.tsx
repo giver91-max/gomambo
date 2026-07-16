@@ -271,6 +271,12 @@ export default async function CarDetailPage({
               {FUEL_POLICY_DESCRIPTIONS[car.fuel_policy]}
             </p>
           )}
+          {car.security_deposit_amount && (
+            <p className="text-sm text-muted-foreground">
+              Kaucja: {Number(car.security_deposit_amount).toFixed(2)} zł — blokowana na
+              karcie przy płatności, zwalniana po zakończeniu wynajmu.
+            </p>
+          )}
           <AvailabilityAndInquiry
             carId={car.id}
             availableDates={availableDates}

@@ -6,8 +6,10 @@ import { BackButton } from "@/components/back-button";
 import { cancelBooking } from "../bookings/actions";
 import { ReviewForm } from "../bookings/review-form";
 import { TripPhotosManager, type TripPhotoItem } from "@/components/trip-photos-manager";
+import { PayBookingButton } from "@/components/pay-booking-button";
 import type { BookingStatus, CancellationPolicy } from "@/types/database";
-import { CANCELLATION_POLICY_FREE_HOURS, CANCELLATION_POLICY_LABELS } from "@/lib/car-options";
+import { CANCELLATION_POLICY_LABELS } from "@/lib/car-options";
+import { freeCancellationDeadline, isWithinFreeCancellationWindow } from "@/lib/cancellation";
 
 const statusLabel: Record<BookingStatus, string> = {
   requested: "Oczekuje na potwierdzenie",
@@ -36,6 +38,7 @@ export default async function RentalHistoryPage() {
     .select(
       `id, start_date, end_date, status, created_at,
        pickup_odometer_km, pickup_fuel_level, return_odometer_km, return_fuel_level,
+       payment_status, deposit_status, total_price, deposit_amount,
        cars(id, brand, model, city, cancellation_policy)`
     )
     .eq("renter_id", user!.id)
@@ -107,16 +110,26 @@ export default async function RentalHistoryPage() {
                 <p>
                   Termin: {booking.start_date} – {booking.end_date}
                 </p>
+                {booking.status === "accepted" && booking.payment_status === "unpaid" && (
+                  <PayBookingButton bookingId={booking.id} />
+                )}
+                {booking.payment_status === "paid" && (
+                  <p className="text-xs">
+                    Opłacono{booking.total_price ? `: ${Number(booking.total_price).toFixed(2)} zł` : ""}
+                    {booking.deposit_status === "held" &&
+                      booking.deposit_amount &&
+                      ` · kaucja ${Number(booking.deposit_amount).toFixed(2)} zł zablokowana`}
+                  </p>
+                )}
                 {(booking.status === "requested" || booking.status === "accepted") &&
                   (() => {
                     const policy: CancellationPolicy =
                       booking.cars?.cancellation_policy ?? "moderate";
-                    const freeHours = CANCELLATION_POLICY_FREE_HOURS[policy];
-                    const deadline = new Date(
-                      new Date(`${booking.start_date}T00:00:00`).getTime() -
-                        freeHours * 60 * 60 * 1000
+                    const deadline = freeCancellationDeadline(policy, booking.start_date);
+                    const withinFreeWindow = isWithinFreeCancellationWindow(
+                      policy,
+                      booking.start_date
                     );
-                    const withinFreeWindow = new Date() < deadline;
                     return (
                       <div className="space-y-2">
                         <p className="text-xs">

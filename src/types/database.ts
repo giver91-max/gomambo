@@ -10,6 +10,8 @@ export type Profile = {
   notify_email: boolean;
   notify_sms: boolean;
   terms_accepted_at: string | null;
+  stripe_connect_account_id: string | null;
+  stripe_connect_onboarded: boolean;
   created_at: string;
 };
 
@@ -50,6 +52,7 @@ export type Car = {
   mileage_limit_km: number | null;
   mileage_overage_fee_per_km: number | null;
   fuel_policy: FuelPolicy | null;
+  security_deposit_amount: number | null;
   price_per_month: number | null;
   delivery_available: boolean;
   delivery_info: string | null;
@@ -81,6 +84,8 @@ export type Favorite = {
 };
 
 export type BookingStatus = "requested" | "accepted" | "declined" | "cancelled" | "completed";
+export type PaymentStatus = "unpaid" | "paid" | "refunded" | "partially_refunded" | "failed";
+export type DepositStatus = "not_required" | "held" | "captured" | "released" | "failed";
 
 export type Booking = {
   id: string;
@@ -94,6 +99,13 @@ export type Booking = {
   pickup_fuel_level: FuelLevel | null;
   return_odometer_km: number | null;
   return_fuel_level: FuelLevel | null;
+  total_price: number | null;
+  platform_fee_amount: number | null;
+  stripe_checkout_session_id: string | null;
+  payment_status: PaymentStatus;
+  deposit_amount: number | null;
+  stripe_deposit_payment_intent_id: string | null;
+  deposit_status: DepositStatus;
   created_at: string;
   updated_at: string;
 };
@@ -240,7 +252,9 @@ export type NotificationType =
   | "booking_declined"
   | "booking_cancelled"
   | "identity_verification_approved"
-  | "identity_verification_rejected";
+  | "identity_verification_rejected"
+  | "booking_paid"
+  | "deposit_captured";
 
 export type Notification = {
   id: string;

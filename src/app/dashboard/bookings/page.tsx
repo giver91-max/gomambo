@@ -6,7 +6,8 @@ import { BackButton } from "@/components/back-button";
 import { BookingActions } from "./booking-actions";
 import { ReviewForm } from "./review-form";
 import { TripPhotosManager, type TripPhotoItem } from "@/components/trip-photos-manager";
-import type { BookingStatus, FuelLevel } from "@/types/database";
+import { CaptureDepositButton } from "@/components/capture-deposit-button";
+import type { BookingStatus, DepositStatus, FuelLevel, PaymentStatus } from "@/types/database";
 
 const statusLabel: Record<BookingStatus, string> = {
   requested: "Oczekuje",
@@ -35,6 +36,7 @@ export default async function OwnerBookingsPage() {
     .select(
       `id, start_date, end_date, status, created_at,
        pickup_odometer_km, pickup_fuel_level, return_odometer_km, return_fuel_level,
+       payment_status, deposit_status, total_price, deposit_amount,
        cars(id, brand, model),
        renter:profiles!bookings_renter_id_fkey(full_name)`
     )
@@ -51,6 +53,10 @@ export default async function OwnerBookingsPage() {
     pickup_fuel_level: FuelLevel | null;
     return_odometer_km: number | null;
     return_fuel_level: FuelLevel | null;
+    payment_status: PaymentStatus;
+    deposit_status: DepositStatus;
+    total_price: number | null;
+    deposit_amount: number | null;
     cars: { id: string; brand: string; model: string } | null;
     renter: { full_name: string } | null;
   }[];
@@ -118,6 +124,23 @@ export default async function OwnerBookingsPage() {
                 <p>
                   Termin: {booking.start_date} – {booking.end_date}
                 </p>
+                {booking.payment_status === "paid" && (
+                  <p className="text-xs">
+                    Opłacono{booking.total_price ? `: ${Number(booking.total_price).toFixed(2)} zł` : ""}
+                    {booking.deposit_status === "held" &&
+                      booking.deposit_amount &&
+                      ` · kaucja ${Number(booking.deposit_amount).toFixed(2)} zł zablokowana`}
+                    {booking.deposit_status === "captured" && " · kaucja zatrzymana"}
+                  </p>
+                )}
+                {booking.status === "accepted" &&
+                  booking.deposit_status === "held" &&
+                  booking.deposit_amount && (
+                    <CaptureDepositButton
+                      bookingId={booking.id}
+                      depositAmount={Number(booking.deposit_amount)}
+                    />
+                  )}
                 <div className="flex flex-wrap items-center gap-4">
                   {(booking.status === "requested" || booking.status === "accepted") && (
                     <BookingActions bookingId={booking.id} status={booking.status} />

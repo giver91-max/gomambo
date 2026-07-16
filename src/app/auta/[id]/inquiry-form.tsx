@@ -8,10 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { getRecaptchaToken } from "@/lib/recaptcha-client";
 import type { SelectedRange } from "./availability-view";
-import { eachDateInRange } from "@/lib/calendar";
+import { calculateBookingPrice } from "@/lib/pricing";
 
 const initialState: InquiryState = { error: null };
-const MONTHLY_THRESHOLD_NIGHTS = 28;
 
 export function InquiryForm({
   carId,
@@ -89,17 +88,17 @@ export function InquiryForm({
           </p>
           {selectedRange.end &&
             (() => {
-              const nights = eachDateInRange(selectedRange.start, selectedRange.end).length;
-              const useMonthly = pricePerMonth !== null && nights >= MONTHLY_THRESHOLD_NIGHTS;
-              const months = useMonthly ? Math.round((nights / 30) * 10) / 10 : null;
-              const estimatedTotal = useMonthly
-                ? (pricePerMonth as number) * (months as number)
-                : pricePerDay * nights;
+              const { nights, useMonthly, total } = calculateBookingPrice(
+                pricePerDay,
+                pricePerMonth,
+                selectedRange.start,
+                selectedRange.end
+              );
               return (
                 <p className="text-sm text-muted-foreground">
                   {nights} {nights === 1 ? "dzień" : "dni"}
                   {useMonthly ? " · stawka miesięczna" : ""} — szacunkowo{" "}
-                  <strong className="text-foreground">{estimatedTotal.toFixed(2)} zł</strong>
+                  <strong className="text-foreground">{total.toFixed(2)} zł</strong>
                 </p>
               );
             })()}

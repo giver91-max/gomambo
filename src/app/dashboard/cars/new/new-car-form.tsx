@@ -339,6 +339,23 @@ export function NewCarForm() {
             Zniżkowa cena dla wynajmu 28 dni i dłużej.
           </p>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="security_deposit_amount">Kaucja zabezpieczająca (zł, opcjonalnie)</Label>
+          <Input
+            id="security_deposit_amount"
+            name="security_deposit_amount"
+            type="number"
+            step="0.01"
+            min={0}
+            placeholder="np. 500"
+          />
+          <p className="text-xs text-muted-foreground">
+            Blokowana na karcie najemcy przy płatności, zwalniana po zakończeniu wynajmu.
+          </p>
+        </div>
         <div className="space-y-2">
           <Label htmlFor="fuel_policy">Polityka paliwa</Label>
           <select

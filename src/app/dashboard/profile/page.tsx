@@ -8,6 +8,7 @@ import { ProfileForm } from "./profile-form";
 import { EmailForm } from "./email-form";
 import { NotificationForm } from "./notification-form";
 import { ReferralLink } from "@/components/referral-link";
+import { StripeConnectManager } from "@/components/stripe-connect-manager";
 import { SITE_URL } from "@/lib/site";
 
 export default async function ProfilePage() {
@@ -101,6 +102,15 @@ export default async function ProfilePage() {
         </CardHeader>
         <CardContent>
           <NotificationForm initialEmailEnabled={profile.notify_email} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Konto do wypłat</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <StripeConnectManager onboarded={profile.stripe_connect_onboarded} />
         </CardContent>
       </Card>
 
