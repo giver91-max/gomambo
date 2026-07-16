@@ -15,6 +15,8 @@ import { firstNameOnly } from "@/lib/utils";
 import {
   CANCELLATION_POLICY_DESCRIPTIONS,
   CANCELLATION_POLICY_LABELS,
+  FUEL_POLICY_DESCRIPTIONS,
+  FUEL_POLICY_LABELS,
   FUEL_TYPE_LABELS,
   TRANSMISSION_LABELS,
   VEHICLE_TYPE_LABELS,
@@ -217,6 +219,12 @@ export default async function CarDetailPage({
         </div>
       )}
 
+      {car.mileage_limit_km && car.mileage_overage_fee_per_km && (
+        <p className="text-xs text-muted-foreground">
+          Po przekroczeniu limitu: {Number(car.mileage_overage_fee_per_km).toFixed(2)} zł / km.
+        </p>
+      )}
+
       {car.description && (
         <div>
           <h2 className="mb-2 font-semibold">Opis</h2>
@@ -257,6 +265,12 @@ export default async function CarDetailPage({
             Anulowanie: {CANCELLATION_POLICY_LABELS[car.cancellation_policy]} —{" "}
             {CANCELLATION_POLICY_DESCRIPTIONS[car.cancellation_policy]}
           </p>
+          {car.fuel_policy && (
+            <p className="text-sm text-muted-foreground">
+              Paliwo: {FUEL_POLICY_LABELS[car.fuel_policy]} —{" "}
+              {FUEL_POLICY_DESCRIPTIONS[car.fuel_policy]}
+            </p>
+          )}
           <AvailabilityAndInquiry
             carId={car.id}
             availableDates={availableDates}

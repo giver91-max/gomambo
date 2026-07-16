@@ -3,9 +3,98 @@
 import { useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import { addTripPhoto, removeTripPhoto } from "@/app/dashboard/bookings/trip-photos-actions";
+import {
+  addTripPhoto,
+  removeTripPhoto,
+  updateTripCondition,
+} from "@/app/dashboard/bookings/trip-photos-actions";
 import { Button } from "@/components/ui/button";
-import type { TripPhotoStage } from "@/types/database";
+import { Input } from "@/components/ui/input";
+import { FUEL_LEVEL_LABELS } from "@/lib/car-options";
+import type { FuelLevel, TripPhotoStage } from "@/types/database";
+
+const selectClassName =
+  "h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+
+function TripConditionForm({
+  bookingId,
+  stage,
+  odometerKm,
+  fuelLevel,
+}: {
+  bookingId: string;
+  stage: TripPhotoStage;
+  odometerKm: number | null;
+  fuelLevel: FuelLevel | null;
+}) {
+  const [odometer, setOdometer] = useState(odometerKm != null ? String(odometerKm) : "");
+  const [fuel, setFuel] = useState<FuelLevel | "">(fuelLevel ?? "");
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSave() {
+    setError(null);
+    setSaved(false);
+    const odometerValue = odometer.trim() ? Number(odometer) : null;
+    if (odometerValue !== null && (!Number.isFinite(odometerValue) || odometerValue < 0)) {
+      setError("Podaj prawidłowy stan licznika.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await updateTripCondition(
+        bookingId,
+        stage,
+        odometerValue,
+        fuel || null
+      );
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setSaved(true);
+    });
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <Input
+          type="number"
+          min={0}
+          placeholder="Stan licznika (km)"
+          value={odometer}
+          onChange={(e) => {
+            setOdometer(e.target.value);
+            setSaved(false);
+          }}
+        />
+        <select
+          className={selectClassName}
+          value={fuel}
+          onChange={(e) => {
+            setFuel(e.target.value as FuelLevel | "");
+            setSaved(false);
+          }}
+        >
+          <option value="">Poziom paliwa</option>
+          {(Object.entries(FUEL_LEVEL_LABELS) as [FuelLevel, string][]).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={handleSave}>
+          {isPending ? "Zapisywanie…" : "Zapisz stan auta"}
+        </Button>
+        {saved && <span className="text-xs text-muted-foreground">Zapisano.</span>}
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
@@ -22,12 +111,16 @@ function PhotoStageSection({
   label,
   photos,
   currentUserId,
+  odometerKm,
+  fuelLevel,
 }: {
   bookingId: string;
   stage: TripPhotoStage;
   label: string;
   photos: TripPhotoItem[];
   currentUserId: string;
+  odometerKm: number | null;
+  fuelLevel: FuelLevel | null;
 }) {
   const [items, setItems] = useState(photos);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +231,12 @@ function PhotoStageSection({
         />
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
+      <TripConditionForm
+        bookingId={bookingId}
+        stage={stage}
+        odometerKm={odometerKm}
+        fuelLevel={fuelLevel}
+      />
     </div>
   );
 }
@@ -147,18 +246,27 @@ export function TripPhotosManager({
   currentUserId,
   pickupPhotos,
   returnPhotos,
+  pickupOdometerKm,
+  pickupFuelLevel,
+  returnOdometerKm,
+  returnFuelLevel,
 }: {
   bookingId: string;
   currentUserId: string;
   pickupPhotos: TripPhotoItem[];
   returnPhotos: TripPhotoItem[];
+  pickupOdometerKm: number | null;
+  pickupFuelLevel: FuelLevel | null;
+  returnOdometerKm: number | null;
+  returnFuelLevel: FuelLevel | null;
 }) {
   return (
     <div className="space-y-3 rounded-lg border p-3">
       <p className="text-sm font-medium">Dokumentacja stanu auta</p>
       <p className="text-xs text-muted-foreground">
-        Dodajcie zdjęcia auta przy odbiorze i zwrocie — to ułatwia wyjaśnienie ewentualnych
-        sporów o uszkodzenia. Zdjęcia widzą tylko strony tej rezerwacji.
+        Dodajcie zdjęcia auta oraz zapiszcie stan licznika i poziom paliwa przy odbiorze i
+        zwrocie — to ułatwia wyjaśnienie ewentualnych sporów. Widzą to tylko strony tej
+        rezerwacji.
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         <PhotoStageSection
@@ -167,6 +275,8 @@ export function TripPhotosManager({
           label="Odbiór"
           photos={pickupPhotos}
           currentUserId={currentUserId}
+          odometerKm={pickupOdometerKm}
+          fuelLevel={pickupFuelLevel}
         />
         <PhotoStageSection
           bookingId={bookingId}
@@ -174,6 +284,8 @@ export function TripPhotosManager({
           label="Zwrot"
           photos={returnPhotos}
           currentUserId={currentUserId}
+          odometerKm={returnOdometerKm}
+          fuelLevel={returnFuelLevel}
         />
       </div>
     </div>

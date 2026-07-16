@@ -10,11 +10,20 @@ import { SubmitButton } from "@/components/submit-button";
 import {
   CANCELLATION_POLICY_DESCRIPTIONS,
   CANCELLATION_POLICY_LABELS,
+  FUEL_POLICY_DESCRIPTIONS,
+  FUEL_POLICY_LABELS,
   FUEL_TYPE_LABELS,
   TRANSMISSION_LABELS,
   VEHICLE_TYPE_LABELS,
 } from "@/lib/car-options";
-import type { CancellationPolicy, Car, FuelType, Transmission, VehicleType } from "@/types/database";
+import type {
+  CancellationPolicy,
+  Car,
+  FuelPolicy,
+  FuelType,
+  Transmission,
+  VehicleType,
+} from "@/types/database";
 
 const initialState: EditCarState = { error: null };
 const selectClassName =
@@ -162,6 +171,21 @@ export function EditCarForm({ car }: { car: Car }) {
           />
         </div>
         <div className="space-y-2">
+          <Label htmlFor="mileage_overage_fee_per_km">Opłata za km ponad limit (zł, opcjonalnie)</Label>
+          <Input
+            id="mileage_overage_fee_per_km"
+            name="mileage_overage_fee_per_km"
+            type="number"
+            step="0.01"
+            min={0}
+            placeholder="np. 1.50"
+            defaultValue={car.mileage_overage_fee_per_km ?? ""}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
           <Label htmlFor="price_per_month">Cena / miesiąc (zł, opcjonalnie)</Label>
           <Input
             id="price_per_month"
@@ -172,6 +196,24 @@ export function EditCarForm({ car }: { car: Car }) {
             placeholder="np. 2400"
             defaultValue={car.price_per_month ?? ""}
           />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="fuel_policy">Polityka paliwa</Label>
+          <select
+            id="fuel_policy"
+            name="fuel_policy"
+            required
+            defaultValue={car.fuel_policy ?? "full_to_full"}
+            className={selectClassName}
+          >
+            {(Object.entries(FUEL_POLICY_LABELS) as [FuelPolicy, string][]).map(
+              ([value, label]) => (
+                <option key={value} value={value}>
+                  {label} — {FUEL_POLICY_DESCRIPTIONS[value]}
+                </option>
+              )
+            )}
+          </select>
         </div>
       </div>
 

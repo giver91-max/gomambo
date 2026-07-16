@@ -27,6 +27,8 @@ export type VehicleType =
 export type FuelType = "benzyna" | "diesel" | "hybryda" | "elektryczny" | "lpg";
 export type Transmission = "manualna" | "automatyczna";
 export type CancellationPolicy = "flexible" | "moderate" | "strict";
+export type FuelPolicy = "full_to_full" | "same_level" | "included";
+export type FuelLevel = "empty" | "quarter" | "half" | "three_quarters" | "full";
 
 export type Car = {
   id: string;
@@ -46,6 +48,8 @@ export type Car = {
   transmission: Transmission | null;
   seats: number | null;
   mileage_limit_km: number | null;
+  mileage_overage_fee_per_km: number | null;
+  fuel_policy: FuelPolicy | null;
   price_per_month: number | null;
   delivery_available: boolean;
   delivery_info: string | null;
@@ -86,6 +90,10 @@ export type Booking = {
   start_date: string;
   end_date: string;
   status: BookingStatus;
+  pickup_odometer_km: number | null;
+  pickup_fuel_level: FuelLevel | null;
+  return_odometer_km: number | null;
+  return_fuel_level: FuelLevel | null;
   created_at: string;
   updated_at: string;
 };

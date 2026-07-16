@@ -1,4 +1,11 @@
-import type { CancellationPolicy, FuelType, Transmission, VehicleType } from "@/types/database";
+import type {
+  CancellationPolicy,
+  FuelLevel,
+  FuelPolicy,
+  FuelType,
+  Transmission,
+  VehicleType,
+} from "@/types/database";
 
 export const VEHICLE_TYPE_LABELS: Record<VehicleType, string> = {
   sedan: "Sedan",
@@ -42,4 +49,24 @@ export const CANCELLATION_POLICY_FREE_HOURS: Record<CancellationPolicy, number> 
   flexible: 24,
   moderate: 72,
   strict: 168,
+};
+
+export const FUEL_POLICY_LABELS: Record<FuelPolicy, string> = {
+  full_to_full: "Pełny do pełnego",
+  same_level: "Zwrot z takim poziomem jak przy odbiorze",
+  included: "Paliwo wliczone w cenę",
+};
+
+export const FUEL_POLICY_DESCRIPTIONS: Record<FuelPolicy, string> = {
+  full_to_full: "Odbierz auto z pełnym bakiem i zwróć je z pełnym bakiem.",
+  same_level: "Zwróć auto z takim samym poziomem paliwa, jaki był przy odbiorze.",
+  included: "Koszt paliwa jest wliczony w cenę wynajmu.",
+};
+
+export const FUEL_LEVEL_LABELS: Record<FuelLevel, string> = {
+  empty: "Pusty",
+  quarter: "1/4",
+  half: "1/2",
+  three_quarters: "3/4",
+  full: "Pełny",
 };

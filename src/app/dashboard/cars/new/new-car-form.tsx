@@ -13,11 +13,19 @@ import { DEFAULT_STICKER, flattenImageWithSticker, type StickerRect } from "@/li
 import {
   CANCELLATION_POLICY_DESCRIPTIONS,
   CANCELLATION_POLICY_LABELS,
+  FUEL_POLICY_DESCRIPTIONS,
+  FUEL_POLICY_LABELS,
   FUEL_TYPE_LABELS,
   TRANSMISSION_LABELS,
   VEHICLE_TYPE_LABELS,
 } from "@/lib/car-options";
-import type { CancellationPolicy, FuelType, Transmission, VehicleType } from "@/types/database";
+import type {
+  CancellationPolicy,
+  FuelPolicy,
+  FuelType,
+  Transmission,
+  VehicleType,
+} from "@/types/database";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 8;
@@ -304,6 +312,20 @@ export function NewCarForm() {
           />
         </div>
         <div className="space-y-2">
+          <Label htmlFor="mileage_overage_fee_per_km">Opłata za km ponad limit (zł, opcjonalnie)</Label>
+          <Input
+            id="mileage_overage_fee_per_km"
+            name="mileage_overage_fee_per_km"
+            type="number"
+            step="0.01"
+            min={0}
+            placeholder="np. 1.50"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
           <Label htmlFor="price_per_month">Cena / miesiąc (zł, opcjonalnie)</Label>
           <Input
             id="price_per_month"
@@ -316,6 +338,24 @@ export function NewCarForm() {
           <p className="text-xs text-muted-foreground">
             Zniżkowa cena dla wynajmu 28 dni i dłużej.
           </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="fuel_policy">Polityka paliwa</Label>
+          <select
+            id="fuel_policy"
+            name="fuel_policy"
+            required
+            defaultValue="full_to_full"
+            className="h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {(Object.entries(FUEL_POLICY_LABELS) as [FuelPolicy, string][]).map(
+              ([value, label]) => (
+                <option key={value} value={value}>
+                  {label} — {FUEL_POLICY_DESCRIPTIONS[value]}
+                </option>
+              )
+            )}
+          </select>
         </div>
       </div>
 

@@ -42,6 +42,9 @@ export async function createCarDraft(
   const seats = Number(formData.get("seats"));
   const mileageLimitRaw = String(formData.get("mileage_limit_km") ?? "").trim();
   const mileageLimit = mileageLimitRaw ? Number(mileageLimitRaw) : null;
+  const mileageOverageFeeRaw = String(formData.get("mileage_overage_fee_per_km") ?? "").trim();
+  const mileageOverageFee = mileageOverageFeeRaw ? Number(mileageOverageFeeRaw) : null;
+  const fuelPolicy = String(formData.get("fuel_policy") ?? "full_to_full").trim();
   const pricePerMonthRaw = String(formData.get("price_per_month") ?? "").trim();
   const pricePerMonth = pricePerMonthRaw ? Number(pricePerMonthRaw) : null;
   const deliveryAvailable = formData.get("delivery_available") === "true";
@@ -70,6 +73,9 @@ export async function createCarDraft(
   if (mileageLimit !== null && !(mileageLimit > 0)) {
     return { error: "Limit kilometrów musi być większy od zera." };
   }
+  if (mileageOverageFee !== null && mileageOverageFee < 0) {
+    return { error: "Opłata za km ponad limit nie może być ujemna." };
+  }
   if (pricePerMonth !== null && !(pricePerMonth > 0)) {
     return { error: "Cena za miesiąc musi być większa od zera." };
   }
@@ -93,6 +99,8 @@ export async function createCarDraft(
       transmission: transmission as Car["transmission"],
       seats,
       mileage_limit_km: mileageLimit,
+      mileage_overage_fee_per_km: mileageOverageFee,
+      fuel_policy: fuelPolicy as Car["fuel_policy"],
       price_per_month: pricePerMonth,
       delivery_available: deliveryAvailable,
       delivery_info: deliveryAvailable && deliveryInfo ? deliveryInfo : null,

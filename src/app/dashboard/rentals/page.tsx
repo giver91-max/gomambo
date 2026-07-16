@@ -35,6 +35,7 @@ export default async function RentalHistoryPage() {
     .from("bookings")
     .select(
       `id, start_date, end_date, status, created_at,
+       pickup_odometer_km, pickup_fuel_level, return_odometer_km, return_fuel_level,
        cars(id, brand, model, city, cancellation_policy)`
     )
     .eq("renter_id", user!.id)
@@ -138,6 +139,10 @@ export default async function RentalHistoryPage() {
                     currentUserId={user!.id}
                     pickupPhotos={tripPhotosByBooking.get(booking.id)?.pickup ?? []}
                     returnPhotos={tripPhotosByBooking.get(booking.id)?.return ?? []}
+                    pickupOdometerKm={booking.pickup_odometer_km}
+                    pickupFuelLevel={booking.pickup_fuel_level}
+                    returnOdometerKm={booking.return_odometer_km}
+                    returnFuelLevel={booking.return_fuel_level}
                   />
                 )}
                 {booking.status === "completed" && !reviewedBookingIds.has(booking.id) && (

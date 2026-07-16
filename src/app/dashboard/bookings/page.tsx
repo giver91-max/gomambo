@@ -6,7 +6,7 @@ import { BackButton } from "@/components/back-button";
 import { BookingActions } from "./booking-actions";
 import { ReviewForm } from "./review-form";
 import { TripPhotosManager, type TripPhotoItem } from "@/components/trip-photos-manager";
-import type { BookingStatus } from "@/types/database";
+import type { BookingStatus, FuelLevel } from "@/types/database";
 
 const statusLabel: Record<BookingStatus, string> = {
   requested: "Oczekuje",
@@ -34,6 +34,7 @@ export default async function OwnerBookingsPage() {
     .from("bookings")
     .select(
       `id, start_date, end_date, status, created_at,
+       pickup_odometer_km, pickup_fuel_level, return_odometer_km, return_fuel_level,
        cars(id, brand, model),
        renter:profiles!bookings_renter_id_fkey(full_name)`
     )
@@ -46,6 +47,10 @@ export default async function OwnerBookingsPage() {
     end_date: string;
     status: BookingStatus;
     created_at: string;
+    pickup_odometer_km: number | null;
+    pickup_fuel_level: FuelLevel | null;
+    return_odometer_km: number | null;
+    return_fuel_level: FuelLevel | null;
     cars: { id: string; brand: string; model: string } | null;
     renter: { full_name: string } | null;
   }[];
@@ -133,6 +138,10 @@ export default async function OwnerBookingsPage() {
                     currentUserId={user!.id}
                     pickupPhotos={tripPhotosByBooking.get(booking.id)?.pickup ?? []}
                     returnPhotos={tripPhotosByBooking.get(booking.id)?.return ?? []}
+                    pickupOdometerKm={booking.pickup_odometer_km}
+                    pickupFuelLevel={booking.pickup_fuel_level}
+                    returnOdometerKm={booking.return_odometer_km}
+                    returnFuelLevel={booking.return_fuel_level}
                   />
                 )}
                 {booking.status === "completed" && !reviewedBookingIds.has(booking.id) && (
