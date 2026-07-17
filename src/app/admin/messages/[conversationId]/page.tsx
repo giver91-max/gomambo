@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { BackButton } from "@/components/back-button";
 import { ChatThread } from "@/components/chat-thread";
-import { markAdminChatReadByAdmin } from "../actions";
+import { deleteAdminChatMessage, markAdminChatReadByAdmin } from "../actions";
 import { AdminReplyForm } from "./reply-form";
 
 export default async function AdminConversationPage({
@@ -31,6 +31,7 @@ export default async function AdminConversationPage({
     .from("admin_chat_messages")
     .select("id, sender_id, body, created_at")
     .eq("conversation_id", params.conversationId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: true });
 
   const userLabel =
@@ -49,6 +50,7 @@ export default async function AdminConversationPage({
           createdAt: m.created_at,
         }))}
         currentUserId={user!.id}
+        onDelete={deleteAdminChatMessage.bind(null, params.conversationId)}
       />
 
       <AdminReplyForm conversationId={conversation.id} />

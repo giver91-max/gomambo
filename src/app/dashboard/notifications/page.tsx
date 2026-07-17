@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
 import { markAdminNotificationsRead, markNotificationsRead } from "./actions";
+import { NotificationDeleteButton } from "./notification-delete-button";
 import type { AdminNotification, Notification } from "@/types/database";
 
 const systemTypeLabel: Record<AdminNotification["type"], string> = {
@@ -26,6 +27,8 @@ const personalTypeLabel: Record<Notification["type"], string> = {
 
 type FeedItem = {
   id: string;
+  rawId: string;
+  kind: "personal" | "system";
   label: string;
   body: string;
   link: string | null;
@@ -45,12 +48,14 @@ export default async function NotificationsPage() {
     supabase
       .from("admin_notifications")
       .select("id, type, body, link, created_at")
+      .is("deleted_at", null)
       .order("created_at", { ascending: false }),
     supabase.from("admin_notification_reads").select("notification_id").eq("user_id", user!.id),
     supabase
       .from("notifications")
       .select("id, type, body, link, read_at, created_at")
       .eq("user_id", user!.id)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false }),
   ]);
 
@@ -69,6 +74,8 @@ export default async function NotificationsPage() {
   const feed: FeedItem[] = [
     ...system.map((n) => ({
       id: `system-${n.id}`,
+      rawId: n.id,
+      kind: "system" as const,
       label: systemTypeLabel[n.type],
       body: n.body,
       link: n.link,
@@ -77,6 +84,8 @@ export default async function NotificationsPage() {
     })),
     ...personal.map((n) => ({
       id: `personal-${n.id}`,
+      rawId: n.id,
+      kind: "personal" as const,
       label: personalTypeLabel[n.type],
       body: n.body,
       link: n.link,
@@ -103,15 +112,18 @@ export default async function NotificationsPage() {
               <CardContent className="space-y-1 py-4">
                 <p className="text-sm font-medium">{notification.label}</p>
                 <p className="whitespace-pre-wrap text-sm text-muted-foreground">{notification.body}</p>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-muted-foreground">
                     {new Date(notification.createdAt).toLocaleString("pl-PL")}
                   </p>
-                  {notification.link && (
-                    <Link href={notification.link} className="text-xs text-primary hover:underline">
-                      Zobacz →
-                    </Link>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {notification.link && (
+                      <Link href={notification.link} className="text-xs text-primary hover:underline">
+                        Zobacz →
+                      </Link>
+                    )}
+                    <NotificationDeleteButton id={notification.rawId} kind={notification.kind} />
+                  </div>
                 </div>
               </CardContent>
             </Card>

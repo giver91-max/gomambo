@@ -18,12 +18,12 @@ export default async function MessagesPage() {
          cars(brand, model),
          owner:profiles!conversations_owner_id_fkey(full_name),
          renter:profiles!conversations_renter_id_fkey(full_name),
-         messages(id, body, sender_id, created_at, read_at)`
+         messages(id, body, sender_id, created_at, read_at, deleted_at)`
       )
       .or(`owner_id.eq.${user!.id},renter_id.eq.${user!.id}`),
     supabase
       .from("admin_conversations")
-      .select("id, admin_chat_messages(id, body, sender_id, created_at, read_at)")
+      .select("id, admin_chat_messages(id, body, sender_id, created_at, read_at, deleted_at)")
       .eq("user_id", user!.id)
       .maybeSingle(),
   ]);
@@ -36,9 +36,10 @@ export default async function MessagesPage() {
       sender_id: string;
       created_at: string;
       read_at: string | null;
+      deleted_at: string | null;
     }[];
   } | null;
-  const adminMessages = adminConversation?.admin_chat_messages ?? [];
+  const adminMessages = (adminConversation?.admin_chat_messages ?? []).filter((m) => !m.deleted_at);
   const adminSorted = adminMessages.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
   const adminLastMessage = adminSorted[adminSorted.length - 1] ?? null;
   const adminUnreadCount = adminMessages.filter((m) => m.sender_id !== user!.id && !m.read_at).length;
@@ -57,12 +58,13 @@ export default async function MessagesPage() {
       sender_id: string;
       created_at: string;
       read_at: string | null;
+      deleted_at: string | null;
     }[];
   }[];
 
   const rows = conversations
     .map((c) => {
-      const messages = c.messages ?? [];
+      const messages = (c.messages ?? []).filter((m) => !m.deleted_at);
       const sorted = messages.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
       const lastMessage = sorted[sorted.length - 1] ?? null;
       const unreadCount = messages.filter(

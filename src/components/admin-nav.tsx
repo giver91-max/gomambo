@@ -20,7 +20,10 @@ export function AdminNav({
     { href: "/admin", label: "Przegląd", exact: true, count: 0 },
     { href: "/admin/cars", label: "Samochody", exact: false, count: pendingCars },
     { href: "/admin/users", label: "Użytkownicy", exact: false, count: 0 },
+    { href: "/admin/bookings", label: "Rezerwacje", exact: false, count: 0 },
+    { href: "/admin/reviews", label: "Recenzje", exact: false, count: 0 },
     { href: "/admin/messages", label: "Wiadomości", exact: false, count: unreadMessages },
+    { href: "/admin/conversations", label: "Rozmowy", exact: false, count: 0 },
     {
       href: "/admin/verifications",
       label: "Weryfikacja tożsamości",

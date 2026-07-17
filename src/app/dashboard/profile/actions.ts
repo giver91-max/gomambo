@@ -67,6 +67,49 @@ export async function updateEmail(
   };
 }
 
+// Requires the current password (verified via a real sign-in attempt, not
+// just "logged in") before allowing a change — the only self-service way to
+// change a password today was the logged-out /nowe-haslo reset-link flow,
+// unreachable from any UI while already logged in.
+export async function updatePassword(
+  _prevState: ProfileState,
+  formData: FormData
+): Promise<ProfileState> {
+  const { supabase, user } = await requireUser();
+
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  const newPassword = String(formData.get("newPassword") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    return { error: "Wypełnij wszystkie pola." };
+  }
+  if (newPassword.length < 6) {
+    return { error: "Nowe hasło musi mieć co najmniej 6 znaków." };
+  }
+  if (newPassword !== confirmPassword) {
+    return { error: "Nowe hasła nie są identyczne." };
+  }
+  if (!user.email) {
+    return { error: "Brak adresu e-mail na koncie." };
+  }
+
+  const { error: verifyError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: currentPassword,
+  });
+  if (verifyError) {
+    return { error: "Obecne hasło jest nieprawidłowe." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { error: null, success: true };
+}
+
 export async function updateNotificationPrefs(
   formData: FormData
 ): Promise<{ error: string | null }> {

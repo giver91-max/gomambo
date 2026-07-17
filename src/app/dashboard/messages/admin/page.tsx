@@ -28,6 +28,7 @@ export default async function AdminChatPage() {
         .from("admin_chat_messages")
         .select("id, sender_id, body, created_at")
         .eq("conversation_id", conversation.id)
+        .is("deleted_at", null)
         .order("created_at", { ascending: true })
     : { data: [] };
 

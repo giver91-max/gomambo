@@ -143,6 +143,7 @@ export default async function CarDetailPage({
     .from("reviews")
     .select("id, rating, comment, created_at, reviewer:profiles!reviews_reviewer_id_fkey(full_name)")
     .eq("reviewee_id", car.owner_id)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   const reviews = (rawReviews ?? []) as unknown as {

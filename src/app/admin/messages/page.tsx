@@ -16,7 +16,7 @@ export default async function AdminMessagesPage() {
     supabase
       .from("admin_conversations")
       .select(
-        "id, user_id, created_at, user:profiles!admin_conversations_user_id_fkey(full_name), admin_chat_messages(id, body, sender_id, created_at, read_at)"
+        "id, user_id, created_at, user:profiles!admin_conversations_user_id_fkey(full_name), admin_chat_messages(id, body, sender_id, created_at, read_at, deleted_at)"
       ),
   ]);
 
@@ -31,12 +31,13 @@ export default async function AdminMessagesPage() {
       sender_id: string;
       created_at: string;
       read_at: string | null;
+      deleted_at: string | null;
     }[];
   }[];
 
   const rows = conversations
     .map((c) => {
-      const messages = c.admin_chat_messages ?? [];
+      const messages = (c.admin_chat_messages ?? []).filter((m) => !m.deleted_at);
       const sorted = messages.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
       const lastMessage = sorted[sorted.length - 1] ?? null;
       const unreadCount = messages.filter((m) => m.sender_id !== user!.id && !m.read_at).length;

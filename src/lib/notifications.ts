@@ -24,13 +24,14 @@ export async function getUnreadCounts(
     // every thread for an admin — same "my rows" shape as above.
     supabase.from("admin_conversations").select("id"),
     // Only returns rows for admins — RLS restricts admin_notifications to is_admin().
-    supabase.from("admin_notifications").select("id"),
+    supabase.from("admin_notifications").select("id").is("deleted_at", null),
     // Per-user notifications (e.g. car approved/rejected) — everyone gets these.
     supabase
       .from("notifications")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
-      .is("read_at", null),
+      .is("read_at", null)
+      .is("deleted_at", null),
   ]);
 
   const conversationIds = (myConversations ?? []).map((c) => c.id);
@@ -45,6 +46,7 @@ export async function getUnreadCounts(
           .in("conversation_id", conversationIds)
           .neq("sender_id", userId)
           .is("read_at", null)
+          .is("deleted_at", null)
       : Promise.resolve({ count: 0 }),
     adminConversationIds.length > 0
       ? supabase
@@ -53,6 +55,7 @@ export async function getUnreadCounts(
           .in("conversation_id", adminConversationIds)
           .neq("sender_id", userId)
           .is("read_at", null)
+          .is("deleted_at", null)
       : Promise.resolve({ count: 0 }),
     systemNotificationIds.length > 0
       ? supabase

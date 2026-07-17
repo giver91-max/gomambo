@@ -130,6 +130,7 @@ export type Review = {
   rating: number;
   comment: string | null;
   created_at: string;
+  deleted_at: string | null;
 };
 
 export type Conversation = {
@@ -147,6 +148,7 @@ export type Message = {
   body: string;
   created_at: string;
   read_at: string | null;
+  deleted_at: string | null;
 };
 
 export type SiteSettings = {
@@ -168,6 +170,7 @@ export type AdminChatMessage = {
   body: string;
   created_at: string;
   read_at: string | null;
+  deleted_at: string | null;
 };
 
 export type AdminNotification = {
@@ -176,6 +179,7 @@ export type AdminNotification = {
   body: string;
   link: string | null;
   created_at: string;
+  deleted_at: string | null;
 };
 
 export type Referral = {
@@ -264,6 +268,7 @@ export type Notification = {
   link: string | null;
   read_at: string | null;
   created_at: string;
+  deleted_at: string | null;
 };
 
 export type Database = {

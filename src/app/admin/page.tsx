@@ -37,6 +37,7 @@ export default async function AdminOverviewPage() {
     supabase
       .from("admin_notifications")
       .select("id, type, body, link, created_at")
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(8),
   ]);

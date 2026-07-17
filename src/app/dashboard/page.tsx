@@ -34,7 +34,7 @@ export default async function DashboardPage() {
       .from("bookings")
       .select("status, start_date, end_date, cars(price_per_day)")
       .eq("owner_id", user!.id),
-    supabase.from("reviews").select("rating").eq("reviewee_id", user!.id),
+    supabase.from("reviews").select("rating").eq("reviewee_id", user!.id).is("deleted_at", null),
   ]);
 
   const activeListings = (cars ?? []).filter(

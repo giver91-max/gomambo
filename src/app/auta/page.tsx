@@ -166,7 +166,11 @@ export default async function AutaPage({
   if (ownerIds.length > 0) {
     const [{ data: ownerProfiles }, { data: ownerReviews }] = await Promise.all([
       supabase.from("profiles").select("id, full_name").in("id", ownerIds),
-      supabase.from("reviews").select("reviewee_id, rating").in("reviewee_id", ownerIds),
+      supabase
+        .from("reviews")
+        .select("reviewee_id, rating")
+        .in("reviewee_id", ownerIds)
+        .is("deleted_at", null),
     ]);
     for (const profile of ownerProfiles ?? []) {
       ownerNameById.set(profile.id, firstNameOnly(profile.full_name || "Właściciel"));

@@ -140,3 +140,34 @@ export async function markAdminChatReadByAdmin(conversationId: string): Promise<
 
   revalidatePath("/admin/messages");
 }
+
+// admin_chat_messages has no delete RLS at all — soft-delete via the
+// service-role client, same reasoning as reviews (see admin/reviews/actions.ts).
+export async function deleteAdminChatMessage(
+  conversationId: string,
+  messageId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "admin") {
+    return { error: "Brak uprawnień." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("admin_chat_messages")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", messageId);
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/admin/messages/${conversationId}`);
+  revalidatePath("/admin/messages");
+  return { error: null };
+}

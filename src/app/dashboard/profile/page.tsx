@@ -6,9 +6,11 @@ import { AvatarManager } from "@/components/avatar-manager";
 import { IdentityVerificationManager } from "@/components/identity-verification-manager";
 import { ProfileForm } from "./profile-form";
 import { EmailForm } from "./email-form";
+import { PasswordForm } from "./password-form";
 import { NotificationForm } from "./notification-form";
 import { ReferralLink } from "@/components/referral-link";
 import { StripeConnectManager } from "@/components/stripe-connect-manager";
+import { DeleteAccountButton } from "./delete-account-button";
 import { isConnectAccountOnboarded } from "@/lib/stripe";
 import { SITE_URL } from "@/lib/site";
 
@@ -115,6 +117,15 @@ export default async function ProfilePage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Hasło</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PasswordForm />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Powiadomienia</CardTitle>
         </CardHeader>
         <CardContent>
@@ -158,6 +169,19 @@ export default async function ProfilePage() {
             initialDocumentUrl={documentUrl}
             initialSelfieUrl={selfieUrl}
           />
+        </CardContent>
+      </Card>
+
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle>Usuń konto</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Trwale usuwa Twoje konto wraz z ogłoszeniami, rezerwacjami, wiadomościami i
+            dokumentami. Tej operacji nie można cofnąć.
+          </p>
+          <DeleteAccountButton />
         </CardContent>
       </Card>
     </div>

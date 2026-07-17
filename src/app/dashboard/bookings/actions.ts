@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { notifyUser } from "@/lib/notify-user";
-import { isWithinFreeCancellationWindow } from "@/lib/cancellation";
-import { captureDeposit, refundCheckoutSession, releaseDeposit } from "@/lib/stripe";
+import { cancelBookingWithRefund } from "@/lib/cancellation";
+import { captureDeposit, releaseDeposit } from "@/lib/stripe";
 import type { BookingStatus, CancellationPolicy } from "@/types/database";
 
 export async function updateBookingStatus(
@@ -107,28 +107,17 @@ export async function cancelBooking(bookingId: string): Promise<void> {
   if (!booking || booking.renter_id !== user.id) return;
   if (booking.status !== "requested" && booking.status !== "accepted") return;
 
-  await supabase.from("bookings").update({ status: "cancelled" }).eq("id", bookingId);
-
-  // Nothing to hold a deposit against once the trip is off, regardless of
-  // whether the rental fee itself gets refunded below.
-  if (booking.deposit_status === "held" && booking.stripe_deposit_payment_intent_id) {
-    const releaseResult = await releaseDeposit(booking.stripe_deposit_payment_intent_id);
-    if (releaseResult.ok) {
-      await supabase.from("bookings").update({ deposit_status: "released" }).eq("id", bookingId);
-    }
-  }
-
-  if (booking.payment_status === "paid" && booking.stripe_checkout_session_id) {
-    const policy: CancellationPolicy =
-      (booking.cars as unknown as { cancellation_policy: CancellationPolicy } | null)
-        ?.cancellation_policy ?? "moderate";
-    if (isWithinFreeCancellationWindow(policy, booking.start_date)) {
-      const refundResult = await refundCheckoutSession(booking.stripe_checkout_session_id);
-      if (refundResult.ok) {
-        await supabase.from("bookings").update({ payment_status: "refunded" }).eq("id", bookingId);
-      }
-    }
-  }
+  const policy: CancellationPolicy =
+    (booking.cars as unknown as { cancellation_policy: CancellationPolicy } | null)
+      ?.cancellation_policy ?? "moderate";
+  await cancelBookingWithRefund(supabase, bookingId, {
+    start_date: booking.start_date,
+    payment_status: booking.payment_status,
+    stripe_checkout_session_id: booking.stripe_checkout_session_id,
+    deposit_status: booking.deposit_status,
+    stripe_deposit_payment_intent_id: booking.stripe_deposit_payment_intent_id,
+    cancellation_policy: policy,
+  });
 
   const car = booking.cars as unknown as { brand: string; model: string; year: number } | null;
   const carLabel = car ? `${car.brand} ${car.model} (${car.year})` : "auto";

@@ -38,6 +38,7 @@ export default async function ConversationPage({
     .from("messages")
     .select("id, sender_id, body, created_at")
     .eq("conversation_id", params.conversationId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: true });
 
   return (
