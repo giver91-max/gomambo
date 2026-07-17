@@ -155,9 +155,11 @@ export async function refundCheckoutSession(
 // set to manual capture. Using Checkout here too (instead of a raw
 // PaymentIntent) keeps both charges on the same "redirect to a
 // Stripe-hosted page" flow — no custom Stripe Elements form to build.
-// Known v1 gap: extended authorization tops out around 30 days, so a
-// deposit hold on a monthly rental can expire before the trip ends — not
-// solved here, just not pretended away.
+// Known v1 gap: a manual-capture hold on a destination charge only lasts
+// Stripe's standard ~7 days (request_extended_authorization errors out
+// entirely on this account type instead of degrading gracefully, so it's
+// deliberately not used here) — a deposit hold on a longer rental can
+// expire before the trip ends. Not solved here, just not pretended away.
 
 export async function createDepositCheckoutSession(params: {
   bookingId: string;
@@ -186,9 +188,6 @@ export async function createDepositCheckoutSession(params: {
       payment_intent_data: {
         capture_method: "manual",
         transfer_data: { destination: params.ownerStripeAccountId },
-      },
-      payment_method_options: {
-        card: { request_extended_authorization: "if_available" },
       },
       metadata: { bookingId: params.bookingId, kind: "security_deposit" },
       success_url: params.successUrl,
