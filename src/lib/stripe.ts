@@ -137,8 +137,13 @@ export async function refundCheckoutSession(
     const refund = await stripe.refunds.create({
       payment_intent: paymentIntentId,
       // Refund the platform's fee too — a cancelled trip earns GoMambo
-      // nothing, so there's no commission left to keep.
+      // nothing, so there's no commission left to keep. reverse_transfer
+      // is required alongside it: this is a destination charge, so the
+      // rental fee was already transferred to the owner's connected
+      // account — without pulling it back, the platform balance may not
+      // have the funds to cover the refund at all.
       refund_application_fee: true,
+      reverse_transfer: true,
     });
     return { ok: true, data: { refundId: refund.id } };
   } catch (error) {
