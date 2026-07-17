@@ -161,6 +161,12 @@ export async function refundCheckoutSession(
 // deliberately not used here) — a deposit hold on a longer rental can
 // expire before the trip ends. Not solved here, just not pretended away.
 
+// Checkout doesn't hand back the underlying PaymentIntent id synchronously
+// at session-creation time for a manual-capture session — it only exists
+// once the customer actually reaches/completes checkout. So this returns
+// just the session id/url; the webhook (checkout.session.completed, kind
+// === "security_deposit") is what resolves and stores the real
+// PaymentIntent id once Stripe has one.
 export async function createDepositCheckoutSession(params: {
   bookingId: string;
   ownerStripeAccountId: string;
@@ -168,7 +174,7 @@ export async function createDepositCheckoutSession(params: {
   renterEmail: string;
   successUrl: string;
   cancelUrl: string;
-}): Promise<StripeResult<{ paymentIntentId: string; url: string }>> {
+}): Promise<StripeResult<{ sessionId: string; url: string }>> {
   if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
   try {
     const session = await stripe.checkout.sessions.create({
@@ -193,12 +199,10 @@ export async function createDepositCheckoutSession(params: {
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
     });
-    if (!session.url || !session.payment_intent) {
-      return { ok: false, error: "Stripe nie zwrócił danych płatności kaucji." };
+    if (!session.url) {
+      return { ok: false, error: "Stripe nie zwrócił adresu płatności kaucji." };
     }
-    const paymentIntentId =
-      typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id;
-    return { ok: true, data: { paymentIntentId, url: session.url } };
+    return { ok: true, data: { sessionId: session.id, url: session.url } };
   } catch (error) {
     return failure("createDepositCheckoutSession", error);
   }

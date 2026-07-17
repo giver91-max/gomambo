@@ -32,6 +32,24 @@ export async function POST(request: Request) {
       const bookingId = session.metadata?.bookingId;
       if (!bookingId) break;
 
+      if (session.metadata?.kind === "security_deposit") {
+        // The deposit's PaymentIntent only exists once the customer has
+        // actually reached checkout — this is the first point session.
+        // payment_intent is reliably populated, so it's stored here rather
+        // than at session-creation time (see createDepositCheckoutSession).
+        const paymentIntentId =
+          typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : (session.payment_intent?.id ?? null);
+        if (paymentIntentId) {
+          await admin
+            .from("bookings")
+            .update({ stripe_deposit_payment_intent_id: paymentIntentId, deposit_status: "held" })
+            .eq("id", bookingId);
+        }
+        break;
+      }
+
       const { data: booking } = await admin
         .from("bookings")
         .update({ payment_status: "paid" })

@@ -69,7 +69,6 @@ export async function createBookingCheckoutSession(
   const cancelUrl = `${SITE_URL}/dashboard/rentals?payment=cancelled`;
 
   let depositUrl: string | null = null;
-  let depositPaymentIntentId: string | null = null;
   const depositAmount = car.security_deposit_amount !== null ? Number(car.security_deposit_amount) : null;
 
   if (depositAmount && depositAmount > 0) {
@@ -85,7 +84,6 @@ export async function createBookingCheckoutSession(
       return { error: depositResult.error };
     }
     depositUrl = depositResult.data.url;
-    depositPaymentIntentId = depositResult.data.paymentIntentId;
   }
 
   const rentalResult = await createRentalCheckoutSession({
@@ -113,12 +111,7 @@ export async function createBookingCheckoutSession(
       total_price: total,
       platform_fee_amount: platformFee,
       stripe_checkout_session_id: rentalResult.data.sessionId,
-      ...(depositAmount && depositAmount > 0
-        ? {
-            deposit_amount: depositAmount,
-            stripe_deposit_payment_intent_id: depositPaymentIntentId,
-          }
-        : {}),
+      ...(depositAmount && depositAmount > 0 ? { deposit_amount: depositAmount } : {}),
     })
     .eq("id", bookingId);
 
