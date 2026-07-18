@@ -110,7 +110,12 @@ export default async function NotificationsPage() {
           {feed.map((notification) => (
             <Card key={notification.id} className={notification.isUnread ? "border-primary/40" : ""}>
               <CardContent className="space-y-1 py-4">
-                <p className="text-sm font-medium">{notification.label}</p>
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  {notification.isUnread && (
+                    <span className="size-2 shrink-0 rounded-full bg-primary" aria-label="Nieprzeczytane" />
+                  )}
+                  {notification.label}
+                </p>
                 <p className="whitespace-pre-wrap text-sm text-muted-foreground">{notification.body}</p>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-muted-foreground">

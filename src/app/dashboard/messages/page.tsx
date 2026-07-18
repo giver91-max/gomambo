@@ -91,7 +91,10 @@ export default async function MessagesPage() {
           <Card className="transition-shadow hover:shadow-md">
             <CardContent className="flex items-center justify-between gap-4 py-4">
               <div className="min-w-0">
-                <p className={adminUnreadCount > 0 ? "font-semibold" : "font-medium"}>
+                <p className={`flex items-center gap-2 ${adminUnreadCount > 0 ? "font-semibold" : "font-medium"}`}>
+                  {adminUnreadCount > 0 && (
+                    <span className="size-2 shrink-0 rounded-full bg-primary" aria-label="Nieprzeczytane" />
+                  )}
                   Wiadomości od GoMambo
                 </p>
                 <p className="truncate text-sm text-muted-foreground">
@@ -108,7 +111,10 @@ export default async function MessagesPage() {
             <Card className="transition-shadow hover:shadow-md">
               <CardContent className="flex items-center justify-between gap-4 py-4">
                 <div className="min-w-0">
-                  <p className={unreadCount > 0 ? "font-semibold" : "font-medium"}>
+                  <p className={`flex items-center gap-2 ${unreadCount > 0 ? "font-semibold" : "font-medium"}`}>
+                    {unreadCount > 0 && (
+                      <span className="size-2 shrink-0 rounded-full bg-primary" aria-label="Nieprzeczytane" />
+                    )}
                     {otherName || "Użytkownik"} ·{" "}
                     {conversation.cars?.brand} {conversation.cars?.model}
                   </p>

@@ -74,7 +74,10 @@ export default async function AdminMessagesPage() {
                 <Card className="transition-shadow hover:shadow-md">
                   <CardContent className="flex items-center justify-between gap-4 py-4">
                     <div className="min-w-0">
-                      <p className={unreadCount > 0 ? "font-semibold" : "font-medium"}>
+                      <p className={`flex items-center gap-2 ${unreadCount > 0 ? "font-semibold" : "font-medium"}`}>
+                        {unreadCount > 0 && (
+                          <span className="size-2 shrink-0 rounded-full bg-primary" aria-label="Nieprzeczytane" />
+                        )}
                         {conversation.user?.full_name || "Użytkownik"}
                       </p>
                       {lastMessage && (
