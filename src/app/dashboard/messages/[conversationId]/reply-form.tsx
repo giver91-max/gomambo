@@ -1,21 +1,52 @@
 "use client";
 
-import { useFormState } from "react-dom";
-import { sendMessage, type MessageState } from "../actions";
+import { useState, useTransition } from "react";
+import { sendMessage } from "../actions";
 import { Textarea } from "@/components/ui/textarea";
-import { SubmitButton } from "@/components/submit-button";
-
-const initialState: MessageState = { error: null };
+import { Button } from "@/components/ui/button";
 
 export function ReplyForm({ conversationId }: { conversationId: string }) {
-  const sendWithId = sendMessage.bind(null, conversationId);
-  const [state, formAction] = useFormState(sendWithId, initialState);
+  const [body, setBody] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.set("body", body);
+      const result = await sendMessage(conversationId, { error: null }, formData);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setBody("");
+      }
+    });
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+    }
+  }
 
   return (
-    <form action={formAction} className="space-y-2">
-      <Textarea name="body" rows={3} required placeholder="Napisz wiadomość…" />
-      {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <SubmitButton>Wyślij</SubmitButton>
+    <form onSubmit={handleSubmit} className="space-y-2">
+      <Textarea
+        name="body"
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        onKeyDown={handleKeyDown}
+        rows={3}
+        required
+        placeholder="Napisz wiadomość…"
+      />
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <Button type="submit" disabled={isPending}>
+        {isPending ? "Chwileczkę…" : "Wyślij"}
+      </Button>
     </form>
   );
 }

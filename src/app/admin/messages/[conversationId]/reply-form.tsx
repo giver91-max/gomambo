@@ -23,11 +23,19 @@ export function AdminReplyForm({ conversationId }: { conversationId: string }) {
     });
   }
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-2">
       <Textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
+        onKeyDown={handleKeyDown}
         rows={3}
         required
         placeholder="Napisz wiadomość…"
