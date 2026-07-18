@@ -120,7 +120,7 @@ a.navCtaName {
   margin-bottom: 24px;
 }
 .heroHeadline {
-  font-size: clamp(42px, 7vw, 96px);
+  font-size: clamp(36px, 5vw, 72px);
   font-weight: 900;
   line-height: 1;
   letter-spacing: -2px;
@@ -269,14 +269,16 @@ a.navCtaName {
   text-transform: uppercase;
   color: var(--yellow);
   margin-bottom: 16px;
+  text-align: center;
 }
 .sectionTitle {
   font-size: clamp(28px, 4vw, 48px);
   font-weight: 900;
   letter-spacing: -1px;
-  margin-bottom: 64px;
+  margin: 0 auto 64px;
   max-width: 540px;
   line-height: 1.1;
+  text-align: center;
 }
 .steps {
   display: grid;
@@ -328,7 +330,8 @@ a.navCtaName {
   color: var(--gray);
   line-height: 1.7;
   max-width: 620px;
-  margin-bottom: 48px;
+  margin: 0 auto 48px;
+  text-align: center;
 }
 .diffGrid {
   display: grid;
