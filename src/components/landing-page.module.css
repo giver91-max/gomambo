@@ -318,6 +318,111 @@ a.navCtaName {
   line-height: 1.6;
 }
 
+/* DIFFERENCE (konkretny samochód, nie klasa) */
+.page :global(#difference) {
+  padding: 100px 40px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.diffIntro {
+  font-size: 15px;
+  color: var(--gray);
+  line-height: 1.7;
+  max-width: 620px;
+  margin-bottom: 48px;
+}
+.diffGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  max-width: 800px;
+}
+.diffCard {
+  border-radius: 12px;
+  padding: 28px;
+}
+.diffCard.old {
+  background: var(--gray-light);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  opacity: 0.75;
+}
+.diffCard.new {
+  background: var(--yellow);
+  color: var(--black);
+}
+.diffLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+.diffCard.old .diffLabel {
+  color: var(--gray);
+}
+.diffCard.new .diffLabel {
+  color: var(--black);
+}
+.diffMain {
+  font-size: 19px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  letter-spacing: -0.3px;
+}
+.diffCard ul {
+  list-style: none;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.diffCard.old ul {
+  color: var(--gray);
+}
+.diffCard.new ul {
+  color: var(--black);
+  opacity: 0.85;
+}
+.diffCard li::before {
+  content: "— ";
+}
+
+/* USE CASES (kiedy auto może zarabiać) */
+.page :global(#usecases) {
+  padding: 100px 40px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--gray-light);
+}
+.useCases {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 2px;
+}
+.useCase {
+  background: var(--black);
+  padding: 36px 28px;
+  position: relative;
+}
+.useCase:first-child {
+  border-radius: 12px 0 0 12px;
+}
+.useCase:last-child {
+  border-radius: 0 12px 12px 0;
+}
+.useCaseIcon {
+  font-size: 28px;
+  margin-bottom: 16px;
+}
+.useCase h3 {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  letter-spacing: -0.3px;
+}
+.useCase p {
+  font-size: 14px;
+  color: var(--gray);
+  line-height: 1.6;
+}
+
 /* WAITLIST */
 .page :global(#waitlist) {
   padding: 100px 40px;

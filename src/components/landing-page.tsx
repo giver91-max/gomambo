@@ -224,6 +224,39 @@ export function LandingPage({
         </div>
       </section>
 
+      <section id="difference">
+        <p className={styles.sectionLabel}>Różnica</p>
+        <h2 className={styles.sectionTitle}>
+          Nie wynajmujesz klasy. Wynajmujesz TO auto.
+        </h2>
+        <p className={styles.diffIntro}>
+          W tradycyjnej wypożyczalni rezerwujesz kategorię — &bdquo;kompakt lub
+          podobny&rdquo; — i dostajesz cokolwiek akurat stoi na parkingu. W
+          GoMambo widzisz dokładnie ten samochód, który wynajmiesz: ten kolor,
+          ten silnik, to konkretne wyposażenie. To, co widzisz w ogłoszeniu,
+          to auto, którym pojedziesz.
+        </p>
+        <div className={styles.diffGrid}>
+          <div className={`${styles.diffCard} ${styles.old}`}>
+            <div className={styles.diffLabel}>Tradycyjna wypożyczalnia</div>
+            <div className={styles.diffMain}>&bdquo;Ford Focus lub podobny&rdquo;</div>
+            <ul>
+              <li>Rezerwujesz kategorię, nie konkretny samochód</li>
+              <li>Kolor, silnik i wyposażenie — niespodzianka na miejscu</li>
+            </ul>
+          </div>
+          <div className={`${styles.diffCard} ${styles.new}`}>
+            <div className={styles.diffLabel}>GoMambo</div>
+            <div className={styles.diffMain}>Ten konkretny samochód</div>
+            <ul>
+              <li>Widzisz realne zdjęcia auta, zanim zarezerwujesz</li>
+              <li>Znasz kolor, silnik i wyposażenie z góry</li>
+              <li>To, co widzisz, to dostajesz — zero niespodzianek</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <section id="how">
         <p className={styles.sectionLabel}>Jak to działa</p>
         <h2 className={styles.sectionTitle}>Proste jak wypożyczenie od sąsiada</h2>
@@ -251,6 +284,39 @@ export function LandingPage({
             <div className={styles.stepIcon}>💰</div>
             <h3>Jedź / Zarabiaj</h3>
             <p>Najemca jedzie, właściciel zarabia. Wypłata w 5 dni roboczych po zwrocie.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="usecases">
+        <p className={styles.sectionLabel}>Dla właścicieli</p>
+        <h2 className={styles.sectionTitle}>
+          Twoje auto może zarabiać częściej, niż myślisz
+        </h2>
+        <div className={styles.useCases}>
+          <div className={styles.useCase}>
+            <div className={styles.useCaseIcon}>✈️</div>
+            <h3>Wyjeżdżasz na wakacje</h3>
+            <p>
+              Zamiast płacić za parking na lotnisku, udostępnij auto na czas
+              wyjazdu — zamiast tracić, zarabiasz.
+            </p>
+          </div>
+          <div className={styles.useCase}>
+            <div className={styles.useCaseIcon}>🚗</div>
+            <h3>Masz drugie auto</h3>
+            <p>
+              Jeśli jeden z Twoich samochodów rzadko wyjeżdża z garażu,
+              udostępnij go innym i zamień stojący kapitał w dochód.
+            </p>
+          </div>
+          <div className={styles.useCase}>
+            <div className={styles.useCaseIcon}>🩹</div>
+            <h3>Jesteś na zwolnieniu (L4)</h3>
+            <p>
+              Nie prowadzisz przez jakiś czas? Auto nie musi stać bezczynnie —
+              może zarabiać zamiast Ciebie.
+            </p>
           </div>
         </div>
       </section>
