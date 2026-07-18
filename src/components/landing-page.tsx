@@ -277,7 +277,7 @@ export function LandingPage({
             <div className={styles.stepNum}>Krok 03</div>
             <div className={styles.stepIcon}>📅</div>
             <h3>Zarezerwuj</h3>
-            <p>Płatność online, ubezpieczenie w cenie. Odbiór bezpośrednio od właściciela.</p>
+            <p>Płatność online. Odbiór bezpośrednio od właściciela.</p>
           </div>
           <div className={styles.step}>
             <div className={styles.stepNum}>Krok 04</div>
@@ -478,7 +478,7 @@ export function LandingPage({
         </div>
         <div className={styles.trustItem}>
           <span className={styles.trustNum}>100%</span>
-          <div className={styles.trustDesc}>Ubezpieczenie w cenie</div>
+          <div className={styles.trustDesc}>Zweryfikowana tożsamość</div>
         </div>
         <div className={styles.trustItem}>
           <span className={styles.trustNum}>5 dni</span>
