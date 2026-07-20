@@ -337,6 +337,8 @@ a.navCtaName {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
+  max-width: 620px;
+  margin: 0 auto;
 }
 .diffCard {
   border-radius: 12px;
