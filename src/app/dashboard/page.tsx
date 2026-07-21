@@ -6,7 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import type { CarStatus } from "@/types/database";
 import { BackButton } from "@/components/back-button";
 import { PauseToggleButton } from "./cars/pause-toggle-button";
-import { eachDateInRange } from "@/lib/calendar";
+import { eachDateInRange, toISODate, addDays } from "@/lib/calendar";
+import { summarizeAvailableRanges } from "@/lib/availability-summary";
+
+const AVAILABILITY_WINDOW_DAYS = 60;
 
 const statusLabel: Record<CarStatus, string> = {
   pending: "Oczekuje na zatwierdzenie",
@@ -51,6 +54,32 @@ export default async function DashboardPage() {
     reviews && reviews.length > 0
       ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
       : null;
+
+  // Only bookable statuses need an at-a-glance availability summary — a
+  // pending/rejected car can't take reservations yet regardless of dates set.
+  const bookableCarIds = (cars ?? [])
+    .filter((c) => c.status === "approved" || c.status === "paused")
+    .map((c) => c.id);
+
+  const todayIso = toISODate(new Date());
+  const windowEndIso = toISODate(addDays(new Date(), AVAILABILITY_WINDOW_DAYS));
+
+  const availabilityByCarId = new Map<string, string[]>();
+  if (bookableCarIds.length > 0) {
+    const { data: availabilityRows } = await supabase
+      .from("car_availability")
+      .select("car_id, date")
+      .in("car_id", bookableCarIds)
+      .gte("date", todayIso)
+      .lte("date", windowEndIso)
+      .order("date", { ascending: true });
+
+    for (const row of availabilityRows ?? []) {
+      const dates = availabilityByCarId.get(row.car_id) ?? [];
+      dates.push(row.date);
+      availabilityByCarId.set(row.car_id, dates);
+    }
+  }
 
   const stats: { label: string; value: string }[] = [
     { label: "Aktywne ogłoszenia", value: String(activeListings) },
@@ -113,6 +142,21 @@ export default async function DashboardPage() {
                     Powód odrzucenia: {car.rejection_reason}
                   </p>
                 )}
+                {(car.status === "approved" || car.status === "paused") &&
+                  (() => {
+                    const dates = availabilityByCarId.get(car.id) ?? [];
+                    const { ranges, extraCount } = summarizeAvailableRanges(dates);
+                    return ranges.length > 0 ? (
+                      <p>
+                        Dostępne: {ranges.join(", ")}
+                        {extraCount > 0 ? ` +${extraCount} innych` : ""}
+                      </p>
+                    ) : (
+                      <p className="text-amber-600 dark:text-amber-500">
+                        Brak ustawionej dostępności w najbliższych {AVAILABILITY_WINDOW_DAYS} dniach
+                      </p>
+                    );
+                  })()}
                 <div className="flex flex-wrap gap-x-4 gap-y-1">
                   <Link
                     href={`/dashboard/cars/${car.id}/edit`}
@@ -124,7 +168,9 @@ export default async function DashboardPage() {
                     href={`/dashboard/cars/${car.id}/availability`}
                     className="inline-block text-sm text-primary hover:underline"
                   >
-                    Zarządzaj dostępnością →
+                    {(availabilityByCarId.get(car.id)?.length ?? 0) > 0
+                      ? "Zarządzaj dostępnością →"
+                      : "Ustaw dostępność →"}
                   </Link>
                 </div>
                 {(car.status === "approved" || car.status === "paused") && (
