@@ -118,7 +118,7 @@ export default async function NotificationsPage() {
                   row below via z-index so those controls stay independently
                   clickable. */}
               {notification.link && (
-                <Link href={notification.link} className="absolute inset-0 z-0" aria-hidden="true" tabIndex={-1} />
+                <Link href={notification.link} className="absolute inset-0 z-10" aria-hidden="true" tabIndex={-1} />
               )}
               <CardContent className="space-y-1 py-4">
                 <p className="flex items-center gap-2 text-sm font-medium">
