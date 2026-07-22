@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
+import { cn } from "@/lib/utils";
 import { markAdminNotificationsRead, markNotificationsRead } from "./actions";
 import { NotificationDeleteButton } from "./notification-delete-button";
 import type { AdminNotification, Notification } from "@/types/database";
@@ -108,7 +109,17 @@ export default async function NotificationsPage() {
       ) : (
         <div className="space-y-3">
           {feed.map((notification) => (
-            <Card key={notification.id} className={notification.isUnread ? "border-primary/40" : ""}>
+            <Card
+              key={notification.id}
+              className={cn("relative", notification.isUnread && "border-primary/40")}
+            >
+              {/* Makes the whole card clickable (matching the messages list),
+                  not just the small "Zobacz" link — sits behind the action
+                  row below via z-index so those controls stay independently
+                  clickable. */}
+              {notification.link && (
+                <Link href={notification.link} className="absolute inset-0 z-0" aria-hidden="true" tabIndex={-1} />
+              )}
               <CardContent className="space-y-1 py-4">
                 <p className="flex items-center gap-2 text-sm font-medium">
                   {notification.isUnread && (
@@ -121,7 +132,7 @@ export default async function NotificationsPage() {
                   <p className="text-xs text-muted-foreground">
                     {new Date(notification.createdAt).toLocaleString("pl-PL")}
                   </p>
-                  <div className="flex items-center gap-3">
+                  <div className="relative z-10 flex items-center gap-3">
                     {notification.link && (
                       <Link href={notification.link} className="text-xs text-primary hover:underline">
                         Zobacz →
