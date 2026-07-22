@@ -142,7 +142,7 @@ export default async function AdminUserDetailPage({
         ) : (
           <div className="space-y-2">
             {cars.map((car) => (
-              <Link key={car.id} href={`/auta/${car.id}`}>
+              <Link key={car.id} href={`/dashboard/cars/${car.id}/edit`}>
                 <Card className="transition-shadow hover:shadow-md">
                   <CardContent className="flex items-center justify-between gap-4 py-4">
                     <div>
