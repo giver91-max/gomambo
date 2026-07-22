@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
+import { getVerificationStatus } from "@/lib/verification-gate";
 
 export type InquiryState = { error: string | null; success?: boolean };
 
@@ -23,6 +24,11 @@ export async function sendInquiry(
 
   if (!user) {
     return { error: "Zaloguj się, aby wysłać zapytanie o wynajem." };
+  }
+
+  const { status: verificationStatus } = await getVerificationStatus(supabase, user.id);
+  if (verificationStatus !== "approved") {
+    return { error: "Musisz najpierw zweryfikować tożsamość i prawo jazdy, zanim wyślesz zapytanie." };
   }
 
   const carId = String(formData.get("carId") ?? "");

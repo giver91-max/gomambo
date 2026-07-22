@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { getRecaptchaToken } from "@/lib/recaptcha-client";
 import type { SelectedRange } from "./availability-view";
 import { calculateBookingPrice } from "@/lib/pricing";
+import { VerificationRequiredNotice } from "@/components/verification-required-notice";
+import type { IdentityVerificationStatus } from "@/types/database";
 
 const initialState: InquiryState = { error: null };
 
@@ -16,12 +18,16 @@ export function InquiryForm({
   carId,
   selectedRange,
   isLoggedIn,
+  verificationStatus,
+  verificationRejectionReason,
   pricePerDay,
   pricePerMonth,
 }: {
   carId: string;
   selectedRange?: SelectedRange;
   isLoggedIn: boolean;
+  verificationStatus: IdentityVerificationStatus | null;
+  verificationRejectionReason: string | null;
   pricePerDay: number;
   pricePerMonth: number | null;
 }) {
@@ -36,6 +42,15 @@ export function InquiryForm({
           Zaloguj się
         </Button>
       </div>
+    );
+  }
+
+  if (verificationStatus !== "approved") {
+    return (
+      <VerificationRequiredNotice
+        status={verificationStatus}
+        rejectionReason={verificationRejectionReason}
+      />
     );
   }
 

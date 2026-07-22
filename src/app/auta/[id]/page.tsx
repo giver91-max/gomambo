@@ -12,6 +12,8 @@ import { BackButton } from "@/components/back-button";
 import { FavoriteButton } from "@/components/favorite-button";
 import { MaintenanceNotice } from "@/components/maintenance-notice";
 import { firstNameOnly } from "@/lib/utils";
+import { getVerificationStatus } from "@/lib/verification-gate";
+import type { IdentityVerificationStatus } from "@/types/database";
 import {
   CANCELLATION_POLICY_DESCRIPTIONS,
   CANCELLATION_POLICY_LABELS,
@@ -127,6 +129,8 @@ export default async function CarDetailPage({
   }
 
   let isFavorited = false;
+  let verificationStatus: IdentityVerificationStatus | null = null;
+  let verificationRejectionReason: string | null = null;
   if (user) {
     const { data: favorite } = await supabase
       .from("favorites")
@@ -135,6 +139,10 @@ export default async function CarDetailPage({
       .eq("car_id", car.id)
       .maybeSingle();
     isFavorited = !!favorite;
+
+    const verification = await getVerificationStatus(supabase, user.id);
+    verificationStatus = verification.status;
+    verificationRejectionReason = verification.rejectionReason;
   }
 
   // Reviews left ABOUT the owner (as a host) — not reviews the owner left
@@ -282,6 +290,8 @@ export default async function CarDetailPage({
             carId={car.id}
             availableDates={availableDates}
             isLoggedIn={!!user}
+            verificationStatus={verificationStatus}
+            verificationRejectionReason={verificationRejectionReason}
             pricePerDay={Number(car.price_per_day)}
             pricePerMonth={car.price_per_month ? Number(car.price_per_month) : null}
           />

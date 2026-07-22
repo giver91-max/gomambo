@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
+import { getVerificationStatus } from "@/lib/verification-gate";
 import type { Car } from "@/types/database";
 
 export type CarFormState = { error: string | null };
@@ -27,6 +28,11 @@ export async function createCarDraft(
 
   if (!user) {
     redirect("/login");
+  }
+
+  const { status: verificationStatus } = await getVerificationStatus(supabase, user.id);
+  if (verificationStatus !== "approved") {
+    return { error: "Musisz najpierw zweryfikować tożsamość i prawo jazdy, zanim dodasz auto." };
   }
 
   const brand = String(formData.get("brand") ?? "").trim();
