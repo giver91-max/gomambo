@@ -32,29 +32,39 @@ export async function compareFaces(selfieBytes: Buffer, documentFrontBytes: Buff
     return { result: "error", score: null };
   }
 
-  try {
-    const response = await client.send(
-      new CompareFacesCommand({
-        SourceImage: { Bytes: selfieBytes },
-        TargetImage: { Bytes: documentFrontBytes },
-        SimilarityThreshold: 0,
-      })
-    );
+  // One retry on transient failures (network blip, cold-start latency
+  // against Rekognition) before giving up — verified against real user
+  // photos that a working call reliably returns a confident match, so a
+  // bare "error" on the first try is far more likely to be transient than
+  // a genuine no-face/multi-face condition (which surfaces as "no_match",
+  // not an exception, and doesn't benefit from retrying).
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await client.send(
+        new CompareFacesCommand({
+          SourceImage: { Bytes: selfieBytes },
+          TargetImage: { Bytes: documentFrontBytes },
+          SimilarityThreshold: 0,
+        })
+      );
 
-    const matches = response.FaceMatches ?? [];
-    // Anything other than exactly one confident match is ambiguous (no
-    // face matched, or multiple candidate faces in the document photo) —
-    // treat as inconclusive rather than guessing.
-    if (matches.length !== 1 || typeof matches[0].Similarity !== "number") {
-      return { result: matches.length === 0 ? "no_match" : "error", score: null };
+      const matches = response.FaceMatches ?? [];
+      // Anything other than exactly one confident match is ambiguous (no
+      // face matched, or multiple candidate faces in the document photo) —
+      // treat as inconclusive rather than guessing.
+      if (matches.length !== 1 || typeof matches[0].Similarity !== "number") {
+        return { result: matches.length === 0 ? "no_match" : "error", score: null };
+      }
+
+      const score = matches[0].Similarity;
+      return { result: score >= FACE_MATCH_AUTO_APPROVE_THRESHOLD ? "match" : "no_match", score };
+    } catch (error) {
+      console.error(`compareFaces: Rekognition call failed (attempt ${attempt})`, error);
+      if (attempt === 2) return { result: "error", score: null };
     }
-
-    const score = matches[0].Similarity;
-    return { result: score >= FACE_MATCH_AUTO_APPROVE_THRESHOLD ? "match" : "no_match", score };
-  } catch (error) {
-    console.error("compareFaces: Rekognition call failed", error);
-    return { result: "error", score: null };
   }
+
+  return { result: "error", score: null };
 }
 
 export type FaceDetectionOutcome = { ok: boolean; reason?: "no_face" | "multiple_faces" };

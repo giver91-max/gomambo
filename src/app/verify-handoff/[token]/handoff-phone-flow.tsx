@@ -246,6 +246,7 @@ export function HandoffPhoneFlow({
         <h1 className="text-2xl font-bold">Krok 1 z 3: przód prawa jazdy</h1>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <DocumentPhotoCapture
+          key="front"
           label="Zrób zdjęcie przodu prawa jazdy"
           isSubmitting={isPending}
           onConfirm={(blob) => uploadDocumentPhoto("front", blob, "back")}
@@ -260,6 +261,7 @@ export function HandoffPhoneFlow({
         <h1 className="text-2xl font-bold">Krok 2 z 3: tył prawa jazdy</h1>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <DocumentPhotoCapture
+          key="back"
           label="Zrób zdjęcie tyłu prawa jazdy"
           isSubmitting={isPending}
           autoStart
