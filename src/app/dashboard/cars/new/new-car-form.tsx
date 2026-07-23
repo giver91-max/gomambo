@@ -31,7 +31,32 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 8;
 const MAX_INSURANCE_BYTES = 8 * 1024 * 1024;
 
-export function NewCarForm() {
+// Everything a duplicated car can safely start from — never includes
+// registration_number, insurance_document_path, photos, or status: every
+// physical car needs its own registration, its own policy, and its own
+// photos, and a duplicate always re-enters moderation from scratch.
+export type NewCarInitialValues = {
+  brand: string;
+  model: string;
+  year: number;
+  price_per_day: number;
+  city: string;
+  vehicle_type: VehicleType | null;
+  fuel_type: FuelType | null;
+  transmission: Transmission | null;
+  seats: number | null;
+  mileage_limit_km: number | null;
+  mileage_overage_fee_per_km: number | null;
+  price_per_month: number | null;
+  security_deposit_amount: number | null;
+  fuel_policy: FuelPolicy | null;
+  delivery_available: boolean;
+  delivery_info: string | null;
+  cancellation_policy: CancellationPolicy;
+  description: string | null;
+};
+
+export function NewCarForm({ initialValues }: { initialValues?: NewCarInitialValues }) {
   const [previews, setPreviews] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [stickers, setStickers] = useState<(StickerRect | null)[]>([]);
@@ -39,7 +64,7 @@ export function NewCarForm() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [deliveryAvailable, setDeliveryAvailable] = useState(false);
+  const [deliveryAvailable, setDeliveryAvailable] = useState(initialValues?.delivery_available ?? false);
 
   function handleInsuranceChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -189,11 +214,11 @@ export function NewCarForm() {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="brand">Marka</Label>
-          <Input id="brand" name="brand" required placeholder="Toyota" />
+          <Input id="brand" name="brand" required placeholder="Toyota" defaultValue={initialValues?.brand} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="model">Model</Label>
-          <Input id="model" name="model" required placeholder="Corolla" />
+          <Input id="model" name="model" required placeholder="Corolla" defaultValue={initialValues?.model} />
         </div>
       </div>
 
@@ -208,6 +233,7 @@ export function NewCarForm() {
             min={1990}
             max={new Date().getFullYear() + 1}
             placeholder="2020"
+            defaultValue={initialValues?.year}
           />
         </div>
         <div className="space-y-2">
@@ -220,13 +246,14 @@ export function NewCarForm() {
             min={1}
             required
             placeholder="150"
+            defaultValue={initialValues?.price_per_day}
           />
         </div>
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="city">Miasto</Label>
-        <Input id="city" name="city" required placeholder="Warszawa" />
+        <Input id="city" name="city" required placeholder="Warszawa" defaultValue={initialValues?.city} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -236,7 +263,7 @@ export function NewCarForm() {
             id="vehicle_type"
             name="vehicle_type"
             required
-            defaultValue=""
+            defaultValue={initialValues?.vehicle_type ?? ""}
             className="h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <option value="" disabled>
@@ -257,7 +284,7 @@ export function NewCarForm() {
             id="fuel_type"
             name="fuel_type"
             required
-            defaultValue=""
+            defaultValue={initialValues?.fuel_type ?? ""}
             className="h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <option value="" disabled>
@@ -279,7 +306,7 @@ export function NewCarForm() {
             id="transmission"
             name="transmission"
             required
-            defaultValue=""
+            defaultValue={initialValues?.transmission ?? ""}
             className="h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <option value="" disabled>
@@ -296,7 +323,16 @@ export function NewCarForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="seats">Liczba miejsc</Label>
-          <Input id="seats" name="seats" type="number" min={1} max={9} required placeholder="5" />
+          <Input
+            id="seats"
+            name="seats"
+            type="number"
+            min={1}
+            max={9}
+            required
+            placeholder="5"
+            defaultValue={initialValues?.seats ?? undefined}
+          />
         </div>
       </div>
 
@@ -309,6 +345,7 @@ export function NewCarForm() {
             type="number"
             min={1}
             placeholder="bez limitu"
+            defaultValue={initialValues?.mileage_limit_km ?? undefined}
           />
         </div>
         <div className="space-y-2">
@@ -320,6 +357,7 @@ export function NewCarForm() {
             step="0.01"
             min={0}
             placeholder="np. 1.50"
+            defaultValue={initialValues?.mileage_overage_fee_per_km ?? undefined}
           />
         </div>
       </div>
@@ -334,6 +372,7 @@ export function NewCarForm() {
             step="0.01"
             min={1}
             placeholder="np. 2400"
+            defaultValue={initialValues?.price_per_month ?? undefined}
           />
           <p className="text-xs text-muted-foreground">
             Zniżkowa cena dla wynajmu 28 dni i dłużej.
@@ -351,6 +390,7 @@ export function NewCarForm() {
             step="0.01"
             min={0}
             placeholder="np. 500"
+            defaultValue={initialValues?.security_deposit_amount ?? undefined}
           />
           <p className="text-xs text-muted-foreground">
             Blokowana na karcie najemcy przy płatności, zwalniana po zakończeniu wynajmu.
@@ -362,7 +402,7 @@ export function NewCarForm() {
             id="fuel_policy"
             name="fuel_policy"
             required
-            defaultValue="full_to_full"
+            defaultValue={initialValues?.fuel_policy ?? "full_to_full"}
             className="h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             {(Object.entries(FUEL_POLICY_LABELS) as [FuelPolicy, string][]).map(
@@ -392,6 +432,7 @@ export function NewCarForm() {
           <Input
             name="delivery_info"
             placeholder="np. Dowóz w promieniu 20 km za 50 zł, na lotnisko za 100 zł"
+            defaultValue={initialValues?.delivery_info ?? undefined}
           />
         )}
       </div>
@@ -401,7 +442,7 @@ export function NewCarForm() {
         <select
           id="cancellation_policy"
           name="cancellation_policy"
-          defaultValue="moderate"
+          defaultValue={initialValues?.cancellation_policy ?? "moderate"}
           className="h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           {(Object.entries(CANCELLATION_POLICY_LABELS) as [CancellationPolicy, string][]).map(
@@ -446,6 +487,7 @@ export function NewCarForm() {
           name="description"
           rows={4}
           placeholder="Dodatkowe informacje o aucie…"
+          defaultValue={initialValues?.description ?? undefined}
         />
       </div>
 

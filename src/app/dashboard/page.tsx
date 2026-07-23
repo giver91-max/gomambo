@@ -1,29 +1,12 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import type { CarStatus } from "@/types/database";
+import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
-import { PauseToggleButton } from "./cars/pause-toggle-button";
+import { FleetCarList } from "./fleet-car-list";
 import { eachDateInRange, toISODate, addDays } from "@/lib/calendar";
-import { summarizeAvailableRanges } from "@/lib/availability-summary";
 
 const AVAILABILITY_WINDOW_DAYS = 60;
-
-const statusLabel: Record<CarStatus, string> = {
-  pending: "Oczekuje na zatwierdzenie",
-  approved: "Zatwierdzone",
-  rejected: "Odrzucone",
-  paused: "Wstrzymane",
-};
-
-const statusVariant: Record<CarStatus, "secondary" | "default" | "destructive"> = {
-  pending: "secondary",
-  approved: "default",
-  rejected: "destructive",
-  paused: "secondary",
-};
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -94,9 +77,14 @@ export default async function DashboardPage() {
       <BackButton />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Moje auta</h1>
-        <Link href="/dashboard/cars/new" className={buttonVariants()}>
-          + Dodaj auto
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/kalendarz" className="text-sm text-primary hover:underline">
+            Kalendarz floty →
+          </Link>
+          <Link href="/dashboard/cars/new" className={buttonVariants()}>
+            + Dodaj auto
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -123,63 +111,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {cars.map((car) => (
-            <Card key={car.id}>
-              <CardHeader className="flex flex-row items-start justify-between space-y-0">
-                <CardTitle className="text-base">
-                  {car.brand} {car.model} ({car.year})
-                </CardTitle>
-                <Badge variant={statusVariant[car.status]}>
-                  {statusLabel[car.status]}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <p>{car.city}</p>
-                <p>{Number(car.price_per_day).toFixed(2)} zł / dzień</p>
-                {car.status === "rejected" && car.rejection_reason && (
-                  <p className="text-destructive">
-                    Powód odrzucenia: {car.rejection_reason}
-                  </p>
-                )}
-                {(car.status === "approved" || car.status === "paused") &&
-                  (() => {
-                    const dates = availabilityByCarId.get(car.id) ?? [];
-                    const { ranges, extraCount } = summarizeAvailableRanges(dates);
-                    return ranges.length > 0 ? (
-                      <p>
-                        Dostępne: {ranges.join(", ")}
-                        {extraCount > 0 ? ` +${extraCount} innych` : ""}
-                      </p>
-                    ) : (
-                      <p className="text-amber-600 dark:text-amber-500">
-                        Brak ustawionej dostępności w najbliższych {AVAILABILITY_WINDOW_DAYS} dniach
-                      </p>
-                    );
-                  })()}
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  <Link
-                    href={`/dashboard/cars/${car.id}/edit`}
-                    className="inline-block text-sm text-primary hover:underline"
-                  >
-                    Edytuj →
-                  </Link>
-                  <Link
-                    href={`/dashboard/cars/${car.id}/availability`}
-                    className="inline-block text-sm text-primary hover:underline"
-                  >
-                    {(availabilityByCarId.get(car.id)?.length ?? 0) > 0
-                      ? "Zarządzaj dostępnością →"
-                      : "Ustaw dostępność →"}
-                  </Link>
-                </div>
-                {(car.status === "approved" || car.status === "paused") && (
-                  <PauseToggleButton carId={car.id} status={car.status} />
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <FleetCarList cars={cars} availabilityByCarId={Object.fromEntries(availabilityByCarId)} />
       )}
     </div>
   );

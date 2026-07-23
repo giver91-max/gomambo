@@ -50,6 +50,89 @@ export async function POST(request: Request) {
         break;
       }
 
+      if (session.metadata?.kind === "extra_charge") {
+        const extraChargeId = session.metadata?.extraChargeId;
+        if (!extraChargeId) break;
+        const { data: extraCharge } = await admin
+          .from("booking_extra_charges")
+          .update({ status: "paid" })
+          .eq("id", extraChargeId)
+          .eq("stripe_checkout_session_id", session.id)
+          .select("amount_pln, reason, bookings(owner_id, cars(brand, model))")
+          .single();
+        if (extraCharge) {
+          const booking = extraCharge.bookings as unknown as {
+            owner_id: string;
+            cars: { brand: string; model: string } | null;
+          } | null;
+          if (booking) {
+            const carLabel = booking.cars ? `${booking.cars.brand} ${booking.cars.model}` : "auto";
+            await notifyUser({
+              userId: booking.owner_id,
+              type: "extra_charge_requested",
+              subject: `Dopłata opłacona: ${carLabel}`,
+              body: `Najemca opłacił dodatkową opłatę ${Number(extraCharge.amount_pln).toFixed(2)} zł za ${carLabel} (${extraCharge.reason}).`,
+              emailHtml: `
+                <p>Najemca opłacił zgłoszoną przez Ciebie dodatkową opłatę na GoMambo.</p>
+                <ul>
+                  <li><strong>Auto:</strong> ${carLabel}</li>
+                  <li><strong>Kwota:</strong> ${Number(extraCharge.amount_pln).toFixed(2)} zł</li>
+                  <li><strong>Powód:</strong> ${extraCharge.reason}</li>
+                </ul>
+                <p><a href="${SITE_URL}/dashboard/bookings">Zobacz rezerwacje →</a></p>
+              `,
+            });
+          }
+        }
+        break;
+      }
+
+      if (session.metadata?.kind === "trip_extension") {
+        const extensionId = session.metadata?.extensionId;
+        if (!extensionId) break;
+        const { data: extension } = await admin
+          .from("booking_extensions")
+          .select("new_end_date, additional_amount_pln, status")
+          .eq("id", extensionId)
+          .single();
+        if (!extension || extension.status === "paid") break;
+
+        await admin.from("booking_extensions").update({ status: "paid" }).eq("id", extensionId);
+
+        const { data: updatedBooking } = await admin
+          .from("bookings")
+          .select("total_price, owner_id, renter_id, cars(brand, model)")
+          .eq("id", bookingId)
+          .single();
+        if (updatedBooking) {
+          const newTotal = Number(updatedBooking.total_price ?? 0) + Number(extension.additional_amount_pln);
+          await admin
+            .from("bookings")
+            .update({ end_date: extension.new_end_date, total_price: newTotal })
+            .eq("id", bookingId);
+
+          const car = updatedBooking.cars as unknown as { brand: string; model: string } | null;
+          const carLabel = car ? `${car.brand} ${car.model}` : "auto";
+          for (const userId of [updatedBooking.owner_id, updatedBooking.renter_id]) {
+            await notifyUser({
+              userId,
+              type: "booking_extended",
+              subject: `Wynajem przedłużony: ${carLabel}`,
+              body: `Wynajem ${carLabel} został przedłużony do ${extension.new_end_date}.`,
+              emailHtml: `
+                <p>Wynajem na GoMambo został przedłużony.</p>
+                <ul>
+                  <li><strong>Auto:</strong> ${carLabel}</li>
+                  <li><strong>Nowa data zakończenia:</strong> ${extension.new_end_date}</li>
+                </ul>
+                <p><a href="${SITE_URL}/dashboard/bookings">Zobacz rezerwacje →</a></p>
+              `,
+            });
+          }
+        }
+        break;
+      }
+
       const { data: booking } = await admin
         .from("bookings")
         .update({ payment_status: "paid" })

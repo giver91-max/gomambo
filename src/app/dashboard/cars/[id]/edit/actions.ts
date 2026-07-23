@@ -241,10 +241,10 @@ export async function removeCarPhoto(
   return { error: null };
 }
 
-export async function deleteCar(
-  carId: string,
-  redirectTo: string = "/dashboard"
-): Promise<{ error: string | null }> {
+// Shared by the single-car delete button (which redirects afterward) and
+// bulkDeleteCars (which doesn't — redirecting mid-loop makes no sense for
+// a multi-car operation, so that caller just aggregates results instead).
+async function deleteCarCore(carId: string): Promise<{ error: string | null }> {
   const { supabase, user, car } = await requireOwnedCar(carId);
   if (!user) redirect("/login");
   if (!car) {
@@ -264,11 +264,76 @@ export async function deleteCar(
   if (error) {
     return { error: error.message };
   }
+  return { error: null };
+}
+
+export async function deleteCar(
+  carId: string,
+  redirectTo: string = "/dashboard"
+): Promise<{ error: string | null }> {
+  const result = await deleteCarCore(carId);
+  if (result.error) {
+    return result;
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/admin");
   revalidatePath("/admin/cars");
   redirect(redirectTo);
+}
+
+export async function bulkDeleteCars(
+  carIds: string[]
+): Promise<{ succeeded: string[]; failed: { carId: string; error: string }[] }> {
+  const succeeded: string[] = [];
+  const failed: { carId: string; error: string }[] = [];
+
+  for (const carId of carIds) {
+    const result = await deleteCarCore(carId);
+    if (result.error) {
+      failed.push({ carId, error: result.error });
+    } else {
+      succeeded.push(carId);
+    }
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/kalendarz");
+  return { succeeded, failed };
+}
+
+export async function bulkSetCarStatus(
+  carIds: string[],
+  nextStatus: "approved" | "paused"
+): Promise<{ succeeded: string[]; failed: { carId: string; error: string }[] }> {
+  const succeeded: string[] = [];
+  const failed: { carId: string; error: string }[] = [];
+
+  for (const carId of carIds) {
+    const { supabase, car } = await requireOwnedCar(carId);
+    if (!car) {
+      failed.push({ carId, error: "Nie masz dostępu do tego ogłoszenia." });
+      continue;
+    }
+    if (car.status !== "approved" && car.status !== "paused") {
+      failed.push({ carId, error: "Można wstrzymać lub wznowić tylko zatwierdzone ogłoszenie." });
+      continue;
+    }
+    if (car.status === nextStatus) {
+      succeeded.push(carId);
+      continue;
+    }
+    const { error } = await supabase.from("cars").update({ status: nextStatus }).eq("id", carId);
+    if (error) {
+      failed.push({ carId, error: error.message });
+    } else {
+      succeeded.push(carId);
+    }
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/kalendarz");
+  return { succeeded, failed };
 }
 
 // Toggling between "approved" and "paused" is the one status change the

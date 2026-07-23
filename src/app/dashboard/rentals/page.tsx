@@ -7,6 +7,8 @@ import { cancelBooking } from "../bookings/actions";
 import { ReviewForm } from "../bookings/review-form";
 import { TripPhotosManager, type TripPhotoItem } from "@/components/trip-photos-manager";
 import { PayBookingButton } from "@/components/pay-booking-button";
+import { PayExtraChargeButton } from "@/components/pay-extra-charge-button";
+import { ExtendBookingForm } from "@/components/extend-booking-form";
 import type { BookingStatus, CancellationPolicy } from "@/types/database";
 import { CANCELLATION_POLICY_LABELS } from "@/lib/car-options";
 import { freeCancellationDeadline, isWithinFreeCancellationWindow } from "@/lib/cancellation";
@@ -60,6 +62,23 @@ export default async function RentalHistoryPage() {
   const activeBookingIds = (bookings ?? [])
     .filter((b) => b.status === "accepted" || b.status === "completed")
     .map((b) => b.id);
+
+  const extraChargesByBooking = new Map<
+    string,
+    { id: string; amount_pln: number; reason: string }[]
+  >();
+  if (activeBookingIds.length > 0) {
+    const { data: extraCharges } = await supabase
+      .from("booking_extra_charges")
+      .select("id, booking_id, amount_pln, reason")
+      .in("booking_id", activeBookingIds)
+      .eq("status", "requested");
+    for (const charge of extraCharges ?? []) {
+      const list = extraChargesByBooking.get(charge.booking_id) ?? [];
+      list.push({ id: charge.id, amount_pln: Number(charge.amount_pln), reason: charge.reason });
+      extraChargesByBooking.set(charge.booking_id, list);
+    }
+  }
   const tripPhotosByBooking = new Map<string, { pickup: TripPhotoItem[]; return: TripPhotoItem[] }>();
   if (activeBookingIds.length > 0) {
     const { data: photos } = await supabase
@@ -120,6 +139,17 @@ export default async function RentalHistoryPage() {
                       booking.deposit_amount &&
                       ` · kaucja ${Number(booking.deposit_amount).toFixed(2)} zł zablokowana`}
                   </p>
+                )}
+                {(extraChargesByBooking.get(booking.id) ?? []).map((charge) => (
+                  <PayExtraChargeButton
+                    key={charge.id}
+                    extraChargeId={charge.id}
+                    amountPln={charge.amount_pln}
+                    reason={charge.reason}
+                  />
+                ))}
+                {booking.status === "accepted" && booking.payment_status === "paid" && (
+                  <ExtendBookingForm bookingId={booking.id} currentEndDate={booking.end_date} />
                 )}
                 {(booking.status === "requested" || booking.status === "accepted") &&
                   (() => {

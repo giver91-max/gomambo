@@ -94,6 +94,7 @@ export async function createRentalCheckoutSession(params: {
   renterEmail: string;
   successUrl: string;
   cancelUrl: string;
+  metadata?: Record<string, string>;
 }): Promise<StripeResult<{ sessionId: string; url: string }>> {
   if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
   try {
@@ -114,7 +115,7 @@ export async function createRentalCheckoutSession(params: {
         application_fee_amount: Math.round(params.platformFeePln * 100),
         transfer_data: { destination: params.ownerStripeAccountId },
       },
-      metadata: { bookingId: params.bookingId },
+      metadata: { bookingId: params.bookingId, ...params.metadata },
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
     });
@@ -122,6 +123,51 @@ export async function createRentalCheckoutSession(params: {
     return { ok: true, data: { sessionId: session.id, url: session.url } };
   } catch (error) {
     return failure("createRentalCheckoutSession", error);
+  }
+}
+
+// A damage claim above the held deposit, not a rental fee — 100% goes to
+// the owner (no application_fee_amount) since GoMambo takes no cut of
+// compensation for someone else's damage. Deliberately a fresh Checkout
+// Session the renter must pay themselves, not an off-session charge: no
+// Stripe Customer/PaymentMethod is ever saved (see createBookingCheckoutSession),
+// and BLIK — Poland's dominant payment method — can't support one anyway.
+export async function createExtraChargeCheckoutSession(params: {
+  bookingId: string;
+  extraChargeId: string;
+  ownerStripeAccountId: string;
+  amountPln: number;
+  description: string;
+  renterEmail: string;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<StripeResult<{ sessionId: string; url: string }>> {
+  if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: params.renterEmail,
+      line_items: [
+        {
+          price_data: {
+            currency: "pln",
+            unit_amount: Math.round(params.amountPln * 100),
+            product_data: { name: params.description },
+          },
+          quantity: 1,
+        },
+      ],
+      payment_intent_data: {
+        transfer_data: { destination: params.ownerStripeAccountId },
+      },
+      metadata: { bookingId: params.bookingId, kind: "extra_charge", extraChargeId: params.extraChargeId },
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+    });
+    if (!session.url) return { ok: false, error: "Stripe nie zwrócił adresu płatności." };
+    return { ok: true, data: { sessionId: session.id, url: session.url } };
+  } catch (error) {
+    return failure("createExtraChargeCheckoutSession", error);
   }
 }
 

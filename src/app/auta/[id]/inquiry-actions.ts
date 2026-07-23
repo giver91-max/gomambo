@@ -1,10 +1,10 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
 import { getVerificationStatus } from "@/lib/verification-gate";
+import { hasOverlappingBooking } from "@/lib/booking-availability";
+import { notifyUser } from "@/lib/notify-user";
 
 export type InquiryState = { error: string | null; success?: boolean };
 
@@ -58,12 +58,22 @@ export async function sendInquiry(
     return { error: "Nie możesz wysłać zapytania o własne auto." };
   }
 
+  // Instant book: every renter reaching this point is already identity
+  // verified (checked above), so there's no more-cautious subset left to
+  // gate on — every request auto-confirms. That removes the owner's only
+  // review step before now, so the one thing standing between two renters
+  // landing on the same car is this overlap check.
+  if (await hasOverlappingBooking(supabase, carId, rangeStart, rangeEnd)) {
+    return { error: "Te daty są już zarezerwowane. Wybierz inny termin." };
+  }
+
   const { error: bookingError } = await supabase.from("bookings").insert({
     car_id: carId,
     owner_id: car.owner_id,
     renter_id: user.id,
     start_date: rangeStart,
     end_date: rangeEnd,
+    status: "accepted",
   });
   if (bookingError) {
     return { error: bookingError.message };
@@ -90,34 +100,23 @@ export async function sendInquiry(
     return { error: messageError.message };
   }
 
-  const { data: ownerProfile } = await supabase
-    .from("profiles")
-    .select("notify_email")
-    .eq("id", car.owner_id)
-    .single();
-
-  if (ownerProfile?.notify_email !== false) {
-    const admin = createAdminClient();
-    const { data: ownerAuth } = await admin.auth.admin.getUserById(car.owner_id);
-    const ownerEmail = ownerAuth?.user?.email;
-
-    if (ownerEmail) {
-      await sendNotificationEmail({
-        to: ownerEmail,
-        subject: `Zapytanie o wynajem: ${car.brand} ${car.model}`,
-        html: `
-          <p>Masz nowe zapytanie o wynajem na GoMambo.</p>
-          <ul>
-            <li><strong>Auto:</strong> ${car.brand} ${car.model} (${car.year}), ${car.city}</li>
-            <li><strong>Termin:</strong> ${rangeStart} – ${rangeEnd}</li>
-          </ul>
-          <p><strong>Wiadomość:</strong></p>
-          <p>${message.replace(/\n/g, "<br>")}</p>
-          <p>Odpowiedz w skrzynce wiadomości na GoMambo.</p>
-        `,
-      });
-    }
-  }
+  await notifyUser({
+    userId: car.owner_id,
+    type: "booking_confirmed",
+    subject: `Nowa rezerwacja: ${car.brand} ${car.model}`,
+    body: `${car.brand} ${car.model} (${car.year}), ${car.city} — rezerwacja na ${rangeStart} – ${rangeEnd} została automatycznie potwierdzona.`,
+    emailHtml: `
+      <p>Masz nową, automatycznie potwierdzoną rezerwację na GoMambo.</p>
+      <ul>
+        <li><strong>Auto:</strong> ${car.brand} ${car.model} (${car.year}), ${car.city}</li>
+        <li><strong>Termin:</strong> ${rangeStart} – ${rangeEnd}</li>
+      </ul>
+      <p><strong>Wiadomość od najemcy:</strong></p>
+      <p>${message.replace(/\n/g, "<br>")}</p>
+      <p>Odpowiedz w skrzynce wiadomości na GoMambo.</p>
+    `,
+    link: "/dashboard/bookings",
+  });
 
   return { error: null, success: true };
 }

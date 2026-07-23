@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updateBookingStatus } from "./actions";
+import { updateBookingStatus, ownerCancelBooking } from "./actions";
 import { Button } from "@/components/ui/button";
 import type { BookingStatus } from "@/types/database";
 
@@ -19,6 +19,15 @@ export function BookingActions({
     setError(null);
     startTransition(async () => {
       const result = await updateBookingStatus(bookingId, nextStatus);
+      if (result.error) setError(result.error);
+    });
+  }
+
+  function handleOwnerCancel() {
+    if (!confirm("Odwołać tę rezerwację? Najemca dostanie pełny zwrot pieniędzy.")) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await ownerCancelBooking(bookingId);
       if (result.error) setError(result.error);
     });
   }
@@ -42,14 +51,25 @@ export function BookingActions({
           </>
         )}
         {status === "accepted" && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={isPending}
-            onClick={() => handleUpdate("completed")}
-          >
-            Zakończ wypożyczenie
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => handleUpdate("completed")}
+            >
+              Zakończ wypożyczenie
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive"
+              disabled={isPending}
+              onClick={handleOwnerCancel}
+            >
+              Odwołaj rezerwację
+            </Button>
+          </>
         )}
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}

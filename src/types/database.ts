@@ -110,6 +110,30 @@ export type Booking = {
   updated_at: string;
 };
 
+export type BookingExtraChargeStatus = "requested" | "paid" | "cancelled";
+
+export type BookingExtraCharge = {
+  id: string;
+  booking_id: string;
+  amount_pln: number;
+  reason: string;
+  status: BookingExtraChargeStatus;
+  stripe_checkout_session_id: string | null;
+  created_at: string;
+};
+
+export type BookingExtensionStatus = "pending" | "paid" | "expired";
+
+export type BookingExtension = {
+  id: string;
+  booking_id: string;
+  new_end_date: string;
+  additional_amount_pln: number;
+  status: BookingExtensionStatus;
+  stripe_checkout_session_id: string | null;
+  created_at: string;
+};
+
 export type TripPhotoStage = "pickup" | "return";
 
 export type TripPhoto = {
@@ -258,7 +282,10 @@ export type NotificationType =
   | "identity_verification_approved"
   | "identity_verification_rejected"
   | "booking_paid"
-  | "deposit_captured";
+  | "deposit_captured"
+  | "booking_confirmed"
+  | "extra_charge_requested"
+  | "booking_extended";
 
 export type Notification = {
   id: string;
@@ -359,6 +386,38 @@ export type Database = {
             columns: ["car_id"];
             isOneToOne: false;
             referencedRelation: "cars";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      booking_extra_charges: {
+        Row: BookingExtraCharge;
+        Insert: Partial<BookingExtraCharge> & { booking_id: string; amount_pln: number; reason: string };
+        Update: Partial<BookingExtraCharge>;
+        Relationships: [
+          {
+            foreignKeyName: "booking_extra_charges_booking_id_fkey";
+            columns: ["booking_id"];
+            isOneToOne: false;
+            referencedRelation: "bookings";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      booking_extensions: {
+        Row: BookingExtension;
+        Insert: Partial<BookingExtension> & {
+          booking_id: string;
+          new_end_date: string;
+          additional_amount_pln: number;
+        };
+        Update: Partial<BookingExtension>;
+        Relationships: [
+          {
+            foreignKeyName: "booking_extensions_booking_id_fkey";
+            columns: ["booking_id"];
+            isOneToOne: false;
+            referencedRelation: "bookings";
             referencedColumns: ["id"];
           },
         ];

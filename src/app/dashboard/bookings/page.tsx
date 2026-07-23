@@ -7,6 +7,7 @@ import { BookingActions } from "./booking-actions";
 import { ReviewForm } from "./review-form";
 import { TripPhotosManager, type TripPhotoItem } from "@/components/trip-photos-manager";
 import { CaptureDepositButton } from "@/components/capture-deposit-button";
+import { RequestExtraChargeButton } from "@/components/request-extra-charge-button";
 import type { BookingStatus, DepositStatus, FuelLevel, PaymentStatus } from "@/types/database";
 
 const statusLabel: Record<BookingStatus, string> = {
@@ -100,12 +101,12 @@ export default async function OwnerBookingsPage() {
   return (
     <div className="space-y-6">
       <BackButton />
-      <h1 className="text-2xl font-bold">Zapytania o wynajem</h1>
+      <h1 className="text-2xl font-bold">Rezerwacje</h1>
 
       {bookings.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
-            Nie masz jeszcze żadnych zapytań o wynajem.
+            Nie masz jeszcze żadnych rezerwacji.
           </CardContent>
         </Card>
       ) : (
@@ -133,14 +134,19 @@ export default async function OwnerBookingsPage() {
                     {booking.deposit_status === "captured" && " · kaucja zatrzymana"}
                   </p>
                 )}
-                {booking.status === "accepted" &&
-                  booking.deposit_status === "held" &&
-                  booking.deposit_amount && (
-                    <CaptureDepositButton
-                      bookingId={booking.id}
-                      depositAmount={Number(booking.deposit_amount)}
-                    />
-                  )}
+                {(booking.status === "accepted" || booking.status === "completed") && (
+                  <div className="flex flex-wrap gap-2">
+                    {booking.status === "accepted" &&
+                      booking.deposit_status === "held" &&
+                      booking.deposit_amount && (
+                        <CaptureDepositButton
+                          bookingId={booking.id}
+                          depositAmount={Number(booking.deposit_amount)}
+                        />
+                      )}
+                    <RequestExtraChargeButton bookingId={booking.id} />
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-4">
                   {(booking.status === "requested" || booking.status === "accepted") && (
                     <BookingActions bookingId={booking.id} status={booking.status} />

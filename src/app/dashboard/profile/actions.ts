@@ -115,10 +115,18 @@ export async function updateNotificationPrefs(
 ): Promise<{ error: string | null }> {
   const { supabase, user } = await requireUser();
   const notifyEmail = formData.get("notify_email") === "on";
+  const notifySms = formData.get("notify_sms") === "on";
+
+  if (notifySms) {
+    const { data: profile } = await supabase.from("profiles").select("phone").eq("id", user.id).single();
+    if (!profile?.phone) {
+      return { error: "Podaj numer telefonu powyżej, zanim włączysz powiadomienia SMS." };
+    }
+  }
 
   const { error } = await supabase
     .from("profiles")
-    .update({ notify_email: notifyEmail })
+    .update({ notify_email: notifyEmail, notify_sms: notifySms })
     .eq("id", user.id);
 
   if (error) {

@@ -86,7 +86,7 @@ export function UserMenu({
         </Link>
         <Link href="/dashboard/bookings" className={itemClassName}>
           <InboxIcon className="size-4 text-muted-foreground" />
-          Zapytania
+          Rezerwacje
         </Link>
         <Link href="/dashboard/rentals" className={itemClassName}>
           <CalendarCheckIcon className="size-4 text-muted-foreground" />

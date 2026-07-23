@@ -15,12 +15,15 @@ export function isWithinFreeCancellationWindow(
   return new Date() < freeCancellationDeadline(policy, startDate);
 }
 
-// Shared by the renter's own cancelBooking and the admin override
-// (adminCancelBooking) — same money-handling rules either way: release any
-// held deposit unconditionally (nothing left to hold once the trip is off),
-// refund the rental fee only if still inside the free-cancellation window.
-// No separate "force refund regardless of window" tool exists yet for
-// disputes — a known, deliberate gap, not solved here.
+// Shared by the renter's own cancelBooking, the admin override
+// (adminCancelBooking), and now the owner's ownerCancelBooking — same
+// money-handling rules either way: release any held deposit
+// unconditionally (nothing left to hold once the trip is off), refund the
+// rental fee only if still inside the free-cancellation window — UNLESS
+// forceFullRefund is set. That window exists to protect the OWNER from a
+// late renter-initiated cancellation; it has no meaning when the OWNER is
+// the one cancelling an already-confirmed booking, so that path always
+// passes forceFullRefund: true instead.
 export async function cancelBookingWithRefund(
   supabase: SupabaseClient<Database>,
   bookingId: string,
@@ -31,7 +34,8 @@ export async function cancelBookingWithRefund(
     deposit_status: DepositStatus;
     stripe_deposit_payment_intent_id: string | null;
     cancellation_policy: CancellationPolicy;
-  }
+  },
+  options: { forceFullRefund?: boolean } = {}
 ): Promise<void> {
   await supabase.from("bookings").update({ status: "cancelled" }).eq("id", bookingId);
 
@@ -43,7 +47,10 @@ export async function cancelBookingWithRefund(
   }
 
   if (booking.payment_status === "paid" && booking.stripe_checkout_session_id) {
-    if (isWithinFreeCancellationWindow(booking.cancellation_policy, booking.start_date)) {
+    if (
+      options.forceFullRefund ||
+      isWithinFreeCancellationWindow(booking.cancellation_policy, booking.start_date)
+    ) {
       const refundResult = await refundCheckoutSession(booking.stripe_checkout_session_id);
       if (refundResult.ok) {
         await supabase.from("bookings").update({ payment_status: "refunded" }).eq("id", bookingId);

@@ -129,7 +129,11 @@ export default async function ProfilePage() {
           <CardTitle>Powiadomienia</CardTitle>
         </CardHeader>
         <CardContent>
-          <NotificationForm initialEmailEnabled={profile.notify_email} />
+          <NotificationForm
+            initialEmailEnabled={profile.notify_email}
+            initialSmsEnabled={profile.notify_sms}
+            hasPhone={Boolean(profile.phone)}
+          />
         </CardContent>
       </Card>
 

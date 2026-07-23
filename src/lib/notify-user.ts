@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
+import { sendNotificationSms } from "@/lib/sms";
 import type { NotificationType } from "@/types/database";
 
 // Shared by every place that needs to tell a user something happened to
@@ -28,7 +29,11 @@ export async function notifyUser({
 
   await admin.from("notifications").insert({ user_id: userId, type, body, link });
 
-  const { data: profile } = await admin.from("profiles").select("notify_email").eq("id", userId).single();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("notify_email, notify_sms, phone")
+    .eq("id", userId)
+    .single();
 
   if (profile?.notify_email !== false) {
     const { data: authUser } = await admin.auth.admin.getUserById(userId);
@@ -36,5 +41,9 @@ export async function notifyUser({
     if (email) {
       await sendNotificationEmail({ to: email, subject, html: emailHtml });
     }
+  }
+
+  if (profile?.notify_sms && profile.phone) {
+    await sendNotificationSms(profile.phone, body);
   }
 }

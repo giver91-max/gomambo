@@ -24,6 +24,9 @@ const personalTypeLabel: Record<Notification["type"], string> = {
   identity_verification_rejected: "Weryfikacja tożsamości odrzucona",
   booking_paid: "Płatność za wynajem otrzymana",
   deposit_captured: "Kaucja zatrzymana",
+  booking_confirmed: "Nowa rezerwacja potwierdzona",
+  extra_charge_requested: "Prośba o dodatkową opłatę",
+  booking_extended: "Wynajem przedłużony",
 };
 
 type FeedItem = {
