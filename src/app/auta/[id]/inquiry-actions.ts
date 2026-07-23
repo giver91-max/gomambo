@@ -63,7 +63,7 @@ export async function sendInquiry(
   // gate on — every request auto-confirms. That removes the owner's only
   // review step before now, so the one thing standing between two renters
   // landing on the same car is this overlap check.
-  if (await hasOverlappingBooking(supabase, carId, rangeStart, rangeEnd)) {
+  if (await hasOverlappingBooking(carId, rangeStart, rangeEnd)) {
     return { error: "Te daty są już zarezerwowane. Wybierz inny termin." };
   }
 

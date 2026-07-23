@@ -1,5 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // Instant book (sendInquiry) and trip extensions both auto-confirm without
 // an owner review step in between, so this is the one guard standing
@@ -8,14 +7,21 @@ import type { Database } from "@/types/database";
 // `car_availability` — that table is just the owner's allow-list of which
 // days are open for a NEW request, it says nothing about which days are
 // already spoken for by an existing booking.
+//
+// Deliberately always uses the admin client rather than accepting the
+// caller's session-scoped one: this check must see every booking on the
+// car regardless of who made it, but RLS on `bookings` restricts SELECT
+// to rows where the querying user is a participant — with the session
+// client, a renter's query would silently see 0 rows for another renter's
+// booking on the same car and let a real double-booking straight through.
 export async function hasOverlappingBooking(
-  supabase: SupabaseClient<Database>,
   carId: string,
   startDate: string,
   endDate: string,
   excludeBookingId?: string
 ): Promise<boolean> {
-  let query = supabase
+  const admin = createAdminClient();
+  let query = admin
     .from("bookings")
     .select("id", { count: "exact", head: true })
     .eq("car_id", carId)

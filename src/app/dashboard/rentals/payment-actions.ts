@@ -161,7 +161,7 @@ export async function requestBookingExtension(
   }
 
   const deltaStart = toISODate(addDays(new Date(`${booking.end_date}T00:00:00`), 1));
-  if (await hasOverlappingBooking(supabase, booking.car_id, deltaStart, newEndDate, bookingId)) {
+  if (await hasOverlappingBooking(booking.car_id, deltaStart, newEndDate, bookingId)) {
     return { error: "Te dodatkowe dni są już zarezerwowane przez kogoś innego." };
   }
 
