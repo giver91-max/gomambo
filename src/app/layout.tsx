@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { cookies } from "next/headers";
-import Script from "next/script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
@@ -80,7 +79,6 @@ export default async function RootLayout({
   const cookieStore = await cookies();
   const stored = cookieStore.get(CONSENT_COOKIE)?.value;
   const initialConsent: Consent = stored === "accepted" || stored === "rejected" ? stored : null;
-  const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
 
   return (
     <html lang="pl" className={cn("font-sans", geistSans.variable, geistMono.variable)}>
@@ -88,12 +86,6 @@ export default async function RootLayout({
         {children}
         <Toaster />
         <AnalyticsConsent initialConsent={initialConsent} />
-        {recaptchaSiteKey && (
-          <Script
-            src={`https://www.google.com/recaptcha/api.js?render=${recaptchaSiteKey}`}
-            strategy="afterInteractive"
-          />
-        )}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
