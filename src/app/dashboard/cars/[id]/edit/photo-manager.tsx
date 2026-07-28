@@ -5,6 +5,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { addCarPhoto, removeCarPhoto } from "./actions";
 import { Input } from "@/components/ui/input";
+import { resizeImageForUpload } from "@/lib/image-resize";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 8;
@@ -62,12 +63,13 @@ export function PhotoManager({
 
       for (const file of files) {
         setStatus(`Wgrywanie zdjęcia „${file.name}"…`);
-        const ext = file.name.split(".").pop() || "jpg";
+        const image = await resizeImageForUpload(file);
+        const ext = image.name.split(".").pop() || "jpg";
         const path = `${user.id}/${carId}/${crypto.randomUUID()}.${ext}`;
 
         const { error: uploadError } = await supabase.storage
           .from("car-images")
-          .upload(path, file, { contentType: file.type });
+          .upload(path, image, { contentType: image.type });
 
         if (uploadError) {
           setError(`Błąd wgrywania zdjęcia: ${uploadError.message}`);

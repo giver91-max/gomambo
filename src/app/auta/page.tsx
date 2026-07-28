@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
+import { unstable_cache } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -27,6 +29,21 @@ export const metadata: Metadata = {
   alternates: { canonical: "/auta" },
 };
 
+const PAGE_SIZE = 24;
+
+// Every page view otherwise re-scanned the city column of every approved
+// car just to build this dropdown. Revalidating every 5 minutes means a new
+// city shows up quickly without querying it on each request.
+const getApprovedCities = unstable_cache(
+  async () => {
+    const supabase = createPublicClient();
+    const { data } = await supabase.from("cars").select("city").eq("status", "approved");
+    return Array.from(new Set((data ?? []).map((c) => c.city))).sort();
+  },
+  ["auta-approved-cities"],
+  { revalidate: 300 }
+);
+
 export default async function AutaPage({
   searchParams,
 }: {
@@ -40,53 +57,48 @@ export default async function AutaPage({
     transmission?: string;
     minSeats?: string;
     sortBy?: string;
+    page?: string;
   };
 }) {
   const sortBy = searchParams.sortBy ?? "newest";
+  const page = Math.max(1, Math.trunc(Number(searchParams.page)) || 1);
+  const buildPageHref = (targetPage: number) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(searchParams)) {
+      if (key !== "page" && value) params.set(key, value);
+    }
+    if (targetPage > 1) params.set("page", String(targetPage));
+    const qs = params.toString();
+    return qs ? `/auta?${qs}` : "/auta";
+  };
   const supabase = await createClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let isAdmin = false;
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-    isAdmin = profile?.role === "admin";
+  // Independent of each other — only the maintenance check's *effect*
+  // depends on isAdmin, not the fetch itself — so run them in parallel
+  // instead of two round trips back to back.
+  const [{ data: profile }, { data: siteSettings }, cities] = await Promise.all([
+    user ? supabase.from("profiles").select("role").eq("id", user.id).single() : Promise.resolve({ data: null }),
+    supabase.from("site_settings").select("maintenance_mode").eq("id", 1).single(),
+    getApprovedCities(),
+  ]);
+  const isAdmin = profile?.role === "admin";
+
+  if (!isAdmin && siteSettings?.maintenance_mode) {
+    return (
+      <div className="space-y-8">
+        <BackButton />
+        <MaintenanceNotice />
+      </div>
+    );
   }
-
-  if (!isAdmin) {
-    const { data: siteSettings } = await supabase
-      .from("site_settings")
-      .select("maintenance_mode")
-      .eq("id", 1)
-      .single();
-    if (siteSettings?.maintenance_mode) {
-      return (
-        <div className="space-y-8">
-          <BackButton />
-          <MaintenanceNotice />
-        </div>
-      );
-    }
-  }
-
-  const { data: allApproved } = await supabase
-    .from("cars")
-    .select("city")
-    .eq("status", "approved");
-
-  const cities = Array.from(
-    new Set((allApproved ?? []).map((c) => c.city))
-  ).sort();
 
   let query = supabase
     .from("cars")
-    .select("*, car_images(storage_path, position)")
+    .select("*, car_images(storage_path, position)", { count: "exact" })
     .eq("status", "approved")
     .order("position", { referencedTable: "car_images", ascending: true });
 
@@ -149,7 +161,16 @@ export default async function AutaPage({
     );
   }
 
-  const { data: cars } = await query;
+  const rangeFrom = (page - 1) * PAGE_SIZE;
+  // "rating" isn't a DB column (it's aggregated from reviews below), so it
+  // can only be sorted within the page already fetched by range() here —
+  // page 1 is the newest 24 sorted by rating, not the platform's top-rated
+  // cars overall. A true global sort needs a materialized rating column.
+  const { data: cars, count: totalCount } = await query.range(
+    rangeFrom,
+    rangeFrom + PAGE_SIZE - 1
+  );
+  const totalPages = Math.max(1, Math.ceil((totalCount ?? 0) / PAGE_SIZE));
 
   let favoriteCarIds = new Set<string>();
   if (user) {
@@ -442,6 +463,32 @@ export default async function AutaPage({
         </div>
       )}
       </ResultsViewToggle>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4">
+          {page > 1 ? (
+            <Button variant="outline" render={<Link href={buildPageHref(page - 1)} />}>
+              Poprzednia
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
+              Poprzednia
+            </Button>
+          )}
+          <span className="text-sm text-muted-foreground">
+            Strona {page} z {totalPages}
+          </span>
+          {page < totalPages ? (
+            <Button variant="outline" render={<Link href={buildPageHref(page + 1)} />}>
+              Następna
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
+              Następna
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import { computeResizedDimensions, IMAGE_JPEG_QUALITY } from "@/lib/image-resize";
+
 // Center-based (not top-left) so rotating around the badge's own center
 // doesn't require also shifting its position.
 export type StickerRect = { cx: number; cy: number; w: number; h: number; rotation: number };
@@ -47,16 +49,19 @@ export async function flattenImageWithSticker(
   file: File,
   rect: StickerRect | null
 ): Promise<File> {
-  if (!rect) return file;
-
   const bitmap = await createImageBitmap(file);
+  const { width, height } = computeResizedDimensions(bitmap.width, bitmap.height);
   const canvas = document.createElement("canvas");
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) return file;
 
-  ctx.drawImage(bitmap, 0, 0);
+  ctx.drawImage(bitmap, 0, 0, width, height);
+
+  if (!rect) {
+    return canvasToFile(canvas, file);
+  }
 
   const cx = rect.cx * canvas.width;
   const cy = rect.cy * canvas.height;
@@ -92,11 +97,15 @@ export async function flattenImageWithSticker(
 
   ctx.restore();
 
-  const blob: Blob | null = await new Promise((resolve) =>
-    canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92)
-  );
-  if (!blob) return file;
+  return canvasToFile(canvas, file);
+}
 
-  const newName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+async function canvasToFile(canvas: HTMLCanvasElement, originalFile: File): Promise<File> {
+  const blob: Blob | null = await new Promise((resolve) =>
+    canvas.toBlob((b) => resolve(b), "image/jpeg", IMAGE_JPEG_QUALITY)
+  );
+  if (!blob) return originalFile;
+
+  const newName = originalFile.name.replace(/\.[^.]+$/, "") + ".jpg";
   return new File([blob], newName, { type: "image/jpeg" });
 }
