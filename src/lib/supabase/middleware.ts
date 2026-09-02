@@ -48,16 +48,27 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isAdmin) {
+  if (isAdmin || isDashboard) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, full_name, phone")
       .eq("id", user.id)
       .single();
 
-    if (profile?.role !== "admin") {
+    if (isAdmin && profile?.role !== "admin") {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+
+    // Required for account verification (name + phone) — enforced right
+    // after login since the email-code sign-in path skips the registration
+    // form that used to collect full_name, and phone was never collected
+    // there at all.
+    if (isDashboard && (!profile?.full_name || !profile?.phone)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/uzupelnij-dane";
+      url.searchParams.set("redirect", path);
       return NextResponse.redirect(url);
     }
   }

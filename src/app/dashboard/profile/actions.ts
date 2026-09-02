@@ -31,10 +31,15 @@ export async function updateProfile(
   if (!fullName) {
     return { error: "Podaj imię i nazwisko." };
   }
+  // Not SMS-verified yet (no SMS gateway) — just a plausible-length check
+  // until phone confirmation exists.
+  if (phone.replace(/\D/g, "").length < 9) {
+    return { error: "Podaj poprawny numer telefonu." };
+  }
 
   const { error } = await supabase
     .from("profiles")
-    .update({ full_name: fullName, phone: phone || null })
+    .update({ full_name: fullName, phone })
     .eq("id", user.id);
 
   if (error) {

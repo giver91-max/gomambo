@@ -122,6 +122,55 @@ export async function signIn(
   redirect(redirectTo);
 }
 
+export async function requestLoginCode(
+  _prevState: AuthActionState,
+  formData: FormData
+): Promise<AuthActionState> {
+  const email = String(formData.get("email") ?? "").trim();
+  const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
+
+  if (!email) {
+    return { error: "Podaj adres e-mail." };
+  }
+  if (!(await verifyRecaptcha(recaptchaToken, "login_otp_request"))) {
+    return { error: "Weryfikacja antyspamowa nie powiodła się. Spróbuj ponownie." };
+  }
+
+  const supabase = await createClient();
+  // shouldCreateUser: false — a code should only ever log an existing user
+  // in. Letting it silently create accounts would skip the terms-acceptance
+  // checkbox and full_name collection that signUp() normally requires.
+  await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+
+  // Always report success regardless of whether the e-mail has an account —
+  // otherwise this form could be used to enumerate accounts (same reasoning
+  // as requestPasswordReset above).
+  return { error: null, success: true };
+}
+
+export async function verifyLoginCode(
+  _prevState: AuthActionState,
+  formData: FormData
+): Promise<AuthActionState> {
+  const email = String(formData.get("email") ?? "").trim();
+  const code = String(formData.get("code") ?? "").trim();
+  const redirectTo = String(formData.get("redirectTo") ?? "/dashboard");
+
+  if (!email || !code) {
+    return { error: "Podaj email i kod." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
+
+  if (error) {
+    return { error: "Nieprawidłowy lub wygasły kod. Spróbuj ponownie." };
+  }
+
+  revalidatePath("/", "layout");
+  redirect(redirectTo);
+}
+
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();

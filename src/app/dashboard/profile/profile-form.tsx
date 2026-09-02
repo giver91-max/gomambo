@@ -25,6 +25,7 @@ export function ProfileForm({ profile }: { profile: Profile }) {
           id="phone"
           name="phone"
           type="tel"
+          required
           placeholder="np. 500 100 200"
           defaultValue={profile.phone ?? ""}
         />
