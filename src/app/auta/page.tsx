@@ -23,9 +23,9 @@ import {
 import type { FuelType, Transmission, VehicleType } from "@/types/database";
 
 export const metadata: Metadata = {
-  title: "Wypożyczalnia aut — wynajmij auto od sąsiada",
+  title: "Wypożyczalnia aut — P2P i lokalne wypożyczalnie w jednym miejscu",
   description:
-    "GoMambo to internetowa wypożyczalnia samochodów peer-to-peer. Przeglądaj sprawdzone auta dostępne do wynajęcia od prywatnych właścicieli w Twojej okolicy. Filtruj po mieście i cenie.",
+    "GoMambo to platforma P2P, która łączy też oferty lokalnych wypożyczalni w jednym miejscu. Przeglądaj sprawdzone auta dostępne do wynajęcia w Twojej okolicy. Filtruj po mieście i cenie.",
   alternates: { canonical: "/auta" },
 };
 

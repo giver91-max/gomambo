@@ -15,9 +15,9 @@ import {
 import type { CancellationPolicy } from "@/types/database";
 
 export const metadata: Metadata = {
-  title: "Jak wynająć auto bez wypożyczalni — zasady i FAQ",
+  title: "Jak wynająć auto na GoMambo — zasady i FAQ",
   description:
-    "Alternatywa dla tradycyjnej wypożyczalni aut: wynajmij auto od prywatnego właściciela na GoMambo. Wymagania, odpowiedzialność najemcy, ubezpieczenie i polityka anulowania.",
+    "Wynajmij auto od lokalnej wypożyczalni albo prywatnego właściciela na GoMambo — wszystkie oferty w jednym miejscu. Wymagania, odpowiedzialność najemcy, ubezpieczenie i polityka anulowania.",
   alternates: { canonical: "/wynajmij-auto" },
 };
 
@@ -161,12 +161,13 @@ export default async function RentACarInfoPage() {
           </p>
           <h1 className="text-3xl font-bold sm:text-4xl">
             Wynajmij auto
-            <br className="hidden sm:block" /> od sąsiada, bez wypożyczalni
+            <br className="hidden sm:block" /> od lokalnej wypożyczalni lub właściciela
           </h1>
           <p className="max-w-xl text-muted-foreground sm:text-lg">
-            Sprawdzone auta od prywatnych właścicieli w Twojej okolicy. Zanim
-            zarezerwujesz, zobacz poniżej jak to działa, czego potrzebujesz i za co
-            odpowiadasz w trakcie wynajmu.
+            Sprawdzone auta od lokalnych wypożyczalni i prywatnych właścicieli w
+            Twojej okolicy — wszystkie w jednym miejscu. Zanim zarezerwujesz, zobacz
+            poniżej jak to działa, czego potrzebujesz i za co odpowiadasz w trakcie
+            wynajmu.
           </p>
           <Link href="/auta" className={buttonVariants({ size: "lg" })}>
             Przeglądaj dostępne auta →

@@ -164,14 +164,14 @@ export function LandingPage({
           <Image
             src="/hero.png"
             width={1672}
-            height={941}
+            height={543}
             sizes="(max-width: 600px) 90vw, 520px"
             style={{ width: 520, maxWidth: "90vw", height: "auto", display: "block" }}
-            alt="GoMambo — wypożyczalnia samochodów peer-to-peer"
+            alt="GoMambo — wypożyczalnia samochodów P2P"
             priority
           />
         </div>
-        <p className={styles.heroEyebrow}>Polska · Platforma P2P · Uruchomienie IV kwartał 2026</p>
+        <p className={styles.heroEyebrow}>Polska · Platforma P2P · Wypożyczalnie w jednym miejscu</p>
         <h1 className={styles.heroHeadline}>
           Twoje auto
           <br />
@@ -189,9 +189,10 @@ export function LandingPage({
         </div>
 
         <p className={styles.heroSub}>
-          GoMambo to internetowa wypożyczalnia i pierwsza polska platforma
-          peer-to-peer wynajmu aut. Łączymy właścicieli samochodów z osobami,
-          które potrzebują auta — bez pośredników i bez zbędnych formalności.
+          GoMambo to internetowa wypożyczalnia samochodów — działamy jako
+          platforma P2P i łączymy oferty lokalnych wypożyczalni w jednym
+          miejscu, żebyś mógł porównać i wybrać dokładnie to auto, które Ci
+          pasuje.
         </p>
 
         <div className={styles.splitCta}>
@@ -206,7 +207,7 @@ export function LandingPage({
             <div className={styles.ctaRole}>Dla najemców</div>
             <div className={styles.ctaTitle}>Wynajmij auto →</div>
             <div className={styles.ctaDesc}>
-              Sprawdzone auta od prywatnych właścicieli. Rezerwacja w 2 minuty.
+              Sprawdzone auta od lokalnych wypożyczalni i właścicieli. Rezerwacja w 2 minuty.
             </div>
           </Link>
         </div>
@@ -259,7 +260,7 @@ export function LandingPage({
 
       <section id="how">
         <p className={styles.sectionLabel}>Jak to działa</p>
-        <h2 className={styles.sectionTitle}>Proste jak wypożyczenie od sąsiada</h2>
+        <h2 className={styles.sectionTitle}>Wynajem w 4 krokach</h2>
         <div className={styles.steps}>
           <div className={styles.step}>
             <div className={styles.stepNum}>Krok 01</div>
@@ -323,13 +324,13 @@ export function LandingPage({
 
       <section id="waitlist">
         <div className={styles.waitlistInner}>
-          <p className={styles.sectionLabel}>Wczesny dostęp</p>
+          <p className={styles.sectionLabel}>Dołącz teraz</p>
           <h2 className={styles.sectionTitle} style={{ marginBottom: 12 }}>
-            Bądź pierwszy w Polsce
+            Platforma już działa
           </h2>
           <p style={{ color: "var(--gray)", fontSize: 15, lineHeight: 1.6, marginBottom: 36 }}>
-            Platforma ruszy w IV kwartale 2026. Osoby z listy oczekujących jako
-            pierwsze dostaną dostęp — i specjalne warunki na start.
+            Przeglądaj dostępne auta od lokalnych wypożyczalni i właścicieli albo
+            dodaj swoje auto w kilka minut — bez czekania.
           </p>
 
           <div className={styles.waitlistTabs}>
@@ -372,8 +373,8 @@ export function LandingPage({
                   {ownerSubmitting ? "Zapisywanie..." : "Zapisz mnie na listę →"}
                 </button>
                 <p className={styles.formNote}>
-                  Bez spamu. Odezwiemy się gdy platforma będzie gotowa. Pierwsi
-                  właściciele otrzymają obniżoną prowizję przez 6 miesięcy.
+                  Bez spamu. Odezwiemy się, gdy będziesz gotowy dodać auto. Zapisani
+                  na liście otrzymają obniżoną prowizję przez 6 miesięcy.
                 </p>
               </>
             )}
@@ -381,10 +382,10 @@ export function LandingPage({
               className={styles.successMsg}
               style={{ display: ownerSubmitted ? "block" : "none" }}
             >
-              <strong>Jesteś na liście! 🎉</strong>
+              <strong>Zapisano! 🎉</strong>
               <br />
-              Odezwiemy się do Ciebie jako jednego z pierwszych. Właściciele z
-              listy oczekujących otrzymają{" "}
+              Odezwiemy się, gdy będziesz gotowy dodać auto. Zapisani na liście
+              otrzymają{" "}
               <strong>obniżoną prowizję przez pierwsze 6 miesięcy</strong>.
             </div>
           </div>
