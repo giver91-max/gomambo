@@ -37,8 +37,10 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 40px;
-  background: rgba(10, 10, 10, 0.85);
-  backdrop-filter: blur(12px);
+  /* Opaque instead of translucent + blur: backdrop-filter on a fixed bar
+     repaints every scroll frame, and bright hero content showing through
+     a translucent bar reads as flicker while scrolling. */
+  background: #0a0a0a;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 .logo {
