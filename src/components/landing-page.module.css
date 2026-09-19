@@ -798,13 +798,17 @@ a.navCtaName {
     max-width: 100%;
   }
   .step:first-child,
-  .step:last-child {
+  .step:last-child,
+  .useCase:first-child,
+  .useCase:last-child {
     border-radius: 0;
   }
-  .step:first-child {
+  .step:first-child,
+  .useCase:first-child {
     border-radius: 12px 12px 0 0;
   }
-  .step:last-child {
+  .step:last-child,
+  .useCase:last-child {
     border-radius: 0 0 12px 12px;
   }
   .page :global(#trust) {

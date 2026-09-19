@@ -319,6 +319,15 @@ export function LandingPage({
               może zarabiać zamiast Ciebie.
             </p>
           </div>
+          <div className={styles.useCase}>
+            <div className={styles.useCaseIcon}>🏢</div>
+            <h3>Masz flotę lub wypożyczalnię</h3>
+            <p>
+              Wystaw wszystkie auta w jednym miejscu i docieraj do klientów, którzy
+              porównują oferty na GoMambo. Ceny ustalasz Ty, dodanie floty jest
+              darmowe.
+            </p>
+          </div>
         </div>
       </section>
 
