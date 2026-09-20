@@ -1,13 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CANCELLATION_POLICY_FREE_HOURS } from "@/lib/car-options";
-import { refundCheckoutSession, releaseDeposit } from "@/lib/stripe";
-import { createAdminClient, tryCreateAdminClient } from "@/lib/supabase/admin";
-import { sendNotificationEmail } from "@/lib/email";
-import { SITE_URL } from "@/lib/site";
+import {
+  expireCheckoutSession,
+  getCheckoutSessionPayment,
+  refundCheckoutSession,
+  releaseDeposit,
+} from "@/lib/stripe";
+import { reportMoneyFailure } from "@/lib/money-alerts";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import type { CancellationPolicy, Database, DepositStatus, PaymentStatus } from "@/types/database";
-
-// Same inbox the new-registration alert uses (src/app/(auth)/actions.ts).
-const ADMIN_ALERT_EMAIL = "user@gomambo.pl";
 
 export function freeCancellationDeadline(policy: CancellationPolicy, startDate: string): Date {
   const freeHours = CANCELLATION_POLICY_FREE_HOURS[policy];
@@ -66,13 +67,13 @@ export function renterRefundSentence(outcome: CancellationRefundOutcome): string
 
 // Shared by the renter's own cancelBooking, the admin override
 // (adminCancelBooking), and the owner's ownerCancelBooking — same
-// money-handling rules either way: release any held deposit
-// unconditionally (nothing left to hold once the trip is off), refund the
-// rental fee only if still inside the free-cancellation window — UNLESS
-// forceFullRefund is set. That window exists to protect the OWNER from a
-// late renter-initiated cancellation; it has no meaning when the OWNER is
-// the one cancelling an already-confirmed booking, so that path always
-// passes forceFullRefund: true instead.
+// money-handling rules either way: neutralise any half-finished extension
+// checkout, release any held deposit (nothing left to hold once the trip is
+// off), refund the rental fee only if still inside the free-cancellation
+// window — UNLESS forceFullRefund is set. That window exists to protect the
+// OWNER from a late renter-initiated cancellation; it has no meaning when
+// the OWNER is the one cancelling an already-confirmed booking, so that
+// path always passes forceFullRefund: true instead.
 export async function cancelBookingWithRefund(
   supabase: SupabaseClient<Database>,
   bookingId: string,
@@ -87,6 +88,11 @@ export async function cancelBookingWithRefund(
   options: { forceFullRefund?: boolean } = {}
 ): Promise<CancellationResult> {
   await supabase.from("bookings").update({ status: "cancelled" }).eq("id", bookingId);
+
+  // Before anything else, and regardless of whether the base fee is
+  // refundable: an extension checkout left open in another tab stays payable
+  // for ~24h, and the webhook would happily extend a cancelled booking.
+  await neutralisePendingExtensions(bookingId);
 
   let deposit: DepositReleaseOutcome = "not_applicable";
   if (booking.deposit_status === "held" && booking.stripe_deposit_payment_intent_id) {
@@ -146,16 +152,103 @@ export async function cancelBookingWithRefund(
   return { refund: "refunded", deposit };
 }
 
-// A paid trip extension is a SECOND Stripe charge with its own Checkout
-// Session on booking_extensions; bookings.total_price already includes it,
-// so refunding only the base session returns less than the renter paid.
-// Service-role client on purpose: booking_extensions has no UPDATE policy,
-// so a session-scoped write would match zero rows and report no error.
+// An extension whose Checkout Session was created but never completed. If it
+// was in fact paid (webhook not landed yet, or never will now), the money
+// goes back; otherwise the session is expired so a stale tab can't complete
+// it later. Marked 'expired' either way, which is also what stops the
+// webhook from applying it — it only acts on 'pending' rows.
+async function neutralisePendingExtensions(bookingId: string): Promise<void> {
+  const admin = tryCreateAdminClient();
+  if (!admin) return;
+
+  const { data: pending, error } = await admin
+    .from("booking_extensions")
+    .select("id, stripe_checkout_session_id")
+    .eq("booking_id", bookingId)
+    .eq("status", "pending")
+    .not("stripe_checkout_session_id", "is", null);
+  if (error || !pending || pending.length === 0) return;
+
+  for (const extension of pending) {
+    const sessionId = extension.stripe_checkout_session_id;
+    if (!sessionId) continue;
+
+    const state = await getCheckoutSessionPayment(sessionId);
+    // "complete" is not the same as paid — a BLIK session is complete while
+    // still settling, and refunding it would only produce a false alarm.
+    const alreadyPaid =
+      state.ok &&
+      (state.data.paymentStatus === "paid" || state.data.paymentIntentStatus === "succeeded");
+
+    if (alreadyPaid) {
+      const refund = await refundCheckoutSession(sessionId);
+      await admin
+        .from("booking_extensions")
+        .update({
+          status: "expired",
+          ...(refund.ok ? { refunded_at: new Date().toISOString() } : {}),
+        })
+        .eq("id", extension.id);
+      if (!refund.ok) {
+        await reportMoneyFailure(
+          "refund_failed",
+          `Przedłużenie ${extension.id} rezerwacji ${bookingId} zostało opłacone tuż przed anulowaniem, a automatyczny zwrot się nie powiódł (${refund.error}). Zwróć płatność ${sessionId} ręcznie w Stripe.`
+        );
+      }
+      continue;
+    }
+
+    const expired = await expireCheckoutSession(sessionId);
+    if (expired.ok) {
+      await admin.from("booking_extensions").update({ status: "expired" }).eq("id", extension.id);
+      continue;
+    }
+
+    // Stripe only refuses to expire a session that stopped being open — so
+    // it was most likely just paid.
+    const recheck = await getCheckoutSessionPayment(sessionId);
+    if (
+      recheck.ok &&
+      (recheck.data.paymentStatus === "paid" || recheck.data.paymentIntentStatus === "succeeded")
+    ) {
+      const refund = await refundCheckoutSession(sessionId);
+      await admin
+        .from("booking_extensions")
+        .update({
+          status: "expired",
+          ...(refund.ok ? { refunded_at: new Date().toISOString() } : {}),
+        })
+        .eq("id", extension.id);
+      if (!refund.ok) {
+        await reportMoneyFailure(
+          "refund_failed",
+          `Przedłużenie ${extension.id} rezerwacji ${bookingId} zostało opłacone tuż przed anulowaniem, a automatyczny zwrot się nie powiódł (${refund.error}). Zwróć płatność ${sessionId} ręcznie w Stripe.`
+        );
+      }
+      continue;
+    }
+
+    // We don't know whether the session is still alive. Leave it 'pending'
+    // ON PURPOSE: the booking is already 'cancelled', so if a payment does
+    // arrive the webhook refunds it. Marking it 'expired' here would be a
+    // lie that silences that safety net.
+    await reportMoneyFailure(
+      "refund_failed",
+      `Nie udało się wygasić sesji ${sessionId} przedłużenia ${extension.id} (rezerwacja ${bookingId}): ${expired.error}. Sesja może być nadal opłacalna — sprawdź ją w Stripe.`
+    );
+  }
+}
+
 type ExtensionRefundResult =
   | { status: "ok"; error?: undefined }
   | { status: "unverified"; error: string }
   | { status: "partial"; error: string };
 
+// A paid trip extension is a SECOND Stripe charge with its own Checkout
+// Session on booking_extensions; bookings.total_price already includes it,
+// so refunding only the base session returns less than the renter paid.
+// Service-role client on purpose: booking_extensions has no UPDATE policy,
+// so a session-scoped write would match zero rows and report no error.
 async function refundPaidExtensions(bookingId: string): Promise<ExtensionRefundResult> {
   // Non-throwing: the base refund has already gone through by this point, so
   // a missing service-role key must degrade to "unverified", not blow up the
@@ -221,38 +314,4 @@ async function refundPaidExtensions(bookingId: string): Promise<ExtensionRefundR
     };
   }
   return { status: "ok" };
-}
-
-type MoneyFailureType = "refund_failed" | "deposit_release_failed";
-
-// Two channels on purpose. The in-app notification is what an admin sees
-// day to day, but it is one INSERT behind a type CHECK constraint — if that
-// rejects (e.g. the code ships before migration 0033), money that never
-// moved would otherwise leave no trace but a console line nobody reads.
-async function reportMoneyFailure(type: MoneyFailureType, body: string): Promise<void> {
-  console.error(`[${type}]`, body);
-
-  try {
-    const admin = createAdminClient();
-    const { error: insertError } = await admin
-      .from("admin_notifications")
-      .insert({ type, body, link: "/admin/bookings" });
-    if (insertError) {
-      console.error(`[${type}] admin notification insert failed`, {
-        code: insertError.code,
-        message: insertError.message,
-      });
-    }
-  } catch (notifyError) {
-    console.error(`[${type}] admin notification threw`, notifyError);
-  }
-
-  await sendNotificationEmail({
-    to: ADMIN_ALERT_EMAIL,
-    subject:
-      type === "refund_failed"
-        ? "GoMambo: zwrot płatności nie powiódł się"
-        : "GoMambo: zwolnienie kaucji nie powiodło się",
-    html: `<p>${body}</p><p><a href="${SITE_URL}/admin/bookings">Panel rezerwacji →</a></p>`,
-  });
 }

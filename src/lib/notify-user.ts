@@ -34,7 +34,20 @@ export async function notifyUser({
     return;
   }
 
-  await admin.from("notifications").insert({ user_id: userId, type, body, link });
+  // supabase-js resolves DB errors into { error } rather than throwing, so
+  // without this a rejected insert (e.g. a type the CHECK doesn't know yet)
+  // would vanish silently. The email below still goes out either way.
+  const { error: insertError } = await admin
+    .from("notifications")
+    .insert({ user_id: userId, type, body, link });
+  if (insertError) {
+    console.error("[notify-user] notification insert failed", {
+      userId,
+      type,
+      code: insertError.code,
+      message: insertError.message,
+    });
+  }
 
   const { data: profile } = await admin
     .from("profiles")

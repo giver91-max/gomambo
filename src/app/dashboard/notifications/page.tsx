@@ -30,6 +30,7 @@ const personalTypeLabel: Record<Notification["type"], string> = {
   booking_confirmed: "Nowa rezerwacja potwierdzona",
   extra_charge_requested: "Prośba o dodatkową opłatę",
   booking_extended: "Wynajem przedłużony",
+  payment_failed: "Płatność nie powiodła się",
 };
 
 type FeedItem = {

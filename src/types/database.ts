@@ -305,7 +305,8 @@ export type NotificationType =
   | "deposit_captured"
   | "booking_confirmed"
   | "extra_charge_requested"
-  | "booking_extended";
+  | "booking_extended"
+  | "payment_failed";
 
 export type Notification = {
   id: string;

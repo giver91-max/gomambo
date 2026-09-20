@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calculateBookingPrice } from "@/lib/pricing";
@@ -11,9 +12,95 @@ import {
   createDepositCheckoutSession,
   createExtraChargeCheckoutSession,
   createRentalCheckoutSession,
+  expireCheckoutSession,
+  getCheckoutSessionPayment,
+  refundCheckoutSession,
 } from "@/lib/stripe";
 import { getOwnerCommissionRate } from "@/lib/commission";
+import { reportMoneyFailure } from "@/lib/money-alerts";
+import { notifyUser } from "@/lib/notify-user";
 import { SITE_URL } from "@/lib/site";
+
+type PreviousSessionState =
+  | { kind: "clear" }
+  | {
+      kind: "paid";
+      sessionId: string;
+      amountTotalPln: number | null;
+      applicationFeePln: number | null;
+    }
+  | { kind: "blocked"; error: string };
+
+function sessionWasPaid(data: {
+  paymentStatus: string | null;
+  paymentIntentStatus: string | null;
+}): boolean {
+  return data.paymentStatus === "paid" || data.paymentIntentStatus === "succeeded";
+}
+
+/**
+ * A Checkout Session stays payable for ~24h, so before replacing one we have
+ * to know what became of it. Fails CLOSED on purpose: when Stripe can't tell
+ * us, we refuse to create a second session rather than leave two of them
+ * payable — that is precisely how a renter ends up charged twice.
+ */
+async function settlePreviousSession(sessionId: string | null): Promise<PreviousSessionState> {
+  if (!sessionId) return { kind: "clear" };
+
+  const previous = await getCheckoutSessionPayment(sessionId);
+  if (!previous.ok) {
+    // Stripe no longer knows this session (e.g. a test/live key swap): it can
+    // never be paid, so there is nothing left to guard against.
+    if (previous.code === "resource_missing") return { kind: "clear" };
+    return {
+      kind: "blocked",
+      error: "Nie udało się zweryfikować poprzedniej płatności. Spróbuj ponownie za chwilę.",
+    };
+  }
+
+  if (sessionWasPaid(previous.data)) {
+    return {
+      kind: "paid",
+      sessionId,
+      amountTotalPln: previous.data.amountTotalPln,
+      applicationFeePln: previous.data.applicationFeePln,
+    };
+  }
+
+  if (previous.data.status === "open") {
+    const expired = await expireCheckoutSession(sessionId);
+    if (expired.ok) return { kind: "clear" };
+    // Stripe only refuses to expire a session that stopped being open — most
+    // likely it was paid in the moment between these two calls.
+    const recheck = await getCheckoutSessionPayment(sessionId);
+    if (recheck.ok && sessionWasPaid(recheck.data)) {
+      return {
+        kind: "paid",
+        sessionId,
+        amountTotalPln: recheck.data.amountTotalPln,
+        applicationFeePln: recheck.data.applicationFeePln,
+      };
+    }
+    return {
+      kind: "blocked",
+      error: "Nie udało się zamknąć poprzedniej płatności. Spróbuj ponownie za chwilę.",
+    };
+  }
+
+  if (previous.data.status === "complete") {
+    // Complete but unpaid = an async method (BLIK) either still settling or
+    // already failed. Only the first is worth making the renter wait for;
+    // after a failure the session is dead and a new one is the way forward.
+    if (
+      previous.data.paymentIntentStatus === "processing" ||
+      previous.data.paymentIntentStatus === "requires_action"
+    ) {
+      return { kind: "blocked", error: "Płatność jest przetwarzana. Odśwież stronę za chwilę." };
+    }
+  }
+
+  return { kind: "clear" };
+}
 
 export async function createBookingCheckoutSession(
   bookingId: string
@@ -28,6 +115,7 @@ export async function createBookingCheckoutSession(
     .from("bookings")
     .select(
       `id, owner_id, renter_id, status, payment_status, start_date, end_date,
+       stripe_checkout_session_id,
        cars(brand, model, price_per_day, price_per_month, security_deposit_amount,
             owner:profiles!cars_owner_id_fkey(stripe_connect_account_id, stripe_connect_onboarded))`
     )
@@ -57,6 +145,50 @@ export async function createBookingCheckoutSession(
     return {
       error: "Właściciel nie ukończył konfiguracji wypłat. Spróbuj ponownie później.",
     };
+  }
+
+  const admin = createAdminClient();
+
+  const previous = await settlePreviousSession(booking.stripe_checkout_session_id);
+  if (previous.kind === "blocked") {
+    return { error: previous.error };
+  }
+  if (previous.kind === "paid") {
+    // Stripe says this booking was already paid but the row still says
+    // otherwise — the webhook never arrived. Record it here instead of
+    // dead-ending the renter behind "already paid, refresh" forever.
+    const { data: healed } = await admin
+      .from("bookings")
+      .update({
+        payment_status: "paid",
+        stripe_checkout_session_id: previous.sessionId,
+        ...(previous.amountTotalPln !== null ? { total_price: previous.amountTotalPln } : {}),
+        ...(previous.applicationFeePln !== null
+          ? { platform_fee_amount: previous.applicationFeePln }
+          : {}),
+      })
+      .eq("id", bookingId)
+      .eq("payment_status", "unpaid")
+      .select("id")
+      .single();
+
+    // Only notify if this call is the one that flipped the row — a webhook
+    // landing concurrently must not produce a second owner notification.
+    if (healed) {
+      await notifyUser({
+        userId: booking.owner_id,
+        type: "booking_paid",
+        subject: "Płatność za wynajem otrzymana",
+        body: `Najemca opłacił wynajem ${car.brand} ${car.model}. Rezerwacja jest potwierdzona.`,
+        emailHtml: `
+          <p>Najemca opłacił rezerwację — ${car.brand} ${car.model}.</p>
+          <p><a href="${SITE_URL}/dashboard/bookings">Przejdź do rezerwacji →</a></p>
+        `,
+        link: "/dashboard/bookings",
+      });
+    }
+    revalidatePath("/dashboard/rentals");
+    redirect(`${SITE_URL}/dashboard/rentals?payment=success`);
   }
 
   const { total } = calculateBookingPrice(
@@ -107,11 +239,10 @@ export async function createBookingCheckoutSession(
     return { error: rentalResult.error };
   }
 
-  // Uses the admin client only for this one write: total_price/deposit
+  // Uses the admin client only for these writes: total_price/deposit
   // fields aren't user-editable anywhere, so there's no RLS reason to
-  // route it through the session client, and it keeps this action
+  // route them through the session client, and it keeps this action
   // consistent with the rest of the money-writing code paths.
-  const admin = createAdminClient();
   const { error: bookingUpdateError } = await admin
     .from("bookings")
     .update({
@@ -201,6 +332,55 @@ export async function requestBookingExtension(
   }
 
   const admin = createAdminClient();
+
+  // Same stale-session hazard as the initial payment: an earlier "Przedłuż"
+  // attempt left an open Checkout Session that is still payable. Expire it
+  // before creating another, so only one extension can ever be paid.
+  const { data: stale } = await admin
+    .from("booking_extensions")
+    .select("id, stripe_checkout_session_id")
+    .eq("booking_id", bookingId)
+    .eq("status", "pending")
+    .not("stripe_checkout_session_id", "is", null);
+  for (const row of stale ?? []) {
+    const state = await settlePreviousSession(row.stripe_checkout_session_id);
+    if (state.kind === "blocked") {
+      return { error: state.error };
+    }
+    if (state.kind === "paid") {
+      // Paid but never applied — the webhook was lost. Applying it now would
+      // be unsafe: days that were free when they paid may since have been
+      // booked by someone else. Give the money back instead, so the renter
+      // can simply extend again, rather than stranding them with a charge
+      // and no extension.
+      const refund = await refundCheckoutSession(state.sessionId);
+      await admin
+        .from("booking_extensions")
+        .update({
+          status: "expired",
+          ...(refund.ok ? { refunded_at: new Date().toISOString() } : {}),
+        })
+        .eq("id", row.id);
+      if (!refund.ok) {
+        await reportMoneyFailure(
+          "refund_failed",
+          `Przedłużenie ${row.id} (rezerwacja ${bookingId}) zostało opłacone sesją ${state.sessionId}, nigdy nie zostało zastosowane, a automatyczny zwrot się nie powiódł (${refund.error}). Zwróć tę płatność ręcznie w Stripe.`
+        );
+        return {
+          error:
+            "Poprzednia płatność za przedłużenie nie została zaksięgowana. Zgłosiliśmy to — odezwiemy się do Ciebie.",
+        };
+      }
+      return {
+        error:
+          "Poprzednia płatność za przedłużenie nie została zaksięgowana, więc ją zwróciliśmy. Spróbuj przedłużyć wynajem jeszcze raz.",
+      };
+    }
+    // Always 'expired': the webhook refuses to apply a non-pending row, and
+    // refunds anything that still gets paid on it.
+    await admin.from("booking_extensions").update({ status: "expired" }).eq("id", row.id);
+  }
+
   const { data: extension, error: extensionError } = await admin
     .from("booking_extensions")
     .insert({ booking_id: bookingId, new_end_date: newEndDate, additional_amount_pln: additionalAmount })
@@ -260,8 +440,8 @@ export async function payExtraCharge(extraChargeId: string): Promise<{ error: st
   const { data: extraCharge } = await supabase
     .from("booking_extra_charges")
     .select(
-      `id, booking_id, amount_pln, reason, status,
-       bookings(renter_id,
+      `id, booking_id, amount_pln, reason, status, stripe_checkout_session_id,
+       bookings(renter_id, owner_id,
          cars(brand, model, owner:profiles!cars_owner_id_fkey(stripe_connect_account_id, stripe_connect_onboarded)))`
     )
     .eq("id", extraChargeId)
@@ -269,6 +449,7 @@ export async function payExtraCharge(extraChargeId: string): Promise<{ error: st
 
   const booking = extraCharge?.bookings as unknown as {
     renter_id: string;
+    owner_id: string;
     cars: {
       brand: string;
       model: string;
@@ -286,6 +467,45 @@ export async function payExtraCharge(extraChargeId: string): Promise<{ error: st
     return { error: "Konfiguracja wypłat właściciela nie jest jeszcze ukończona." };
   }
 
+  // This action deliberately re-creates the session on every click, so the
+  // one it replaces has to be killed — otherwise both stay payable and the
+  // renter can be charged twice for the same damage claim.
+  const admin = createAdminClient();
+
+  const previousCharge = await settlePreviousSession(extraCharge.stripe_checkout_session_id);
+  if (previousCharge.kind === "blocked") {
+    return { error: previousCharge.error };
+  }
+  if (previousCharge.kind === "paid") {
+    // Paid but never recorded (lost webhook). Unlike an extension, nothing
+    // here depends on availability, so just record it — no reason to make
+    // the renter pay twice or the owner chase money they already have.
+    const { data: healedCharge } = await admin
+      .from("booking_extra_charges")
+      .update({ status: "paid", stripe_checkout_session_id: previousCharge.sessionId })
+      .eq("id", extraChargeId)
+      .eq("status", "requested")
+      .select("id")
+      .single();
+    if (healedCharge) {
+      await notifyUser({
+        userId: booking.owner_id,
+        type: "extra_charge_requested",
+        subject: `Dopłata opłacona: ${booking.cars.brand} ${booking.cars.model}`,
+        body: `Najemca opłacił dodatkową opłatę ${Number(extraCharge.amount_pln).toFixed(2)} zł.`,
+        emailHtml: `
+          <p>Najemca opłacił zgłoszoną przez Ciebie dodatkową opłatę na GoMambo.</p>
+          <p><strong>Kwota:</strong> ${Number(extraCharge.amount_pln).toFixed(2)} zł</p>
+          <p><a href="${SITE_URL}/dashboard/bookings">Zobacz rezerwacje →</a></p>
+        `,
+        link: "/dashboard/bookings",
+      });
+    }
+    return {
+      error: "Ta dopłata została już opłacona — właśnie ją zaksięgowaliśmy. Odśwież stronę.",
+    };
+  }
+
   const checkoutResult = await createExtraChargeCheckoutSession({
     bookingId: extraCharge.booking_id,
     extraChargeId: extraCharge.id,
@@ -300,7 +520,6 @@ export async function payExtraCharge(extraChargeId: string): Promise<{ error: st
     return { error: checkoutResult.error };
   }
 
-  const admin = createAdminClient();
   await admin
     .from("booking_extra_charges")
     .update({ stripe_checkout_session_id: checkoutResult.data.sessionId })

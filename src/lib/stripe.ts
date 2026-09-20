@@ -15,12 +15,22 @@ export function isStripeConfigured(): boolean {
   return stripe !== null;
 }
 
-export type StripeResult<T> = { ok: true; data: T } | { ok: false; error: string };
+export type StripeResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string; code?: string };
 
+// `code` is carried so callers can tell "this object no longer exists"
+// (safe to move on) from "I couldn't reach Stripe" (must not assume
+// anything) — the difference between a harmless retry and a second
+// payable Checkout Session.
 function failure<T>(context: string, error: unknown): StripeResult<T> {
   console.error(`${context}:`, error);
-  const message = error instanceof Stripe.errors.StripeError ? error.message : "Nieznany błąd Stripe.";
-  return { ok: false, error: message };
+  const stripeError = error instanceof Stripe.errors.StripeError ? error : null;
+  return {
+    ok: false,
+    error: stripeError?.message ?? "Nieznany błąd Stripe.",
+    code: stripeError?.code,
+  };
 }
 
 // --- Connect onboarding (owner payouts) ---------------------------------
@@ -175,19 +185,89 @@ export async function createExtraChargeCheckoutSession(params: {
   }
 }
 
+// A Checkout Session stays payable until it expires (~24h), so anything
+// that replaces one — a retry, a cancellation — has to know whether the old
+// one was already paid before deciding what to do with it.
+export async function getCheckoutSessionPayment(sessionId: string): Promise<
+  StripeResult<{
+    status: string | null;
+    paymentStatus: string | null;
+    paymentIntentId: string | null;
+    paymentIntentStatus: string | null;
+    amountTotalPln: number | null;
+    applicationFeePln: number | null;
+  }>
+> {
+  if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent"],
+    });
+    const intent =
+      session.payment_intent && typeof session.payment_intent !== "string"
+        ? session.payment_intent
+        : null;
+    return {
+      ok: true,
+      data: {
+        status: session.status ?? null,
+        paymentStatus: session.payment_status ?? null,
+        paymentIntentId: intent?.id ?? null,
+        // A "complete" session can still be unpaid (BLIK/async settling or
+        // failed), so the intent's own status is what decides whether money
+        // actually moved.
+        paymentIntentStatus: intent?.status ?? null,
+        amountTotalPln: session.amount_total !== null ? session.amount_total / 100 : null,
+        applicationFeePln:
+          intent?.application_fee_amount != null ? intent.application_fee_amount / 100 : null,
+      },
+    };
+  } catch (error) {
+    return failure("getCheckoutSessionPayment", error);
+  }
+}
+
+// Kills an unpaid Session so it can't be completed later from a stale tab.
+// Stripe only allows this while it's "open"; anything else is already
+// resolved and the caller treats the rejection as "nothing to do".
+export async function expireCheckoutSession(
+  sessionId: string
+): Promise<StripeResult<{ status: string | null }>> {
+  if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
+  try {
+    const session = await stripe.checkout.sessions.expire(sessionId);
+    return { ok: true, data: { status: session.status ?? null } };
+  } catch (error) {
+    return failure("expireCheckoutSession", error);
+  }
+}
+
 export async function refundCheckoutSession(
   sessionId: string
 ): Promise<StripeResult<{ refundId: string }>> {
   if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ["payment_intent"],
+      expand: ["payment_intent", "payment_intent.latest_charge"],
     });
     if (!session.payment_intent) return { ok: false, error: "Brak płatności do zwrotu." };
     const intent =
       typeof session.payment_intent === "string"
-        ? await stripe.paymentIntents.retrieve(session.payment_intent)
+        ? await stripe.paymentIntents.retrieve(session.payment_intent, {
+            expand: ["latest_charge"],
+          })
         : session.payment_intent;
+
+    // Idempotent: Stripe redelivers webhooks for days, and several paths can
+    // ask for the same refund. Re-asking Stripe would fail with "already
+    // refunded" and fire a false "refund failed" alert at a human.
+    const charge =
+      intent.latest_charge && typeof intent.latest_charge !== "string"
+        ? intent.latest_charge
+        : null;
+    if (charge?.refunded) {
+      return { ok: true, data: { refundId: charge.refunds?.data?.[0]?.id ?? "already_refunded" } };
+    }
     // Refund the platform's fee too — a cancelled trip earns GoMambo
     // nothing — but only when there IS one: Stripe rejects
     // refund_application_fee on a charge with no application fee ("...but it
