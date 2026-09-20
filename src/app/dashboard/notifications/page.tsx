@@ -12,6 +12,9 @@ const systemTypeLabel: Record<AdminNotification["type"], string> = {
   new_car_pending: "Nowe auto do weryfikacji",
   new_identity_verification: "Zgłoszenie weryfikacji tożsamości",
   new_referral: "Rejestracja z polecenia",
+  commission_fallback: "Prowizja: naliczono stawkę domyślną",
+  refund_failed: "Zwrot w Stripe nie powiódł się",
+  deposit_release_failed: "Nie zwolniono kaucji",
 };
 
 const personalTypeLabel: Record<Notification["type"], string> = {

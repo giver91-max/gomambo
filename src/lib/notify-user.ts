@@ -1,5 +1,5 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { sendNotificationSms } from "@/lib/sms";
 import type { NotificationType } from "@/types/database";
@@ -25,7 +25,14 @@ export async function notifyUser({
   body: string;
   link?: string;
 }) {
-  const admin = createAdminClient();
+  // Never throw: callers reach this AFTER money has already moved (refunds,
+  // deposit releases), so a misconfigured service-role key must not turn a
+  // completed cancellation into a failed server action.
+  const admin = tryCreateAdminClient();
+  if (!admin) {
+    console.error("[notify-user] skipped, admin client unavailable", { userId, type });
+    return;
+  }
 
   await admin.from("notifications").insert({ user_id: userId, type, body, link });
 

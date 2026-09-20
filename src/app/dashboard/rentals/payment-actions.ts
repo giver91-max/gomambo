@@ -12,6 +12,7 @@ import {
   createExtraChargeCheckoutSession,
   createRentalCheckoutSession,
 } from "@/lib/stripe";
+import { getOwnerCommissionRate } from "@/lib/commission";
 import { SITE_URL } from "@/lib/site";
 
 export async function createBookingCheckoutSession(
@@ -26,7 +27,7 @@ export async function createBookingCheckoutSession(
   const { data: booking } = await supabase
     .from("bookings")
     .select(
-      `id, renter_id, status, payment_status, start_date, end_date,
+      `id, owner_id, renter_id, status, payment_status, start_date, end_date,
        cars(brand, model, price_per_day, price_per_month, security_deposit_amount,
             owner:profiles!cars_owner_id_fkey(stripe_connect_account_id, stripe_connect_onboarded))`
     )
@@ -64,7 +65,10 @@ export async function createBookingCheckoutSession(
     booking.start_date,
     booking.end_date
   );
-  const platformFee = calculatePlatformFee(total);
+  const platformFee = calculatePlatformFee(
+    total,
+    await getOwnerCommissionRate(booking.owner_id, { bookingId })
+  );
   const ownerAccountId = car.owner.stripe_connect_account_id;
   const renterEmail = user.email ?? "";
 
@@ -108,7 +112,7 @@ export async function createBookingCheckoutSession(
   // route it through the session client, and it keeps this action
   // consistent with the rest of the money-writing code paths.
   const admin = createAdminClient();
-  await admin
+  const { error: bookingUpdateError } = await admin
     .from("bookings")
     .update({
       total_price: total,
@@ -117,6 +121,14 @@ export async function createBookingCheckoutSession(
       ...(depositAmount && depositAmount > 0 ? { deposit_amount: depositAmount } : {}),
     })
     .eq("id", bookingId);
+  // Without this row the webhook can't match the payment to the booking and
+  // the fee can't be reconciled — better to have the renter retry than to
+  // send them to Stripe for a charge nothing tracks. The unused Checkout
+  // Session simply expires.
+  if (bookingUpdateError) {
+    console.error("createBookingCheckoutSession: booking update failed", bookingUpdateError);
+    return { error: "Nie udało się zapisać płatności. Spróbuj ponownie za chwilę." };
+  }
 
   redirect(rentalResult.data.url);
 }
@@ -140,7 +152,7 @@ export async function requestBookingExtension(
   const { data: booking } = await supabase
     .from("bookings")
     .select(
-      `id, car_id, renter_id, status, payment_status, start_date, end_date, total_price,
+      `id, car_id, owner_id, renter_id, status, payment_status, start_date, end_date, total_price,
        cars(brand, model, price_per_day, price_per_month,
             owner:profiles!cars_owner_id_fkey(stripe_connect_account_id, stripe_connect_onboarded))`
     )
@@ -198,7 +210,10 @@ export async function requestBookingExtension(
     return { error: extensionError?.message ?? "Nie udało się utworzyć prośby o przedłużenie." };
   }
 
-  const platformFee = calculatePlatformFee(additionalAmount);
+  const platformFee = calculatePlatformFee(
+    additionalAmount,
+    await getOwnerCommissionRate(booking.owner_id, { bookingId, extensionId: extension.id })
+  );
   const successUrl = `${SITE_URL}/dashboard/rentals?extension=success`;
   const cancelUrl = `${SITE_URL}/dashboard/rentals?extension=cancelled`;
 
@@ -214,12 +229,18 @@ export async function requestBookingExtension(
     metadata: { kind: "trip_extension", extensionId: extension.id },
   });
   if (!checkoutResult.ok) {
+    // The row was inserted before Stripe was called; don't leave an orphan
+    // extension with no session behind every failed attempt.
+    await admin.from("booking_extensions").delete().eq("id", extension.id);
     return { error: checkoutResult.error };
   }
 
+  // platform_fee_pln is the only record of what Stripe took on an extension
+  // (bookings.platform_fee_amount covers just the initial payment) — with
+  // per-owner rates that's what makes a promo reconcilable.
   await admin
     .from("booking_extensions")
-    .update({ stripe_checkout_session_id: checkoutResult.data.sessionId })
+    .update({ stripe_checkout_session_id: checkoutResult.data.sessionId, platform_fee_pln: platformFee })
     .eq("id", extension.id);
 
   redirect(checkoutResult.data.url);

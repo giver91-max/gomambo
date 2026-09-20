@@ -79,10 +79,11 @@ export async function isConnectAccountOnboarded(accountId: string): Promise<bool
 
 // --- Rental fee (captured immediately, split via Connect) ---------------
 
-const PLATFORM_FEE_RATE = 0.15;
-
-export function calculatePlatformFee(totalPrice: number): number {
-  return Math.round(totalPrice * PLATFORM_FEE_RATE * 100) / 100;
+// `rate` is a fraction resolved per owner (src/lib/commission.ts). It's a
+// required argument so no code path can silently bill the default to an
+// owner who is on a 0% promo.
+export function calculatePlatformFee(totalPrice: number, rate: number): number {
+  return Math.round(totalPrice * rate * 100) / 100;
 }
 
 export async function createRentalCheckoutSession(params: {
@@ -98,6 +99,7 @@ export async function createRentalCheckoutSession(params: {
 }): Promise<StripeResult<{ sessionId: string; url: string }>> {
   if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
   try {
+    const feeCents = Math.round(params.platformFeePln * 100);
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: params.renterEmail,
@@ -112,7 +114,9 @@ export async function createRentalCheckoutSession(params: {
         },
       ],
       payment_intent_data: {
-        application_fee_amount: Math.round(params.platformFeePln * 100),
+        // Omitted rather than sent as 0 on a 0% promo — the same shape as
+        // the extra-charge session below, which also takes no cut.
+        ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
         transfer_data: { destination: params.ownerStripeAccountId },
       },
       metadata: { bookingId: params.bookingId, ...params.metadata },
@@ -176,19 +180,26 @@ export async function refundCheckoutSession(
 ): Promise<StripeResult<{ refundId: string }>> {
   if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
   try {
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent"],
+    });
     if (!session.payment_intent) return { ok: false, error: "Brak płatności do zwrotu." };
-    const paymentIntentId =
-      typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id;
+    const intent =
+      typeof session.payment_intent === "string"
+        ? await stripe.paymentIntents.retrieve(session.payment_intent)
+        : session.payment_intent;
+    // Refund the platform's fee too — a cancelled trip earns GoMambo
+    // nothing — but only when there IS one: Stripe rejects
+    // refund_application_fee on a charge with no application fee ("...but it
+    // has no application fee"), and 0%-promo rentals are created without
+    // application_fee_amount. reverse_transfer stays unconditional: this is
+    // a destination charge, the rental fee was already transferred to the
+    // owner's connected account, and pulling it back is what funds the
+    // refund at all.
+    const hasApplicationFee = (intent.application_fee_amount ?? 0) > 0;
     const refund = await stripe.refunds.create({
-      payment_intent: paymentIntentId,
-      // Refund the platform's fee too — a cancelled trip earns GoMambo
-      // nothing, so there's no commission left to keep. reverse_transfer
-      // is required alongside it: this is a destination charge, so the
-      // rental fee was already transferred to the owner's connected
-      // account — without pulling it back, the platform balance may not
-      // have the funds to cover the refund at all.
-      refund_application_fee: true,
+      payment_intent: intent.id,
+      ...(hasApplicationFee ? { refund_application_fee: true } : {}),
       reverse_transfer: true,
     });
     return { ok: true, data: { refundId: refund.id } };

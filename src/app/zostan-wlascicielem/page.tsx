@@ -8,9 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EarningsCalculator } from "./earnings-calculator";
 
 export const metadata: Metadata = {
-  title: "Zostań właścicielem — wynajmuj swoje auto na GoMambo",
+  title: "Zostań właścicielem — wynajmuj auto lub flotę na GoMambo",
   description:
-    "Dodaj swoje auto na GoMambo i zarabiaj, gdy z niego nie korzystasz. Ty ustalasz cenę i dostępność, dodanie ogłoszenia jest darmowe.",
+    "Dodaj swoje auto — albo całą flotę wypożyczalni — na GoMambo. Ty ustalasz cenę i dostępność, dodanie ogłoszeń jest darmowe, a floty przez pierwsze 6 miesięcy nie płacą prowizji.",
   alternates: { canonical: "/zostan-wlascicielem" },
 };
 
@@ -59,6 +59,51 @@ const FACTS = [
   { value: "Weryfikacja", label: "Sprawdzamy tożsamość najemców" },
 ];
 
+const FLEET_TERMS = [
+  { value: "0 zł", label: "Za dodanie floty" },
+  { value: "0%", label: "Prowizji przez pierwsze 6 miesięcy" },
+  { value: "Ty decydujesz", label: "Ceny i dostępność każdego auta" },
+];
+
+const FLEET_FEATURES = [
+  {
+    title: "Konkretne auto, nie klasa",
+    body: "Każdy samochód to osobne ogłoszenie z prawdziwymi zdjęciami — klient rezerwuje dokładnie to auto, które widzi.",
+  },
+  {
+    title: "Zapytania w jednym miejscu",
+    body: "Wiadomości i rezerwacje od klientów spływają do Twojego panelu, bez przełączania się między kanałami.",
+  },
+  {
+    title: "Płatność i kaucja online",
+    body: "Opłata za wynajem, kaucja i wypłata na Twoje konto obsługiwane przez Stripe.",
+  },
+  {
+    title: "Sprawdzeni najemcy",
+    body: "Każdy najemca przechodzi weryfikację tożsamości i prawa jazdy, zanim wypożyczy auto.",
+  },
+];
+
+const FLEET_MAILTO = `mailto:kontakt@gomambo.pl?subject=${encodeURIComponent(
+  "Zgłoszenie floty — GoMambo"
+)}&body=${encodeURIComponent(
+  [
+    "Dzień dobry,",
+    "",
+    "chcę wystawić flotę na GoMambo.",
+    "",
+    "Nazwa firmy / wypożyczalni:",
+    "Miasto:",
+    "Liczba aut:",
+    "Lista aut (marka, model, rok, cena za dzień):",
+    "",
+    "Zdjęcia prześlę w załączniku lub linkiem.",
+    "",
+    "Telefon kontaktowy:",
+    "",
+  ].join("\n")
+)}`;
+
 export default async function BecomeOwnerPage() {
   const supabase = await createClient();
   const {
@@ -98,6 +143,12 @@ export default async function BecomeOwnerPage() {
           <Link href={addCarHref} className={buttonVariants({ size: "lg" })}>
             Dodaj swoje auto →
           </Link>
+          <p className="text-sm text-muted-foreground">
+            Prowadzisz wypożyczalnię lub masz flotę?{" "}
+            <Link href="#flota" className="underline underline-offset-4">
+              Zobacz warunki dla flot
+            </Link>
+          </p>
         </section>
 
         <section className="space-y-4">
@@ -144,6 +195,60 @@ export default async function BecomeOwnerPage() {
               <p className="text-sm text-muted-foreground">{fact.label}</p>
             </div>
           ))}
+        </section>
+
+        <section id="flota" className="scroll-mt-24 space-y-8 rounded-xl border p-6 sm:p-8">
+          <div className="space-y-4">
+            <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+              Dla wypożyczalni i flot
+            </p>
+            <h2 className="text-2xl font-bold sm:text-3xl">
+              Prowadzisz wypożyczalnię albo masz flotę?
+            </h2>
+            <p className="max-w-2xl text-muted-foreground">
+              Wystaw swoje auta na GoMambo i docieraj do klientów, którzy porównują oferty
+              lokalnych wypożyczalni w jednym miejscu. Klient rezerwuje konkretny samochód,
+              nie „klasę lub podobny” — dokładnie to, czego w klasycznych wypożyczalniach
+              brakuje.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {FLEET_TERMS.map((term) => (
+              <div key={term.label} className="rounded-xl border p-5 text-center">
+                <p className="text-lg font-bold text-primary">{term.value}</p>
+                <p className="text-sm text-muted-foreground">{term.label}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {FLEET_FEATURES.map((feature) => (
+              <Card key={feature.title}>
+                <CardContent className="space-y-1 py-5">
+                  <p className="font-semibold">{feature.title}</p>
+                  <p className="text-sm text-muted-foreground">{feature.body}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="space-y-4 rounded-xl bg-muted p-6">
+            <h3 className="text-lg font-bold">Jak dodajemy flotę</h3>
+            <p className="text-sm text-muted-foreground">
+              Możesz wprowadzić auta samodzielnie w panelu albo przesłać nam listę (marka,
+              model, rok, cena za dzień, zdjęcia) — dodamy je za Ciebie i odezwiemy się, gdy
+              ogłoszenia będą gotowe do zatwierdzenia.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <a href={FLEET_MAILTO} className={buttonVariants({ size: "lg" })}>
+                Zgłoś flotę →
+              </a>
+              <Link href={addCarHref} className={buttonVariants({ size: "lg", variant: "outline" })}>
+                Dodaj auta sam w panelu
+              </Link>
+            </div>
+          </div>
         </section>
 
         <section className="space-y-4 rounded-xl bg-muted p-8 text-center">

@@ -18,3 +18,18 @@ export function createAdminClient() {
     }
   );
 }
+
+/**
+ * Same client, but a missing service-role key returns null instead of
+ * throwing. For money paths (cancellation, notifications) where the throw
+ * would abort an action that has already moved funds in Stripe and leave
+ * the caller with no notification and no trace.
+ */
+export function tryCreateAdminClient(): ReturnType<typeof createAdminClient> | null {
+  try {
+    return createAdminClient();
+  } catch (error) {
+    console.error("[admin-client] unavailable:", error);
+    return null;
+  }
+}

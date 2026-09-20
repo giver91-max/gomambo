@@ -44,7 +44,7 @@ export async function adminCancelBooking(bookingId: string): Promise<{ error: st
   const policy: CancellationPolicy =
     (booking.cars as unknown as { cancellation_policy: CancellationPolicy } | null)
       ?.cancellation_policy ?? "moderate";
-  await cancelBookingWithRefund(admin, bookingId, {
+  const cancellation = await cancelBookingWithRefund(admin, bookingId, {
     start_date: booking.start_date,
     payment_status: booking.payment_status,
     stripe_checkout_session_id: booking.stripe_checkout_session_id,
@@ -93,5 +93,25 @@ export async function adminCancelBooking(bookingId: string): Promise<{ error: st
   revalidatePath("/admin/bookings");
   revalidatePath("/dashboard/bookings");
   revalidatePath("/dashboard/rentals");
+
+  // The booking is cancelled regardless — but the admin is the one person
+  // who can actually fix these, so say it here instead of only in a log.
+  const problems: string[] = [];
+  if (cancellation.refund === "failed" || cancellation.refund === "partially_refunded") {
+    problems.push(`zwrot płatności: ${cancellation.error ?? "nie powiódł się"}`);
+  }
+  if (cancellation.refund === "refund_unverified") {
+    problems.push(
+      "opłata podstawowa zwrócona, ale nie udało się sprawdzić przedłużeń wynajmu — zweryfikuj w Stripe"
+    );
+  }
+  if (cancellation.deposit === "failed") {
+    problems.push("nie udało się zwolnić kaucji — środki nadal blokują kartę najemcy");
+  }
+  if (problems.length > 0) {
+    return {
+      error: `Rezerwacja anulowana, ale ${problems.join("; ")}. Dokończ ręcznie w panelu Stripe.`,
+    };
+  }
   return { error: null };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { adminCancelBooking } from "./actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,18 +18,19 @@ import {
 
 export function CancelBookingButton({ bookingId }: { bookingId: string }) {
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleConfirm() {
-    setError(null);
     startTransition(async () => {
       const result = await adminCancelBooking(bookingId);
-      if (result?.error) {
-        setError(result.error);
-        return;
-      }
       setOpen(false);
+      if (result?.error) {
+        // A toast, not local state: the action revalidates /admin/bookings,
+        // which re-renders this row without its cancel button — any message
+        // held here would be unmounted before it could be read. Money may be
+        // stuck in Stripe, so it must not auto-dismiss either.
+        toast.error(result.error, { duration: Infinity, closeButton: true });
+      }
     });
   }
 
@@ -45,7 +47,6 @@ export function CancelBookingButton({ bookingId }: { bookingId: string }) {
             jest jeszcze w oknie darmowego anulowania. Obie strony zostaną powiadomione.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {error && <p className="text-sm text-destructive">{error}</p>}
         <AlertDialogFooter>
           <AlertDialogCancel>Wróć</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={handleConfirm} disabled={isPending}>

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/notify-user";
-import { cancelBookingWithRefund } from "@/lib/cancellation";
+import { cancelBookingWithRefund, renterRefundSentence } from "@/lib/cancellation";
 import { captureDeposit, createExtraChargeCheckoutSession, releaseDeposit } from "@/lib/stripe";
 import { SITE_URL } from "@/lib/site";
 import type { BookingStatus, CancellationPolicy } from "@/types/database";
@@ -112,7 +112,7 @@ export async function cancelBooking(bookingId: string): Promise<void> {
   const policy: CancellationPolicy =
     (booking.cars as unknown as { cancellation_policy: CancellationPolicy } | null)
       ?.cancellation_policy ?? "moderate";
-  await cancelBookingWithRefund(supabase, bookingId, {
+  const cancellation = await cancelBookingWithRefund(supabase, bookingId, {
     start_date: booking.start_date,
     payment_status: booking.payment_status,
     stripe_checkout_session_id: booking.stripe_checkout_session_id,
@@ -138,6 +138,27 @@ export async function cancelBooking(bookingId: string): Promise<void> {
     `,
     link: "/dashboard/bookings",
   });
+
+  // The booking is cancelled either way; don't let the renter assume the
+  // money is on its way when Stripe rejected the refund — or when only the
+  // base fee came back and a paid extension didn't.
+  if (cancellation.refund === "failed" || cancellation.refund === "partially_refunded") {
+    await notifyUser({
+      userId: user.id,
+      type: "booking_cancelled",
+      subject: `Rezerwacja anulowana: ${carLabel} — zwrot w toku`,
+      body: `Rezerwacja ${carLabel} została anulowana, ale automatyczny zwrot płatności nie powiódł się w całości. Wykonamy go ręcznie i potwierdzimy — nie musisz nic robić.`,
+      emailHtml: `
+        <p>Twoja rezerwacja na GoMambo została anulowana, ale automatyczny zwrot płatności nie powiódł się w całości.</p>
+        <ul>
+          <li><strong>Auto:</strong> ${carLabel}</li>
+          <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
+        </ul>
+        <p>Zwrot wykonamy ręcznie i potwierdzimy osobno — nie musisz nic robić. Pytania: kontakt@gomambo.pl.</p>
+      `,
+      link: "/dashboard/rentals",
+    });
+  }
 
   revalidatePath("/dashboard/bookings");
   revalidatePath("/dashboard/rentals");
@@ -180,7 +201,7 @@ export async function ownerCancelBooking(bookingId: string): Promise<{ error: st
   const policy: CancellationPolicy =
     (booking.cars as unknown as { cancellation_policy: CancellationPolicy } | null)
       ?.cancellation_policy ?? "moderate";
-  await cancelBookingWithRefund(
+  const cancellation = await cancelBookingWithRefund(
     supabase,
     bookingId,
     {
@@ -196,13 +217,16 @@ export async function ownerCancelBooking(bookingId: string): Promise<{ error: st
 
   const car = booking.cars as unknown as { brand: string; model: string; year: number } | null;
   const carLabel = car ? `${car.brand} ${car.model} (${car.year})` : "auto";
+  // Only promise the renter money that's actually moving — a paid extension
+  // that failed to refund makes "pełny zwrot" false (see renterRefundSentence).
+  const refundLine = renterRefundSentence(cancellation.refund);
   await notifyUser({
     userId: booking.renter_id,
     type: "booking_cancelled",
     subject: `Rezerwacja odwołana: ${carLabel}`,
-    body: `Właściciel odwołał rezerwację ${carLabel} (${booking.start_date} – ${booking.end_date}). Otrzymasz pełny zwrot.`,
+    body: `Właściciel odwołał rezerwację ${carLabel} (${booking.start_date} – ${booking.end_date}).${refundLine}`,
     emailHtml: `
-      <p>Właściciel odwołał Twoją rezerwację na GoMambo. Otrzymasz pełny zwrot.</p>
+      <p>Właściciel odwołał Twoją rezerwację na GoMambo.${refundLine}</p>
       <ul>
         <li><strong>Auto:</strong> ${carLabel}</li>
         <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>

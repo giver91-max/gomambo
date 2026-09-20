@@ -15,6 +15,15 @@ export type Profile = {
   created_at: string;
 };
 
+// Per-owner platform commission override (fleet promo). Fraction 0–1,
+// strictly < 1; no row = platform default (see src/lib/commission.ts).
+export type OwnerCommissionOverride = {
+  owner_id: string;
+  commission_rate: number;
+  commission_rate_until: string | null;
+  updated_at: string;
+};
+
 export type VehicleType =
   | "sedan"
   | "kombi"
@@ -131,6 +140,10 @@ export type BookingExtension = {
   additional_amount_pln: number;
   status: BookingExtensionStatus;
   stripe_checkout_session_id: string | null;
+  // Platform fee Stripe took on this extension (null before 0033 / unpaid).
+  platform_fee_pln: number | null;
+  // Set when the extension's own Stripe charge was refunded on cancellation.
+  refunded_at: string | null;
   created_at: string;
 };
 
@@ -199,7 +212,14 @@ export type AdminChatMessage = {
 
 export type AdminNotification = {
   id: string;
-  type: "new_registration" | "new_car_pending" | "new_identity_verification" | "new_referral";
+  type:
+    | "new_registration"
+    | "new_car_pending"
+    | "new_identity_verification"
+    | "new_referral"
+    | "commission_fallback"
+    | "refund_failed"
+    | "deposit_release_failed";
   body: string;
   link: string | null;
   created_at: string;
@@ -400,6 +420,20 @@ export type Database = {
             columns: ["booking_id"];
             isOneToOne: false;
             referencedRelation: "bookings";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      owner_commission_overrides: {
+        Row: OwnerCommissionOverride;
+        Insert: Partial<OwnerCommissionOverride> & { owner_id: string; commission_rate: number };
+        Update: Partial<OwnerCommissionOverride>;
+        Relationships: [
+          {
+            foreignKeyName: "owner_commission_overrides_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];
