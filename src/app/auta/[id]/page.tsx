@@ -13,6 +13,7 @@ import { FavoriteButton } from "@/components/favorite-button";
 import { MaintenanceNotice } from "@/components/maintenance-notice";
 import { firstNameOnly } from "@/lib/utils";
 import { getVerificationStatus } from "@/lib/verification-gate";
+import { getOwnerCommissionRate } from "@/lib/commission";
 import type { IdentityVerificationStatus } from "@/types/database";
 import {
   CANCELLATION_POLICY_DESCRIPTIONS,
@@ -294,6 +295,7 @@ export default async function CarDetailPage({
             verificationRejectionReason={verificationRejectionReason}
             pricePerDay={Number(car.price_per_day)}
             pricePerMonth={car.price_per_month ? Number(car.price_per_month) : null}
+            commissionRate={await getOwnerCommissionRate(car.owner_id)}
           />
         </CardContent>
       </Card>

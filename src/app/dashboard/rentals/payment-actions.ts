@@ -4,11 +4,10 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { calculateBookingPrice } from "@/lib/pricing";
+import { applyCommission, calculateBookingPrice } from "@/lib/pricing";
 import { hasOverlappingBooking } from "@/lib/booking-availability";
 import { addDays, toISODate } from "@/lib/calendar";
 import {
-  calculatePlatformFee,
   createDepositCheckoutSession,
   createExtraChargeCheckoutSession,
   createRentalCheckoutSession,
@@ -191,14 +190,16 @@ export async function createBookingCheckoutSession(
     redirect(`${SITE_URL}/dashboard/rentals?payment=success`);
   }
 
-  const { total } = calculateBookingPrice(
+  const { total: rentalTotal } = calculateBookingPrice(
     Number(car.price_per_day),
     car.price_per_month !== null ? Number(car.price_per_month) : null,
     booking.start_date,
     booking.end_date
   );
-  const platformFee = calculatePlatformFee(
-    total,
+  // The renter pays the owner's price plus the platform fee; the owner is
+  // transferred their full listed price.
+  const { commission: platformFee, gross } = applyCommission(
+    rentalTotal,
     await getOwnerCommissionRate(booking.owner_id, { bookingId })
   );
   const ownerAccountId = car.owner.stripe_connect_account_id;
@@ -228,7 +229,7 @@ export async function createBookingCheckoutSession(
   const rentalResult = await createRentalCheckoutSession({
     bookingId,
     ownerStripeAccountId: ownerAccountId,
-    totalPricePln: total,
+    totalPricePln: gross,
     platformFeePln: platformFee,
     description: `Wynajem: ${car.brand} ${car.model}`,
     renterEmail,
@@ -246,7 +247,7 @@ export async function createBookingCheckoutSession(
   const { error: bookingUpdateError } = await admin
     .from("bookings")
     .update({
-      total_price: total,
+      total_price: gross,
       platform_fee_amount: platformFee,
       stripe_checkout_session_id: rentalResult.data.sessionId,
       ...(depositAmount && depositAmount > 0 ? { deposit_amount: depositAmount } : {}),
@@ -320,16 +321,31 @@ export async function requestBookingExtension(
     return { error: "Właściciel nie ukończył konfiguracji wypłat. Spróbuj ponownie później." };
   }
 
-  const { total: newTotal } = calculateBookingPrice(
-    Number(car.price_per_day),
-    car.price_per_month !== null ? Number(car.price_per_month) : null,
+  const pricePerDay = Number(car.price_per_day);
+  const pricePerMonth = car.price_per_month !== null ? Number(car.price_per_month) : null;
+  const { total: currentRental } = calculateBookingPrice(
+    pricePerDay,
+    pricePerMonth,
+    booking.start_date,
+    booking.end_date
+  );
+  const { total: newRental } = calculateBookingPrice(
+    pricePerDay,
+    pricePerMonth,
     booking.start_date,
     newEndDate
   );
-  const additionalAmount = Math.round((newTotal - Number(booking.total_price)) * 100) / 100;
-  if (additionalAmount <= 0) {
+  // Recomputed from the dates rather than from bookings.total_price: that
+  // column holds the GROSS amount (owner's price + platform fee), so
+  // subtracting it from a rental total would mix the two and undercharge.
+  const additionalRental = Math.round((newRental - currentRental) * 100) / 100;
+  if (additionalRental <= 0) {
     return { error: "Nie udało się wyliczyć dopłaty za przedłużenie." };
   }
+  const { commission: platformFee, gross: additionalGross } = applyCommission(
+    additionalRental,
+    await getOwnerCommissionRate(booking.owner_id, { bookingId })
+  );
 
   const admin = createAdminClient();
 
@@ -383,24 +399,24 @@ export async function requestBookingExtension(
 
   const { data: extension, error: extensionError } = await admin
     .from("booking_extensions")
-    .insert({ booking_id: bookingId, new_end_date: newEndDate, additional_amount_pln: additionalAmount })
+    .insert({
+      booking_id: bookingId,
+      new_end_date: newEndDate,
+      additional_amount_pln: additionalGross,
+    })
     .select("id")
     .single();
   if (extensionError || !extension) {
     return { error: extensionError?.message ?? "Nie udało się utworzyć prośby o przedłużenie." };
   }
 
-  const platformFee = calculatePlatformFee(
-    additionalAmount,
-    await getOwnerCommissionRate(booking.owner_id, { bookingId, extensionId: extension.id })
-  );
   const successUrl = `${SITE_URL}/dashboard/rentals?extension=success`;
   const cancelUrl = `${SITE_URL}/dashboard/rentals?extension=cancelled`;
 
   const checkoutResult = await createRentalCheckoutSession({
     bookingId,
     ownerStripeAccountId: car.owner.stripe_connect_account_id,
-    totalPricePln: additionalAmount,
+    totalPricePln: additionalGross,
     platformFeePln: platformFee,
     description: `Przedłużenie wynajmu: ${car.brand} ${car.model}`,
     renterEmail: user.email ?? "",

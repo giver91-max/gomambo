@@ -13,6 +13,7 @@ export function AvailabilityAndInquiry({
   verificationRejectionReason,
   pricePerDay,
   pricePerMonth,
+  commissionRate,
 }: {
   carId: string;
   availableDates: string[];
@@ -21,6 +22,7 @@ export function AvailabilityAndInquiry({
   verificationRejectionReason: string | null;
   pricePerDay: number;
   pricePerMonth: number | null;
+  commissionRate: number;
 }) {
   const [range, setRange] = useState<SelectedRange>({ start: "", end: null });
 
@@ -35,6 +37,7 @@ export function AvailabilityAndInquiry({
         verificationRejectionReason={verificationRejectionReason}
         pricePerDay={pricePerDay}
         pricePerMonth={pricePerMonth}
+        commissionRate={commissionRate}
       />
     </div>
   );

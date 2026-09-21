@@ -89,13 +89,10 @@ export async function isConnectAccountOnboarded(accountId: string): Promise<bool
 
 // --- Rental fee (captured immediately, split via Connect) ---------------
 
-// `rate` is a fraction resolved per owner (src/lib/commission.ts). It's a
-// required argument so no code path can silently bill the default to an
-// owner who is on a 0% promo.
-export function calculatePlatformFee(totalPrice: number, rate: number): number {
-  return Math.round(totalPrice * rate * 100) / 100;
-}
-
+// `totalPricePln` is the GROSS amount the renter pays (owner's price plus
+// the platform fee) and `platformFeePln` the fee inside it — see
+// applyCommission in src/lib/pricing.ts. Stripe transfers the remainder to
+// the owner, which is exactly their listed price.
 export async function createRentalCheckoutSession(params: {
   bookingId: string;
   ownerStripeAccountId: string;

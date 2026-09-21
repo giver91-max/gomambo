@@ -7,6 +7,7 @@ import { cancelBooking } from "../bookings/actions";
 import { ReviewForm } from "../bookings/review-form";
 import { TripPhotosManager, type TripPhotoItem } from "@/components/trip-photos-manager";
 import { PayBookingButton } from "@/components/pay-booking-button";
+import { InsuranceProtectionNotice } from "@/components/insurance-protection-notice";
 import { PayExtraChargeButton } from "@/components/pay-extra-charge-button";
 import { ExtendBookingForm } from "@/components/extend-booking-form";
 import type { BookingStatus, CancellationPolicy } from "@/types/database";
@@ -130,7 +131,11 @@ export default async function RentalHistoryPage() {
                   Termin: {booking.start_date} – {booking.end_date}
                 </p>
                 {booking.status === "accepted" && booking.payment_status === "unpaid" && (
-                  <PayBookingButton bookingId={booking.id} />
+                  <div className="space-y-3">
+                    {/* Second time they see this, right before the money moves. */}
+                    <InsuranceProtectionNotice compact />
+                    <PayBookingButton bookingId={booking.id} />
+                  </div>
                 )}
                 {booking.payment_status === "paid" && (
                   <p className="text-xs">

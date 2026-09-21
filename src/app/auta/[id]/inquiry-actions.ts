@@ -40,6 +40,14 @@ export async function sendInquiry(
   if (!carId || !message || !rangeStart || !rangeEnd) {
     return { error: "Wybierz termin i napisz wiadomość." };
   }
+  // Enforced server-side too: the renter is taking on full liability for the
+  // car, so a client-side `required` alone would be too easy to bypass.
+  if (formData.get("insuranceAck") !== "on") {
+    return {
+      error:
+        "Potwierdź, że rozumiesz zasady odpowiedzialności za auto wynajmowane bez dodatkowego ubezpieczenia.",
+    };
+  }
   if (!(await verifyRecaptcha(recaptchaToken, "inquiry"))) {
     return { error: "Weryfikacja antyspamowa nie powiodła się. Spróbuj ponownie." };
   }

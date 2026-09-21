@@ -8,8 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { getRecaptchaToken } from "@/lib/recaptcha-client";
 import type { SelectedRange } from "./availability-view";
-import { calculateBookingPrice } from "@/lib/pricing";
+import { applyCommission, calculateBookingPrice } from "@/lib/pricing";
 import { VerificationRequiredNotice } from "@/components/verification-required-notice";
+import { InsuranceProtectionNotice } from "@/components/insurance-protection-notice";
 import type { IdentityVerificationStatus } from "@/types/database";
 
 const initialState: InquiryState = { error: null };
@@ -22,6 +23,7 @@ export function InquiryForm({
   verificationRejectionReason,
   pricePerDay,
   pricePerMonth,
+  commissionRate,
 }: {
   carId: string;
   selectedRange?: SelectedRange;
@@ -30,6 +32,7 @@ export function InquiryForm({
   verificationRejectionReason: string | null;
   pricePerDay: number;
   pricePerMonth: number | null;
+  commissionRate: number;
 }) {
   const [state, setState] = useState<InquiryState>(initialState);
   const [isPending, startTransition] = useTransition();
@@ -109,12 +112,28 @@ export function InquiryForm({
                 selectedRange.start,
                 selectedRange.end
               );
+              const { commission, gross } = applyCommission(total, commissionRate);
               return (
-                <p className="text-sm text-muted-foreground">
-                  {nights} {nights === 1 ? "dzień" : "dni"}
-                  {useMonthly ? " · stawka miesięczna" : ""} — szacunkowo{" "}
-                  <strong className="text-foreground">{total.toFixed(2)} zł</strong>
-                </p>
+                <div className="space-y-1 rounded-lg border p-3 text-sm">
+                  <p className="text-muted-foreground">
+                    {nights} {nights === 1 ? "dzień" : "dni"}
+                    {useMonthly ? " · stawka miesięczna" : ""}
+                  </p>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Wynajem</span>
+                    <span>{total.toFixed(2)} zł</span>
+                  </div>
+                  {commission > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Opłata serwisowa GoMambo</span>
+                      <span>{commission.toFixed(2)} zł</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t pt-1 font-semibold text-foreground">
+                    <span>Razem</span>
+                    <span>{gross.toFixed(2)} zł</span>
+                  </div>
+                </div>
               );
             })()}
         </div>
@@ -123,6 +142,22 @@ export function InquiryForm({
           Zaznacz w kalendarzu termin, o który chcesz zapytać.
         </p>
       )}
+
+      <InsuranceProtectionNotice />
+
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-destructive/40 p-3 text-sm">
+        <input
+          type="checkbox"
+          name="insuranceAck"
+          required
+          className="mt-0.5 size-4 shrink-0 accent-[var(--destructive)]"
+        />
+        <span>
+          Rozumiem, że wynajmuję <strong>bez dodatkowego ubezpieczenia</strong> i że odpowiadam
+          finansowo za wszelkie uszkodzenia, kradzież i utratę wartości auta — do pełnej wartości
+          pojazdu, także ponad wysokość kaucji.
+        </span>
+      </label>
 
       <div className="space-y-1.5">
         <Label htmlFor="message">Wiadomość</Label>

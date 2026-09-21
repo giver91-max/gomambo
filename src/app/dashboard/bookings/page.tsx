@@ -37,7 +37,7 @@ export default async function OwnerBookingsPage() {
     .select(
       `id, start_date, end_date, status, created_at,
        pickup_odometer_km, pickup_fuel_level, return_odometer_km, return_fuel_level,
-       payment_status, deposit_status, total_price, deposit_amount,
+       payment_status, deposit_status, total_price, platform_fee_amount, deposit_amount,
        cars(id, brand, model),
        renter:profiles!bookings_renter_id_fkey(full_name)`
     )
@@ -57,6 +57,7 @@ export default async function OwnerBookingsPage() {
     payment_status: PaymentStatus;
     deposit_status: DepositStatus;
     total_price: number | null;
+    platform_fee_amount: number | null;
     deposit_amount: number | null;
     cars: { id: string; brand: string; model: string } | null;
     renter: { full_name: string } | null;
@@ -127,7 +128,11 @@ export default async function OwnerBookingsPage() {
                 </p>
                 {booking.payment_status === "paid" && (
                   <p className="text-xs">
-                    Opłacono{booking.total_price ? `: ${Number(booking.total_price).toFixed(2)} zł` : ""}
+                    {/* The renter pays the listing price plus the platform fee,
+                        so the gross would overstate what the owner receives. */}
+                    {booking.total_price
+                      ? `Do wypłaty: ${(Number(booking.total_price) - Number(booking.platform_fee_amount ?? 0)).toFixed(2)} zł`
+                      : "Opłacono"}
                     {booking.deposit_status === "held" &&
                       booking.deposit_amount &&
                       ` · kaucja ${Number(booking.deposit_amount).toFixed(2)} zł zablokowana`}
