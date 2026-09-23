@@ -77,9 +77,9 @@ export function BookingVerificationRenter({
         Potwierdź tożsamość przed odbiorem
       </p>
       <p className="text-xs">
-        Zrób selfie. Osoba wydająca auto zobaczy je razem ze zdjęciami dokumentu, który przesłałeś
-        przy weryfikacji konta, i potwierdzi, że to Ty odbierasz auto — tak jak przy ladzie w
-        wypożyczalni, tylko wcześniej. Po potwierdzeniu traci do nich dostęp.{" "}
+        Zrób selfie. Osoba wydająca auto zobaczy je razem ze zdjęciami Twojego prawa jazdy i
+        potwierdzi, że to Ty odbierasz auto — tak jak przy ladzie w wypożyczalni, tylko wcześniej.
+        Po potwierdzeniu traci do nich dostęp.{" "}
         <strong className="text-foreground">
           Bez tego nie wyślemy Ci numeru rejestracyjnego ani kontaktu do właściciela.
         </strong>
@@ -92,9 +92,9 @@ export function BookingVerificationRenter({
           className="mt-0.5"
         />
         <span>
-          Zgadzam się, aby osoba wydająca mi auto zobaczyła to selfie oraz zdjęcia dokumentu
-          tożsamości, który przesłałem przy weryfikacji konta — po to, by potwierdzić, że to ja
-          odbieram auto i że mój dokument jest ważny. Dostęp kończy się w chwili potwierdzenia.
+          Zgadzam się, aby osoba wydająca mi auto zobaczyła to selfie oraz zdjęcia mojego prawa
+          jazdy — po to, by potwierdzić, że to ja odbieram auto i że prawo jazdy jest ważne.
+          Dostęp kończy się w chwili potwierdzenia.
         </span>
       </label>
       {capturing ? (

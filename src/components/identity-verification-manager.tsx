@@ -23,109 +23,123 @@ const statusVariant: Record<IdentityVerificationStatus, "secondary" | "default" 
   rejected: "destructive",
 };
 
+/**
+ * Identity verification from a desktop. Collects the same three photos as the
+ * phone route — both sides of a driving licence and a live selfie — because
+ * the device someone happens to be sitting at shouldn't decide how carefully
+ * they get verified.
+ *
+ * The browser uploads the three photos straight to Supabase Storage and then
+ * hands the paths to the server action. That is not the server trusting the
+ * client: Vercel caps a request body at ~4.5MB, far below three real phone
+ * photos, so posting the files themselves would 413 before any code ran. The
+ * action re-downloads what was stored and re-checks all of it — including
+ * that the three images are genuinely three different images.
+ */
 export function IdentityVerificationManager({
   userId,
   initialStatus,
   initialRejectionReason,
   initialDocumentUrl,
+  initialDocumentBackUrl,
   initialSelfieUrl,
 }: {
   userId: string;
   initialStatus: IdentityVerificationStatus | null;
   initialRejectionReason: string | null;
   initialDocumentUrl: string | null;
+  initialDocumentBackUrl: string | null;
   initialSelfieUrl: string | null;
 }) {
   const [status, setStatus] = useState(initialStatus);
   const [rejectionReason, setRejectionReason] = useState(initialRejectionReason);
-  const [documentUrl, setDocumentUrl] = useState(initialDocumentUrl);
-  const [selfieUrl, setSelfieUrl] = useState(initialSelfieUrl);
-  const [pendingDocument, setPendingDocument] = useState<File | null>(null);
+  const [front, setFront] = useState<File | null>(null);
+  const [back, setBack] = useState<File | null>(null);
+  const [selfie, setSelfie] = useState<Blob | null>(null);
+  const [capturing, setCapturing] = useState(false);
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const frontInputRef = useRef<HTMLInputElement>(null);
+  const backInputRef = useRef<HTMLInputElement>(null);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  const submitted = Boolean(initialDocumentUrl);
 
-    setError(null);
-
-    if (!file.type.startsWith("image/")) {
-      setError("Plik musi być zdjęciem.");
-      return;
-    }
-    if (file.size > MAX_FILE_BYTES) {
-      setError("Plik przekracza 8 MB.");
-      return;
-    }
-
-    setPendingDocument(file);
+  function pick(side: "front" | "back") {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      setError(null);
+      if (!file.type.startsWith("image/")) {
+        setError("Plik musi być zdjęciem.");
+        return;
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        setError("Plik przekracza 8 MB.");
+        return;
+      }
+      if (side === "front") setFront(file);
+      else setBack(file);
+    };
   }
 
-  function finish(documentFile: File, selfieBlob: Blob | null) {
+  const ready = Boolean(front && back && selfie && consent);
+
+  function submit() {
+    if (!ready) return;
     setError(null);
     startTransition(async () => {
-      const supabase = createClient();
-      const ext = documentFile.name.split(".").pop() || "jpg";
-      const documentPath = `${userId}/${crypto.randomUUID()}.${ext}`;
+      try {
+        const supabase = createClient();
+        const uploaded: Record<"front" | "back" | "selfie", string> = {
+          front: "",
+          back: "",
+          selfie: "",
+        };
 
-      const { error: uploadError } = await supabase.storage
-        .from("id-documents")
-        .upload(documentPath, documentFile, { contentType: documentFile.type });
+        for (const [slot, blob] of [
+          ["front", front!],
+          ["back", back!],
+          ["selfie", selfie!],
+        ] as const) {
+          const path = `${userId}/${crypto.randomUUID()}-${slot}.jpg`;
+          const { error: uploadError } = await supabase.storage
+            .from("id-documents")
+            .upload(path, blob, { contentType: blob.type || "image/jpeg" });
+          if (uploadError) {
+            setError(`Nie udało się wgrać zdjęcia: ${uploadError.message}`);
+            return;
+          }
+          uploaded[slot] = path;
+        }
 
-      if (uploadError) {
-        setError(`Błąd wgrywania dokumentu: ${uploadError.message}`);
-        setPendingDocument(null);
-        return;
-      }
-
-      let selfiePath: string | null = null;
-      if (selfieBlob) {
-        selfiePath = `${userId}/${crypto.randomUUID()}-selfie.jpg`;
-        const { error: selfieUploadError } = await supabase.storage
-          .from("id-documents")
-          .upload(selfiePath, selfieBlob, { contentType: "image/jpeg" });
-        if (selfieUploadError) {
-          setError(`Błąd wgrywania selfie: ${selfieUploadError.message}`);
-          setPendingDocument(null);
+        const result = await submitIdentityVerification(uploaded, consent);
+        if (result.error) {
+          setError(result.error);
           return;
         }
+        setStatus(result.approved ? "approved" : "pending");
+        setRejectionReason(null);
+        setFront(null);
+        setBack(null);
+        setSelfie(null);
+      } catch (err) {
+        // Without this the user sat on "Sprawdzamy…" for ever whenever the
+        // request failed before the action could answer.
+        setError(
+          err instanceof Error ? err.message : "Coś poszło nie tak. Spróbuj ponownie."
+        );
       }
-
-      const result = await submitIdentityVerification(documentPath, selfiePath);
-      if (result.error) {
-        setError(result.error);
-        setPendingDocument(null);
-        return;
-      }
-
-      const { data: signedDoc } = await supabase.storage
-        .from("id-documents")
-        .createSignedUrl(documentPath, 60 * 5);
-      setDocumentUrl(signedDoc?.signedUrl ?? null);
-
-      if (selfiePath) {
-        const { data: signedSelfie } = await supabase.storage
-          .from("id-documents")
-          .createSignedUrl(selfiePath, 60 * 5);
-        setSelfieUrl(signedSelfie?.signedUrl ?? null);
-      } else {
-        setSelfieUrl(null);
-      }
-
-      setStatus("pending");
-      setRejectionReason(null);
-      setPendingDocument(null);
     });
   }
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        Dodaj zdjęcie dowodu osobistego lub prawa jazdy oraz zrób selfie na żywo. Dokumenty widzi
-        tylko nasz zespół podczas weryfikacji.
+        Potrzebujemy zdjęć <strong className="text-foreground">obu stron prawa jazdy</strong> oraz
+        selfie zrobionego na żywo. Prawo jazdy, nie dowód osobisty — bez niego nie da się wynająć
+        auta. Zdjęcia widzi tylko nasz zespół podczas weryfikacji.
       </p>
 
       {status && <Badge variant={statusVariant[status]}>{statusLabel[status]}</Badge>}
@@ -134,64 +148,121 @@ export function IdentityVerificationManager({
         <p className="text-sm text-destructive">Powód odrzucenia: {rejectionReason}</p>
       )}
 
-      <div className="flex flex-wrap gap-3">
-        {documentUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
-          <img
-            src={documentUrl}
-            alt="Wgrany dokument"
-            className="max-h-48 rounded-lg border object-contain"
-          />
-        )}
-        {selfieUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
-          <img
-            src={selfieUrl}
-            alt="Wgrane selfie"
-            className="max-h-48 rounded-lg border object-contain"
-          />
-        )}
-      </div>
+      {submitted && (
+        <div className="flex flex-wrap gap-3">
+          {[
+            [initialDocumentUrl, "Prawo jazdy — przód"],
+            [initialDocumentBackUrl, "Prawo jazdy — tył"],
+            [initialSelfieUrl, "Selfie"],
+          ]
+            .filter(([url]) => url)
+            .map(([url, label]) => (
+              <figure key={label as string} className="space-y-1">
+                {/* eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully */}
+                <img
+                  src={url as string}
+                  alt={label as string}
+                  className="max-h-40 rounded-lg border object-contain"
+                />
+                <figcaption className="text-xs text-muted-foreground">{label}</figcaption>
+              </figure>
+            ))}
+        </div>
+      )}
 
-      {!pendingDocument && (
-        <div>
+      <div className="space-y-3 rounded-lg border p-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
-            variant="outline"
+            variant={front ? "secondary" : "outline"}
             size="sm"
             disabled={isPending}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => frontInputRef.current?.click()}
           >
-            {isPending ? "Wgrywanie…" : documentUrl ? "Wgraj nowy dokument" : "Wgraj dokument"}
+            {front ? "✓ Przód prawa jazdy" : "1. Dodaj przód prawa jazdy"}
           </Button>
           <input
-            ref={fileInputRef}
+            ref={frontInputRef}
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={handleFileChange}
+            onChange={pick("front")}
           />
-        </div>
-      )}
 
-      {pendingDocument && !isPending && (
-        <div className="space-y-2 rounded-lg border p-3">
-          <p className="text-sm font-medium">Krok 2: zrób selfie</p>
-          <SelfieCapture
-            onConfirm={(blob) => finish(pendingDocument, blob)}
-            onSkip={() => finish(pendingDocument, null)}
-            isSubmitting={isPending}
+          <Button
+            type="button"
+            variant={back ? "secondary" : "outline"}
+            size="sm"
+            disabled={isPending}
+            onClick={() => backInputRef.current?.click()}
+          >
+            {back ? "✓ Tył prawa jazdy" : "2. Dodaj tył prawa jazdy"}
+          </Button>
+          <input
+            ref={backInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={pick("back")}
           />
+
+          {!capturing && (
+            <Button
+              type="button"
+              variant={selfie ? "secondary" : "outline"}
+              size="sm"
+              disabled={isPending}
+              onClick={() => setCapturing(true)}
+            >
+              {selfie ? "✓ Selfie" : "3. Zrób selfie"}
+            </Button>
+          )}
         </div>
-      )}
+
+        {capturing && (
+          <SelfieCapture
+            onConfirm={(blob) => {
+              setSelfie(blob);
+              setCapturing(false);
+            }}
+            onSkip={() => setCapturing(false)}
+            isSubmitting={isPending}
+            autoStart
+          />
+        )}
+
+        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            className="mt-0.5"
+            disabled={isPending}
+          />
+          <span>
+            Zgadzam się, aby GoMambo porównał moje selfie ze zdjęciem w prawie jazdy w celu
+            potwierdzenia tożsamości.
+          </span>
+        </label>
+
+        <Button type="button" size="sm" disabled={!ready || isPending} onClick={submit}>
+          {isPending ? "Sprawdzamy…" : "Wyślij do weryfikacji"}
+        </Button>
+
+        {!ready && !isPending && (
+          <p className="text-xs text-muted-foreground">
+            Potrzebne są wszystkie trzy zdjęcia i zgoda.
+          </p>
+        )}
+      </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {!pendingDocument && (
+      {!capturing && (
         <div className="space-y-2 border-t pt-3">
           <p className="text-sm text-muted-foreground">
-            Wolisz zrobić zdjęcia telefonem? Zeskanuj kod QR — dostaniesz zdjęcia przodu, tyłu i
-            selfie w jednym kroku, z automatycznym porównaniem.
+            Wolisz zrobić zdjęcia telefonem? Zeskanuj kod QR — aparat telefonu robi wyraźniejsze
+            zdjęcia dokumentu niż kamerka w laptopie.
           </p>
           <VerificationQrPanel />
         </div>

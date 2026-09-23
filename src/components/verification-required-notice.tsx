@@ -57,9 +57,9 @@ export function VerificationRequiredNotice({
           <Badge variant="secondary">Wkrótce</Badge>
         </li>
         <li>
-          <strong className="text-foreground">Selfie i zdjęcie prawa jazdy</strong> (albo dowodu
-          osobistego) — zajmuje około 5 minut i robisz to raz. Najszybciej telefonem: zeskanujesz
-          kod QR i zrobisz zdjęcia aparatem.
+          <strong className="text-foreground">Selfie i prawo jazdy z obu stron</strong> — zajmuje
+          około 5 minut i robisz to raz. Najszybciej telefonem: zeskanujesz kod QR i zrobisz
+          zdjęcia aparatem.
         </li>
       </ul>
 

@@ -143,10 +143,10 @@ export default async function AdminBookingVerificationsPage() {
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={licenceUrls.get(row.booking_id)!.front!}
-                          alt="Dokument tożsamości — przód"
+                          alt="Prawo jazdy — przód"
                           className="max-h-44 rounded-md border"
                         />
-                        <figcaption className="text-xs">Dokument — przód</figcaption>
+                        <figcaption className="text-xs">Prawo jazdy — przód</figcaption>
                       </figure>
                     )}
                     {licenceUrls.get(row.booking_id)?.back && (
@@ -154,10 +154,10 @@ export default async function AdminBookingVerificationsPage() {
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={licenceUrls.get(row.booking_id)!.back!}
-                          alt="Dokument tożsamości — tył"
+                          alt="Prawo jazdy — tył"
                           className="max-h-44 rounded-md border"
                         />
-                        <figcaption className="text-xs">Dokument — tył</figcaption>
+                        <figcaption className="text-xs">Prawo jazdy — tył</figcaption>
                       </figure>
                     )}
                   </div>

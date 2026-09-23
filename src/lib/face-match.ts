@@ -27,6 +27,25 @@ export const FACE_MATCH_AUTO_APPROVE_THRESHOLD = 99;
 // a second, different person in the frame does not.
 export const FACE_MATCH_MIN_PER_FACE_THRESHOLD = 90;
 
+// Minimum sharpness (Rekognition's own 0-100 quality measure) for a selfie to
+// be approved automatically.
+//
+// This exists because of a demonstrated attack, not a theoretical one: crop
+// the portrait out of a photo of SOMEONE ELSE'S licence, submit the crop as
+// your selfie, and the comparison returns 100.00 against the document it came
+// from — every other gate passes and the account is verified as that person.
+// Nothing in a face comparison can tell that the "selfie" is a photograph of
+// a photograph; that is what liveness detection is for, and we do not have it
+// yet.
+//
+// A portrait cropped out of a licence-sized image is soft: measured at 7.6 on
+// a real one, against 83.1 for a genuine phone selfie. A floor of 30 sits in
+// that gap with room on both sides. It is a speed bump, not a solution — a
+// high-resolution photo of a licence would crop to a sharp portrait — so it
+// gates AUTOMATIC APPROVAL ONLY. A genuinely blurry selfie is not rejected;
+// it goes to a human, which is where an uncertain case belongs anyway.
+export const SELFIE_MIN_SHARPNESS = 30;
+
 // AWS_* is a RESERVED prefix in the serverless runtime: Lambda injects its
 // own AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN and
 // AWS_REGION for the function's execution role, and those win over anything
@@ -143,6 +162,28 @@ export type FaceDetectionOutcome = { ok: boolean; reason?: "no_face" | "multiple
 // user for something that isn't their fault — compareFaces() at finalize
 // time is still the authoritative check and routes to manual review if
 // anything is actually wrong.
+/**
+ * Rekognition's own quality reading for the largest face in a photo. DEFAULT
+ * attributes already include Quality, so this costs one call and no extra
+ * configuration. Returns null when it cannot be established — callers must
+ * treat that as "unknown", never as "fine".
+ */
+export async function readFaceSharpness(imageBytes: Buffer): Promise<number | null> {
+  if (!client) return null;
+  try {
+    const response = await client.send(new DetectFacesCommand({ Image: { Bytes: imageBytes } }));
+    const faces = response.FaceDetails ?? [];
+    if (faces.length === 0) return null;
+    const sharpness = faces
+      .map((f) => f.Quality?.Sharpness)
+      .filter((v): v is number => typeof v === "number");
+    return sharpness.length > 0 ? Math.max(...sharpness) : null;
+  } catch (error) {
+    console.error("readFaceSharpness: Rekognition call failed", error);
+    return null;
+  }
+}
+
 export async function detectFace(
   imageBytes: Buffer,
   // What the photo is supposed to show. It decides whether more than one

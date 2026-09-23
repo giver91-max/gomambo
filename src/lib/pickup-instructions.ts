@@ -99,7 +99,7 @@ export async function sendPickupInstructionsIfDue(
     userId: booking.renter_id,
     type: "booking_confirmed",
     subject: `${startsToday ? "Dziś" : "Jutro"} odbierasz auto: ${label}`,
-    body: `Odbiór ${label} ${when} (${booking.start_date}) w ${car.city}. Weź prawo jazdy i dowód, zrób zdjęcia auta przy odbiorze.`,
+    body: `Odbiór ${label} ${when} (${booking.start_date}) w ${car.city}. Weź prawo jazdy, zrób zdjęcia auta przy odbiorze.`,
     emailHtml: `
       <p>Twój wynajem zaczyna się ${when}.</p>
       <ul>
@@ -112,7 +112,7 @@ export async function sendPickupInstructionsIfDue(
           ownerPhoneHtml ? ` · tel. ${ownerPhoneHtml}` : ""
         }</li>
       </ul>
-      <p><strong>Weź ze sobą:</strong> prawo jazdy i dowód osobisty — ten sam dokument, który przeszedł weryfikację.</p>
+      <p><strong>Weź ze sobą:</strong> prawo jazdy — to samo, które przeszło weryfikację.</p>
       <p><strong>Przy odbiorze koniecznie:</strong> zrób zdjęcia auta dookoła i wnętrza oraz spisz stan licznika i paliwa w zakładce „Zdjęcia odbioru i zwrotu”. To jedyny dowód stanu auta, jeśli później pojawi się spór o szkodę.</p>
       ${car.mileage_limit_km ? `<p><strong>Limit kilometrów:</strong> ${car.mileage_limit_km} km/dzień — powyżej limitu właściciel może doliczyć opłatę.</p>` : ""}
       ${car.fuel_policy ? `<p><strong>Paliwo:</strong> ${FUEL_POLICY_LABELS[car.fuel_policy]} — ${FUEL_POLICY_DESCRIPTIONS[car.fuel_policy]}</p>` : ""}

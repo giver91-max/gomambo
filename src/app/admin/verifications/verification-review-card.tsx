@@ -23,15 +23,45 @@ type Props = {
   selfieUrl: string | null;
 };
 
-const faceMatchContext: Record<FaceMatchResult, (score: number | null) => string | null> = {
-  not_run: () => null,
-  match: (score) => `Automatyczne dopasowanie: ${score}% — zatwierdzone automatycznie.`,
-  no_match: (score) =>
-    score !== null
-      ? `Automatyczne dopasowanie: ${score}% — poniżej progu, wymaga ręcznej weryfikacji.`
-      : "Automatyczne dopasowanie: brak jednoznacznego wyniku, wymaga ręcznej weryfikacji.",
-  error: () => "Sprawdzanie automatyczne niedostępne — wymaga ręcznej weryfikacji.",
-};
+/**
+ * What the reviewer is told about the machine's opinion.
+ *
+ * It depends on the STATUS as well as the score, because the two answer
+ * different questions and used to be conflated here. face_match_result is
+ * 'match' from 97% up, while automatic approval needs 99% AND four further
+ * gates (one person in frame, it is a driving licence, field 4b is not
+ * expired, the selfie is sharp). So a submission the machine deliberately
+ * REFUSED could still be labelled "zatwierdzone automatycznie" on a card
+ * showing "Oczekuje" next to an Approve button — telling the only human in
+ * the loop that the check had already passed.
+ */
+function faceMatchContext(
+  result: FaceMatchResult,
+  score: number | null,
+  status: IdentityVerificationStatus
+): string | null {
+  const pct = score !== null ? `${score.toFixed(1)}%` : "brak wyniku";
+
+  if (status === "approved") {
+    return result === "match"
+      ? `Automatyczne dopasowanie: ${pct} — przeszło wszystkie automatyczne bramki.`
+      : `Zatwierdzone ręcznie. Automat: ${pct}.`;
+  }
+
+  switch (result) {
+    case "not_run":
+      return null;
+    case "match":
+      // Matched as a person, but something stopped the automatic approval.
+      return `Automatyczne dopasowanie: ${pct} — automat NIE zatwierdził tego zgłoszenia. Powód znajdziesz w powiadomieniu; sprawdź dokument samodzielnie.`;
+    case "no_match":
+      return score !== null
+        ? `Automatyczne dopasowanie: ${pct} — poniżej progu, wymaga ręcznej weryfikacji.`
+        : "Automatyczne dopasowanie: brak jednoznacznego wyniku, wymaga ręcznej weryfikacji.";
+    case "error":
+      return "Sprawdzanie automatyczne niedostępne — wymaga ręcznej weryfikacji.";
+  }
+}
 
 export function VerificationReviewCard({
   verification,
@@ -92,9 +122,17 @@ export function VerificationReviewCard({
         </Badge>
       </CardHeader>
       <CardContent className="space-y-3">
-        {faceMatchContext[verification.face_match_result](verification.face_match_score) && (
+        {faceMatchContext(
+          verification.face_match_result,
+          verification.face_match_score,
+          verification.status
+        ) && (
           <p className="text-sm text-muted-foreground">
-            {faceMatchContext[verification.face_match_result](verification.face_match_score)}
+            {faceMatchContext(
+              verification.face_match_result,
+              verification.face_match_score,
+              verification.status
+            )}
           </p>
         )}
         <div className="flex flex-wrap gap-3">

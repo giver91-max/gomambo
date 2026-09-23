@@ -3,14 +3,13 @@
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendCodeEmail } from "@/lib/email";
+import { checkDocumentLegibility, detectFace } from "@/lib/face-match";
 import {
-  FACE_MATCH_AUTO_APPROVE_THRESHOLD,
-  FACE_MATCH_MIN_PER_FACE_THRESHOLD,
-  checkDocumentLegibility,
-  compareFaces,
-  detectFace,
-  readLicence,
-} from "@/lib/face-match";
+  assessIdentity,
+  describeAssessment,
+  emptyAssessment,
+  type IdentityAssessment,
+} from "@/lib/identity-gates";
 import {
   codeMatches,
   generateEmailCode,
@@ -263,53 +262,17 @@ export async function finalizeHandoff(
     admin.storage.from("id-documents").download(handoff.selfie_path),
   ]);
 
-  let matchOutcome: Awaited<ReturnType<typeof compareFaces>> = {
-    result: "error",
-    score: null,
-    minScore: null,
-    unmatchedFaces: 0,
-  };
-  // What the document itself says: is it a driving licence, and what is in
-  // field 4b. Anchored to the 4b label, never to "some future date somewhere
-  // in the photo" — see readLicence.
-  let licence: Awaited<ReturnType<typeof readLicence>> = {
-    isDrivingLicence: false,
-    expiry: null,
-    expired: null,
-    dates: [],
-  };
-
+  // One shared assessment for both ways in (phone QR and desktop upload), so
+  // a gate tightened in one can't be silently missing from the other.
+  let assessment: IdentityAssessment = emptyAssessment();
   if (frontBlob && selfieBlob) {
     const [frontBuffer, selfieBuffer] = await Promise.all([
       frontBlob.arrayBuffer().then((buf) => Buffer.from(buf)),
       selfieBlob.arrayBuffer().then((buf) => Buffer.from(buf)),
     ]);
-    matchOutcome = await compareFaces(selfieBuffer, frontBuffer);
-    licence = await readLicence(frontBuffer);
+    assessment = await assessIdentity(selfieBuffer, frontBuffer);
   }
-
-  // The gates for letting a verification through with NOBODY looking at it.
-  // Every one fails closed: anything unreadable, unconfigured or merely
-  // inconclusive lands in the human queue, never past it.
-  const gates = {
-    // 1. The selfie matches the portrait, with near-certainty.
-    strongMatch:
-      matchOutcome.result === "match" &&
-      matchOutcome.score !== null &&
-      matchOutcome.score >= FACE_MATCH_AUTO_APPROVE_THRESHOLD,
-    // 2. EVERY face in the document frame is that same person. A real licence
-    //    shows one person twice (photo + ghost portrait); a second, DIFFERENT
-    //    face means someone else's document is in the shot — which taking the
-    //    best match alone would have rewarded rather than caught.
-    onlyOnePerson:
-      matchOutcome.unmatchedFaces === 0 &&
-      matchOutcome.minScore !== null &&
-      matchOutcome.minScore >= FACE_MATCH_MIN_PER_FACE_THRESHOLD,
-    // 3. It is a driving licence, not an ID card and not a photo of a screen.
-    isLicence: licence.isDrivingLicence,
-    // 4. Field 4b was read and is not in the past.
-    notExpired: licence.expiry !== null && licence.expired === false,
-  };
+  const matchOutcome = assessment.match;
 
   const { data: existing } = await admin
     .from("identity_verifications")
@@ -327,12 +290,7 @@ export async function finalizeHandoff(
   // limit on attempts. After a rejection a human always looks again.
   const previouslyRejected = existing?.status === "rejected";
 
-  const autoApproved =
-    gates.strongMatch &&
-    gates.onlyOnePerson &&
-    gates.isLicence &&
-    gates.notExpired &&
-    !previouslyRejected;
+  const autoApproved = assessment.passes && !previouslyRejected;
 
   const verificationRow = {
     document_path: handoff.document_front_path,
@@ -374,22 +332,7 @@ export async function finalizeHandoff(
   // anyone to act.
   if (!autoApproved) {
     const { data: profile } = await admin.from("profiles").select("full_name").eq("id", handoff.user_id).single();
-    const hint =
-      matchOutcome.score !== null
-        ? ` Automat: zgodność ${matchOutcome.score.toFixed(1)}%`
-        : " Automat: brak wyniku";
-    const expiry = licence.expiry
-      ? `, prawo jazdy ważne do ${licence.expiry}${licence.expired ? " (PRZETERMINOWANE)" : ""}`
-      : ", daty ważności nie odczytano";
-
-    // Say WHICH gate stopped it, so the reviewer knows what to look at
-    // instead of re-deriving it from a score.
-    const reasons = [];
-    if (!gates.strongMatch) reasons.push(`zgodność poniżej progu ${FACE_MATCH_AUTO_APPROVE_THRESHOLD}%`);
-    if (!gates.onlyOnePerson) reasons.push("w kadrze dokumentu jest więcej niż jedna osoba");
-    if (!gates.isLicence) reasons.push("dokument nie wygląda na prawo jazdy");
-    if (!gates.notExpired) reasons.push("nie potwierdzono ważności (pole 4b)");
-    const why = reasons.length ? ` Do sprawdzenia: ${reasons.join("; ")}.` : "";
+    const detail = describeAssessment(assessment);
 
     // A resubmission after a rejection is the case that must never pass
     // quietly, so it leads the message.
@@ -403,7 +346,7 @@ export async function finalizeHandoff(
       type: "new_identity_verification",
       body: `${rejected}Nowe zgłoszenie weryfikacji tożsamości (telefon): ${
         profile?.full_name ?? "nieznany"
-      }.${hint}${expiry}.${why}`,
+      }.${detail}`,
       link: "/admin/verifications",
     });
   }

@@ -7,13 +7,12 @@ import { Input } from "@/components/ui/input";
 import type { BookingVerificationStatus } from "@/lib/booking-verification";
 
 /**
- * The host confirms the person, with the document in front of them.
+ * The host confirms the person, with the licence in front of them.
  *
- * The document is labelled neutrally on purpose: the profile route accepts a
- * driving licence OR a national ID card and nothing records which arrived, so
- * calling it "Prawo jazdy" told the host they were looking at something they
- * might not be — and told the renter their licence was being shown when they
- * had uploaded an ID card.
+ * Both routes into verification now collect a driving licence and nothing
+ * else, so the host can be told exactly what they are looking at — and can
+ * answer the question they actually have to answer, which is whether this
+ * person may legally drive away in the car.
  *
  * Rejecting does not cancel anything — it hands the case to GoMambo, because
  * "this isn't the same person" is an accusation, and the host already has a
@@ -84,10 +83,9 @@ export function BookingVerificationOwner({
     <div className="space-y-2 rounded-md border border-primary/40 bg-primary/5 p-3">
       <p className="text-sm font-medium text-foreground">Potwierdź najemcę przed wydaniem</p>
       <p className="text-xs">
-        {renterName} przesłał świeże selfie przed odbiorem. Sprawdź, czy to ta sama osoba co na
-        dokumencie. Jeśli to prawo jazdy — sprawdź też datę ważności (pole 4b). Jeśli najemca
-        przesłał dowód osobisty, prawo jazdy obejrzyj przy wydaniu auta. Po zatwierdzeniu te
-        zdjęcia znikną z Twojego panelu.
+        {renterName} przesłał świeże selfie przed odbiorem. Sprawdź dwie rzeczy: czy to ta sama
+        osoba co na prawie jazdy i czy prawo jazdy jest nadal ważne — data w polu 4b. Po
+        zatwierdzeniu te zdjęcia znikną z Twojego panelu.
       </p>
       {/* The host decides two things — is this the same person, and is the
           licence still valid — so they get the fresh selfie and both sides of
@@ -106,10 +104,10 @@ export function BookingVerificationOwner({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={licenceFrontUrl}
-              alt="Dokument tożsamości najemcy — przód"
+              alt="Prawo jazdy najemcy — przód"
               className="max-h-44 rounded-md border"
             />
-            <figcaption className="text-xs">Dokument — przód</figcaption>
+            <figcaption className="text-xs">Prawo jazdy — przód</figcaption>
           </figure>
         )}
         {licenceBackUrl && (
@@ -117,18 +115,18 @@ export function BookingVerificationOwner({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={licenceBackUrl}
-              alt="Dokument tożsamości najemcy — tył"
+              alt="Prawo jazdy najemcy — tył"
               className="max-h-44 rounded-md border"
             />
-            <figcaption className="text-xs">Dokument — tył</figcaption>
+            <figcaption className="text-xs">Prawo jazdy — tył</figcaption>
           </figure>
         )}
       </div>
       {!licenceBackUrl && (
         <p className="text-xs">
           {licenceFrontUrl
-            ? "Najemca przesłał tylko jedną stronę dokumentu — daty ważności może nie być widać."
-            : "Nie mamy zdjęcia dokumentu tego najemcy. Sprawdź prawo jazdy przy wydaniu auta."}
+            ? "Najemca przesłał tylko jedną stronę prawa jazdy — daty ważności może nie być widać."
+            : "Nie mamy zdjęcia prawa jazdy tego najemcy. Sprawdź je przy wydaniu auta."}
         </p>
       )}
       <p className="text-xs">

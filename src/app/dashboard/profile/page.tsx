@@ -61,25 +61,20 @@ export default async function ProfilePage() {
 
   const { data: verification } = await supabase
     .from("identity_verifications")
-    .select("status, rejection_reason, document_path, selfie_path")
+    .select("status, rejection_reason, document_path, document_back_path, selfie_path")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  let documentUrl: string | null = null;
-  if (verification?.document_path) {
-    const { data: signed } = await supabase.storage
-      .from("id-documents")
-      .createSignedUrl(verification.document_path, 60 * 5);
-    documentUrl = signed?.signedUrl ?? null;
-  }
-
-  let selfieUrl: string | null = null;
-  if (verification?.selfie_path) {
-    const { data: signed } = await supabase.storage
-      .from("id-documents")
-      .createSignedUrl(verification.selfie_path, 60 * 5);
-    selfieUrl = signed?.signedUrl ?? null;
-  }
+  const signOwn = async (path: string | null | undefined) => {
+    if (!path) return null;
+    const { data } = await supabase.storage.from("id-documents").createSignedUrl(path, 60 * 5);
+    return data?.signedUrl ?? null;
+  };
+  const [documentUrl, documentBackUrl, selfieUrl] = await Promise.all([
+    signOwn(verification?.document_path),
+    signOwn(verification?.document_back_path),
+    signOwn(verification?.selfie_path),
+  ]);
 
   const { count: referralCount } = await supabase
     .from("referrals")
@@ -175,6 +170,7 @@ export default async function ProfilePage() {
             initialStatus={verification?.status ?? null}
             initialRejectionReason={verification?.rejection_reason ?? null}
             initialDocumentUrl={documentUrl}
+            initialDocumentBackUrl={documentBackUrl}
             initialSelfieUrl={selfieUrl}
           />
         </CardContent>
