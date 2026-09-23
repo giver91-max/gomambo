@@ -81,11 +81,13 @@ export default async function AutaPage({
   // depends on isAdmin, not the fetch itself — so run them in parallel
   // instead of two round trips back to back.
   const [{ data: profile }, { data: siteSettings }, cities] = await Promise.all([
-    user ? supabase.from("profiles").select("role").eq("id", user.id).single() : Promise.resolve({ data: null }),
+    user ? supabase.from("profiles").select("role, maintenance_bypass").eq("id", user.id).single() : Promise.resolve({ data: null }),
     supabase.from("site_settings").select("maintenance_mode").eq("id", 1).single(),
     getApprovedCities(),
   ]);
-  const isAdmin = profile?.role === "admin";
+  // maintenance_bypass lets a test account browse while the listings
+  // stay hidden from everyone else.
+  const isAdmin = profile?.role === "admin" || profile?.maintenance_bypass === true;
 
   if (!isAdmin && siteSettings?.maintenance_mode) {
     return (
@@ -98,7 +100,7 @@ export default async function AutaPage({
 
   let query = supabase
     .from("cars")
-    .select("*, car_images(storage_path, position)", { count: "exact" })
+    .select("*, car_images(storage_path, position), partners(trade_name)", { count: "exact" })
     .eq("status", "approved")
     .order("position", { referencedTable: "car_images", ascending: true });
 
@@ -239,7 +241,7 @@ export default async function AutaPage({
       <div>
         <h1 className="text-2xl font-bold">Wypożyczalnia aut — przeglądaj oferty</h1>
         <p className="text-sm text-muted-foreground">
-          Zatwierdzone samochody dostępne od właścicieli w Twojej okolicy.
+          Auta od lokalnych wypożyczalni i od właścicieli prywatnych — w jednym miejscu.
         </p>
       </div>
 
@@ -428,6 +430,19 @@ export default async function AutaPage({
                       {car.seats && <span>· {car.seats} miejsc</span>}
                     </p>
                     {(() => {
+                      // A Partner car is rented out by the company, so it is
+                      // named and badged as one. Showing the member's first
+                      // name and personal rating here would tell the customer
+                      // the opposite of who they are contracting with.
+                      const partner = car.partners as unknown as { trade_name: string } | null;
+                      if (partner) {
+                        return (
+                          <p className="flex flex-wrap items-center gap-1 text-xs">
+                            <span>{partner.trade_name}</span>
+                            <Badge className="h-4 px-1.5 text-[10px]">Wypożyczalnia</Badge>
+                          </p>
+                        );
+                      }
                       const rating = ratingByOwnerId.get(car.owner_id);
                       const ownerName = ownerNameById.get(car.owner_id);
                       const isVerified = verifiedOwnerIds.has(car.owner_id);

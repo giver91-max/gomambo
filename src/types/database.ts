@@ -1,4 +1,65 @@
 export type ProfileRole = "owner" | "admin";
+
+// A professional rental company. Deliberately NOT a role on profiles: a
+// company is not a login, it has many members, and its legal identity must
+// not sit on a row a booking counterparty can read (migration 0042).
+export type PartnerStatus = "draft" | "pending" | "active" | "suspended" | "terminated";
+export type PartnerMemberRole = "owner" | "manager" | "staff";
+export type PartnerDocumentKind =
+  | "krs"
+  | "ceidg"
+  | "nip_confirmation"
+  | "insurance"
+  | "other";
+
+// Public half — what a customer is shown about who is renting them the car.
+export type Partner = {
+  id: string;
+  trade_name: string;
+  city: string | null;
+  description: string | null;
+  logo_path: string | null;
+  status: PartnerStatus;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// Members and admins only.
+export type PartnerPrivate = {
+  partner_id: string;
+  legal_name: string | null;
+  nip: string | null;
+  regon: string | null;
+  krs: string | null;
+  address_street: string | null;
+  address_postal_code: string | null;
+  address_city: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  stripe_connect_account_id: string | null;
+  stripe_connect_onboarded: boolean;
+  updated_at: string;
+};
+
+export type PartnerMember = {
+  partner_id: string;
+  profile_id: string;
+  role: PartnerMemberRole;
+  created_at: string;
+};
+
+export type PartnerDocument = {
+  id: string;
+  partner_id: string;
+  kind: PartnerDocumentKind;
+  storage_path: string;
+  original_name: string | null;
+  valid_until: string | null;
+  verified_at: string | null;
+  verified_by: string | null;
+  created_at: string;
+};
 export type CarStatus = "pending" | "approved" | "rejected" | "paused";
 
 export type Profile = {
@@ -12,6 +73,8 @@ export type Profile = {
   terms_accepted_at: string | null;
   stripe_connect_account_id: string | null;
   stripe_connect_onboarded: boolean;
+  // Lets this account browse/book while the site is in maintenance mode.
+  maintenance_bypass: boolean;
   created_at: string;
 };
 
@@ -52,8 +115,14 @@ export type Car = {
   description: string | null;
   status: CarStatus;
   rejection_reason: string | null;
-  registration_number: string | null;
-  insurance_document_path: string | null;
+  // Set when the car is operated by a professional Partner rather than an
+  // individual. owner_id stays the acting person — payouts and conversations
+  // hang off it (migration 0042).
+  partner_id: string | null;
+  // Peer-to-peer listings keep the instant book they have today; Partner
+  // cars are created with false, because Rafał's decision is that a Partner
+  // confirms each booking.
+  instant_book: boolean;
   vehicle_type: VehicleType | null;
   fuel_type: FuelType | null;
   transmission: Transmission | null;
@@ -67,6 +136,16 @@ export type Car = {
   delivery_info: string | null;
   cancellation_policy: CancellationPolicy;
   created_at: string;
+  updated_at: string;
+};
+
+// Kept off public.cars on purpose: an approved listing is world-readable and
+// RLS filters rows, never columns, so anything here would otherwise be served
+// to anonymous REST clients along with the price (migration 0037).
+export type CarPrivate = {
+  car_id: string;
+  registration_number: string | null;
+  insurance_document_path: string | null;
   updated_at: string;
 };
 
@@ -96,6 +175,9 @@ export type BookingStatus = "requested" | "accepted" | "declined" | "cancelled" 
 export type PaymentStatus = "unpaid" | "paid" | "refunded" | "partially_refunded" | "failed";
 export type DepositStatus = "not_required" | "held" | "captured" | "released" | "failed";
 
+// Stripe Checkout, or a bank transfer an admin confirms by hand.
+export type PaymentMethod = "stripe" | "bank_transfer";
+
 export type Booking = {
   id: string;
   car_id: string;
@@ -112,11 +194,13 @@ export type Booking = {
   platform_fee_amount: number | null;
   stripe_checkout_session_id: string | null;
   payment_status: PaymentStatus;
+  payment_method: PaymentMethod;
   deposit_amount: number | null;
   stripe_deposit_payment_intent_id: string | null;
   deposit_status: DepositStatus;
   created_at: string;
   updated_at: string;
+  pickup_instructions_sent_at: string | null;
 };
 
 export type BookingExtraChargeStatus = "requested" | "paid" | "cancelled";
@@ -127,6 +211,7 @@ export type BookingExtraCharge = {
   amount_pln: number;
   reason: string;
   status: BookingExtraChargeStatus;
+  payment_method: PaymentMethod;
   stripe_checkout_session_id: string | null;
   created_at: string;
 };
@@ -219,7 +304,11 @@ export type AdminNotification = {
     | "new_referral"
     | "commission_fallback"
     | "refund_failed"
-    | "deposit_release_failed";
+    | "deposit_release_failed"
+    | "bank_transfer_declared"
+    | "damage_reported"
+    | "booking_verification_escalated"
+    | "new_partner_pending";
   body: string;
   link: string | null;
   created_at: string;
@@ -306,7 +395,61 @@ export type NotificationType =
   | "booking_confirmed"
   | "extra_charge_requested"
   | "booking_extended"
-  | "payment_failed";
+  | "payment_failed"
+  | "damage_reported"
+  | "booking_verification_requested"
+  | "booking_verification_approved"
+  | "booking_verification_pending_owner";
+
+export type DamageReportStatus = "open" | "resolved";
+
+// Filed by either side of a rental; reaches the other party AND GoMambo.
+// No client insert policy — the server action writes it, so nobody can file
+// a report in the counterparty's name.
+export type DamageReport = {
+  id: string;
+  booking_id: string;
+  reporter_id: string;
+  reporter_role: "owner" | "renter";
+  description: string;
+  status: DamageReportStatus;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+// Separate table, not a column: the report row is readable by both booking
+// participants, and RLS cannot hide a column from them (migration 0039).
+export type DamageReportNote = {
+  report_id: string;
+  note: string;
+  updated_at: string;
+};
+
+// Per-BOOKING re-verification shortly before pickup. identity_verifications
+// is per USER and approved once, which does not catch an account handed to
+// someone else afterwards — the risk that actually matters at handover.
+export type BookingVerification = {
+  booking_id: string;
+  status: "pending_renter" | "pending_owner" | "approved" | "escalated";
+  selfie_path: string | null;
+  face_match_result: FaceMatchResult | null;
+  face_match_score: number | null;
+  requested_at: string;
+  submitted_at: string | null;
+  decided_at: string | null;
+  decided_by: string | null;
+  escalated_at: string | null;
+  reminder_sent_at: string | null;
+};
+
+// Separate table, not a column: the verification row is readable by both
+// participants, and an owner's objection or GoMambo's note is an unverified
+// accusation about one of them (migration 0041).
+export type BookingVerificationNote = {
+  booking_id: string;
+  reason: string;
+  updated_at: string;
+};
 
 export type Notification = {
   id: string;
@@ -345,6 +488,140 @@ export type Database = {
             columns: ["owner_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cars_partner_id_fkey";
+            columns: ["partner_id"];
+            isOneToOne: false;
+            referencedRelation: "partners";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      partners: {
+        Row: Partner;
+        Insert: Partial<Partner> & { trade_name: string };
+        Update: Partial<Partner>;
+        Relationships: [];
+      };
+      partner_private: {
+        Row: PartnerPrivate;
+        Insert: Partial<PartnerPrivate> & { partner_id: string };
+        Update: Partial<PartnerPrivate>;
+        Relationships: [
+          {
+            foreignKeyName: "partner_private_partner_id_fkey";
+            columns: ["partner_id"];
+            isOneToOne: true;
+            referencedRelation: "partners";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      partner_members: {
+        Row: PartnerMember;
+        Insert: Partial<PartnerMember> & { partner_id: string; profile_id: string };
+        Update: Partial<PartnerMember>;
+        Relationships: [
+          {
+            foreignKeyName: "partner_members_partner_id_fkey";
+            columns: ["partner_id"];
+            isOneToOne: false;
+            referencedRelation: "partners";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      partner_documents: {
+        Row: PartnerDocument;
+        Insert: Partial<PartnerDocument> & {
+          partner_id: string;
+          kind: PartnerDocumentKind;
+          storage_path: string;
+        };
+        Update: Partial<PartnerDocument>;
+        Relationships: [
+          {
+            foreignKeyName: "partner_documents_partner_id_fkey";
+            columns: ["partner_id"];
+            isOneToOne: false;
+            referencedRelation: "partners";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      car_private: {
+        Row: CarPrivate;
+        Insert: Partial<CarPrivate> & { car_id: string };
+        Update: Partial<CarPrivate>;
+        Relationships: [
+          {
+            foreignKeyName: "car_private_car_id_fkey";
+            columns: ["car_id"];
+            isOneToOne: true;
+            referencedRelation: "cars";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      booking_verification_notes: {
+        Row: BookingVerificationNote;
+        Insert: Partial<BookingVerificationNote> & { booking_id: string; reason: string };
+        Update: Partial<BookingVerificationNote>;
+        Relationships: [
+          {
+            foreignKeyName: "booking_verification_notes_booking_id_fkey";
+            columns: ["booking_id"];
+            isOneToOne: true;
+            referencedRelation: "booking_verifications";
+            referencedColumns: ["booking_id"];
+          },
+        ];
+      };
+      booking_verifications: {
+        Row: BookingVerification;
+        Insert: Partial<BookingVerification> & { booking_id: string };
+        Update: Partial<BookingVerification>;
+        Relationships: [
+          {
+            foreignKeyName: "booking_verifications_booking_id_fkey";
+            columns: ["booking_id"];
+            isOneToOne: true;
+            referencedRelation: "bookings";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      damage_report_notes: {
+        Row: DamageReportNote;
+        Insert: Partial<DamageReportNote> & { report_id: string; note: string };
+        Update: Partial<DamageReportNote>;
+        Relationships: [
+          {
+            foreignKeyName: "damage_report_notes_report_id_fkey";
+            columns: ["report_id"];
+            isOneToOne: true;
+            referencedRelation: "damage_reports";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      damage_reports: {
+        Row: DamageReport;
+        Insert: Partial<DamageReport> & {
+          booking_id: string;
+          reporter_id: string;
+          reporter_role: "owner" | "renter";
+          description: string;
+        };
+        Update: Partial<DamageReport>;
+        Relationships: [
+          {
+            foreignKeyName: "damage_reports_booking_id_fkey";
+            columns: ["booking_id"];
+            isOneToOne: false;
+            referencedRelation: "bookings";
             referencedColumns: ["id"];
           },
         ];

@@ -23,7 +23,9 @@ export default async function EditCarPage({
   const [{ data: car }, { data: profile }] = await Promise.all([
     supabase
       .from("cars")
-      .select("*, car_images(id, storage_path, position)")
+      .select(
+        "*, car_images(id, storage_path, position), car_private(registration_number, insurance_document_path)"
+      )
       .eq("id", params.id)
       .single(),
     supabase.from("profiles").select("role").eq("id", user.id).single(),
@@ -49,13 +51,22 @@ export default async function EditCarPage({
     }));
 
   let insuranceUrl: string | null = null;
-  if (car.insurance_document_path) {
+  // registration_number / insurance_document_path moved off the public
+  // listing row into car_private (0037) — readable here only because RLS on
+  // that table admits the owner and an admin.
+  const carPrivate = (car.car_private ?? null) as unknown as {
+    registration_number: string | null;
+    insurance_document_path: string | null;
+  } | null;
+
+  if (carPrivate?.insurance_document_path) {
     const { data: signed } = await supabase.storage
       .from("car-insurance")
-      .createSignedUrl(car.insurance_document_path, 60 * 5);
+      .createSignedUrl(carPrivate.insurance_document_path, 60 * 5);
     insuranceUrl = signed?.signedUrl ?? null;
   }
-  const insuranceIsPdf = car.insurance_document_path?.toLowerCase().endsWith(".pdf") ?? false;
+  const insuranceIsPdf =
+    carPrivate?.insurance_document_path?.toLowerCase().endsWith(".pdf") ?? false;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -98,7 +109,7 @@ export default async function EditCarPage({
 
       <div className="space-y-3">
         <h2 className="font-semibold">Dane auta</h2>
-        <EditCarForm car={car} />
+        <EditCarForm car={car} registrationNumber={carPrivate?.registration_number ?? null} />
       </div>
 
       <div className="border-t pt-4">

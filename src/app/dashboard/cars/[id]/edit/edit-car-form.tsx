@@ -29,7 +29,14 @@ const initialState: EditCarState = { error: null };
 const selectClassName =
   "h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
-export function EditCarForm({ car }: { car: Car }) {
+export function EditCarForm({
+  car,
+  registrationNumber,
+}: {
+  car: Car;
+  // Lives in car_private, not on the listing row (migration 0037).
+  registrationNumber: string | null;
+}) {
   const updateWithId = updateCarDetails.bind(null, car.id);
   const [state, formAction] = useFormState(updateWithId, initialState);
   const [deliveryAvailable, setDeliveryAvailable] = useState(car.delivery_available);
@@ -212,7 +219,11 @@ export function EditCarForm({ car }: { car: Car }) {
             defaultValue={car.security_deposit_amount ?? ""}
           />
           <p className="text-xs text-muted-foreground">
-            Blokowana na karcie najemcy przy płatności, zwalniana po zakończeniu wynajmu.
+            Blokowana na karcie najemcy przy płatności, zwalniana po zakończeniu wynajmu.{" "}
+            <strong className="text-foreground">
+              Kaucja oznacza, że to auto można opłacić wyłącznie kartą lub BLIK-iem
+            </strong>{" "}
+            — przelewem nie da się jej zablokować.
           </p>
         </div>
         <div className="space-y-2">
@@ -280,7 +291,7 @@ export function EditCarForm({ car }: { car: Car }) {
           id="registration_number"
           name="registration_number"
           required
-          defaultValue={car.registration_number ?? ""}
+          defaultValue={registrationNumber ?? ""}
           placeholder="WX 12345"
         />
       </div>

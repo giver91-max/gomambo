@@ -10,7 +10,7 @@ import { getRecaptchaToken } from "@/lib/recaptcha-client";
 import type { SelectedRange } from "./availability-view";
 import { applyCommission, calculateBookingPrice } from "@/lib/pricing";
 import { VerificationRequiredNotice } from "@/components/verification-required-notice";
-import { InsuranceProtectionNotice } from "@/components/insurance-protection-notice";
+import type { RentalParty } from "@/components/rental-liability-notice";
 import type { IdentityVerificationStatus } from "@/types/database";
 
 const initialState: InquiryState = { error: null };
@@ -24,6 +24,7 @@ export function InquiryForm({
   pricePerDay,
   pricePerMonth,
   commissionRate,
+  party,
 }: {
   carId: string;
   selectedRange?: SelectedRange;
@@ -33,6 +34,7 @@ export function InquiryForm({
   pricePerDay: number;
   pricePerMonth: number | null;
   commissionRate: number;
+  party: RentalParty;
 }) {
   const [state, setState] = useState<InquiryState>(initialState);
   const [isPending, startTransition] = useTransition();
@@ -143,7 +145,6 @@ export function InquiryForm({
         </p>
       )}
 
-      <InsuranceProtectionNotice />
 
       <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-destructive/40 p-3 text-sm">
         <input
@@ -153,9 +154,11 @@ export function InquiryForm({
           className="mt-0.5 size-4 shrink-0 accent-[var(--destructive)]"
         />
         <span>
-          Rozumiem, że wynajmuję <strong>bez dodatkowego ubezpieczenia</strong> i że odpowiadam
-          finansowo za wszelkie uszkodzenia, kradzież i utratę wartości auta — do pełnej wartości
-          pojazdu, także ponad wysokość kaucji.
+          Rozumiem, że umowę najmu zawieram bezpośrednio z wynajmującym —{" "}
+          <strong>{party.partnerName ?? party.ownerName}</strong> — a GoMambo prowadzi platformę i
+          nie jest ubezpieczycielem. Wiem, że{" "}
+          <strong>obowiązkowe OC nie pokrywa uszkodzeń wynajmowanego auta</strong> i że za auto w
+          czasie wynajmu odpowiadam na zasadach umowy najmu.
         </span>
       </label>
 

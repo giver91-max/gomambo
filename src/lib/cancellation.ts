@@ -8,7 +8,7 @@ import {
 } from "@/lib/stripe";
 import { reportMoneyFailure } from "@/lib/money-alerts";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
-import type { CancellationPolicy, Database, DepositStatus, PaymentStatus } from "@/types/database";
+import type { CancellationPolicy, Database, DepositStatus, PaymentMethod, PaymentStatus } from "@/types/database";
 
 export function freeCancellationDeadline(policy: CancellationPolicy, startDate: string): Date {
   const freeHours = CANCELLATION_POLICY_FREE_HOURS[policy];
@@ -29,6 +29,8 @@ export function isWithinFreeCancellationWindow(
 // anything is still owed is unknown (usually there are none — don't alarm
 // the renter over it). "failed": the base refund itself was rejected.
 // "not_due": paid, but outside the free-cancellation window.
+// "manual_refund_required": paid by bank transfer, so there is no Stripe
+// charge to reverse — a human has to send the money back.
 // "not_applicable": nothing had been paid.
 export type CancellationRefundOutcome =
   | "refunded"
@@ -36,6 +38,7 @@ export type CancellationRefundOutcome =
   | "refund_unverified"
   | "failed"
   | "not_due"
+  | "manual_refund_required"
   | "not_applicable";
 
 export type DepositReleaseOutcome = "released" | "failed" | "not_applicable";
@@ -60,6 +63,8 @@ export function renterRefundSentence(outcome: CancellationRefundOutcome): string
       // Almost always a full refund we simply couldn't confirm; don't claim
       // a failure that probably didn't happen, don't promise completeness.
       return " Zwrot płatności został zlecony — potwierdzimy go osobno, nie musisz nic robić.";
+    case "manual_refund_required":
+      return " Zwrot wykonamy przelewem na konto, z którego przyszła wpłata — odezwiemy się do Ciebie, nie musisz nic robić.";
     default:
       return "";
   }
@@ -80,6 +85,7 @@ export async function cancelBookingWithRefund(
   booking: {
     start_date: string;
     payment_status: PaymentStatus;
+    payment_method?: PaymentMethod;
     stripe_checkout_session_id: string | null;
     deposit_status: DepositStatus;
     stripe_deposit_payment_intent_id: string | null;
@@ -93,6 +99,26 @@ export async function cancelBookingWithRefund(
   // refundable: an extension checkout left open in another tab stays payable
   // for ~24h, and the webhook would happily extend a cancelled booking.
   await neutralisePendingExtensions(bookingId);
+
+  // An outstanding damage/mileage charge dies with the booking. Left
+  // 'requested' it disappears from the renter's screen (that list only
+  // covers live bookings) while still sitting on the admin's transfer queue,
+  // where confirming it would tell the owner money arrived for a trip that
+  // was called off.
+  const { data: killedCharges } = await supabase
+    .from("booking_extra_charges")
+    .update({ status: "cancelled" })
+    .eq("booking_id", bookingId)
+    .eq("status", "requested")
+    .select("id, stripe_checkout_session_id");
+  for (const charge of killedCharges ?? []) {
+    // Same ~24h problem as the extensions above: the renter may still have
+    // the Checkout page open, and once the row is 'cancelled' the webhook
+    // has no branch that would refund it.
+    if (charge.stripe_checkout_session_id) {
+      await expireCheckoutSession(charge.stripe_checkout_session_id);
+    }
+  }
 
   let deposit: DepositReleaseOutcome = "not_applicable";
   if (booking.deposit_status === "held" && booking.stripe_deposit_payment_intent_id) {
@@ -113,13 +139,36 @@ export async function cancelBookingWithRefund(
     }
   }
 
-  if (booking.payment_status !== "paid" || !booking.stripe_checkout_session_id) {
+  if (booking.payment_status !== "paid") {
     return { refund: "not_applicable", deposit };
   }
-  if (
-    !options.forceFullRefund &&
-    !isWithinFreeCancellationWindow(booking.cancellation_policy, booking.start_date)
-  ) {
+  const refundDue =
+    options.forceFullRefund ||
+    isWithinFreeCancellationWindow(booking.cancellation_policy, booking.start_date);
+
+  // Paid by bank transfer: real money arrived, but there is no Stripe charge
+  // to reverse. Treating that as "nothing was paid" would silently keep the
+  // renter's money, so it goes to a human instead. payment_status stays
+  // 'paid' — it only becomes 'refunded' once someone has actually sent it.
+  if (booking.payment_method === "bank_transfer" || !booking.stripe_checkout_session_id) {
+    if (!refundDue) {
+      return { refund: "not_due", deposit };
+    }
+    // The base fee has no Stripe charge, but an extension of this same trip
+    // may well have been paid by card — that money CAN go back automatically
+    // and must not be forgotten just because the rental itself was a wire.
+    const transferExtensions = await refundPaidExtensions(bookingId);
+    await reportMoneyFailure(
+      "refund_failed",
+      `Anulowana rezerwacja ${bookingId} została opłacona przelewem — nie ma płatności Stripe do cofnięcia. Zwróć wpłatę najemcy ręcznie przelewem i odnotuj to w rezerwacji.` +
+        (transferExtensions.status !== "ok"
+          ? ` Uwaga: zwrot za opłacone przedłużenie tej rezerwacji też wymaga sprawdzenia (${transferExtensions.error ?? "nieznany błąd"}).`
+          : "")
+    );
+    return { refund: "manual_refund_required", deposit };
+  }
+
+  if (!refundDue) {
     return { refund: "not_due", deposit };
   }
 

@@ -9,18 +9,35 @@ export function AdminNav({
   pendingCars,
   unreadMessages,
   pendingVerifications,
+  pendingTransfers = 0,
+  openReports = 0,
+  openVerifications = 0,
+  pendingPartners = 0,
 }: {
   pendingCars: number;
   unreadMessages: number;
   pendingVerifications: number;
+  pendingTransfers?: number;
+  openReports?: number;
+  openVerifications?: number;
+  pendingPartners?: number;
 }) {
   const pathname = usePathname();
 
   const items = [
     { href: "/admin", label: "Przegląd", exact: true, count: 0 },
+    { href: "/admin/partnerzy", label: "Wypożyczalnie", exact: false, count: pendingPartners },
     { href: "/admin/cars", label: "Samochody", exact: false, count: pendingCars },
     { href: "/admin/users", label: "Użytkownicy", exact: false, count: 0 },
     { href: "/admin/bookings", label: "Rezerwacje", exact: false, count: 0 },
+    { href: "/admin/przelewy", label: "Przelewy", exact: false, count: pendingTransfers },
+    { href: "/admin/zgloszenia", label: "Zgłoszenia", exact: false, count: openReports },
+    {
+      href: "/admin/weryfikacje-najmu",
+      label: "Weryfikacje najmu",
+      exact: false,
+      count: openVerifications,
+    },
     { href: "/admin/reviews", label: "Recenzje", exact: false, count: 0 },
     { href: "/admin/messages", label: "Wiadomości", exact: false, count: unreadMessages },
     { href: "/admin/conversations", label: "Rozmowy", exact: false, count: 0 },

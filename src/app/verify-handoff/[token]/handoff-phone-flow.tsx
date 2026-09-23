@@ -60,6 +60,11 @@ export function HandoffPhoneFlow({
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [finalResult, setFinalResult] = useState<FaceMatchResult | null>(null);
+  // Whether the server actually approved the verification, not whether the
+  // photos looked alike. These are different answers and the screen must not
+  // guess: telling someone "potwierdzone" while the desktop still says
+  // "czeka na weryfikację" is the bug this flag exists to prevent.
+  const [approved, setApproved] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleSendCode() {
@@ -122,7 +127,13 @@ export function HandoffPhoneFlow({
           return;
         }
         setFinalResult(result.result ?? null);
-        setStep(result.result === "match" ? "done" : "review_needed");
+        setApproved(result.approved ?? false);
+        // Offer a retake only when retaking could plausibly change the
+        // outcome — i.e. the faces didn't match. If they matched but the
+        // automatic approval didn't fire (score just under the bar, or the
+        // expiry date unreadable), another selfie won't fix it and a human
+        // is already looking.
+        setStep(result.approved || result.result === "match" ? "done" : "review_needed");
       } catch (err) {
         setFinalizeError(toErrorMessage(err));
       }
@@ -218,7 +229,8 @@ export function HandoffPhoneFlow({
         <h1 className="text-2xl font-bold">Zgoda na przetwarzanie wizerunku</h1>
         <p className="text-base text-muted-foreground">
           Za chwilę zrobisz zdjęcia prawa jazdy (przód i tył) oraz selfie. Selfie zostanie
-          automatycznie porównane ze zdjęciem dokumentu w celu potwierdzenia Twojej tożsamości.
+          automatycznie porównane ze zdjęciem dokumentu — wynik pomaga naszemu zespołowi
+          potwierdzić Twoją tożsamość.
         </p>
         <label className="flex items-start gap-3 text-left text-sm">
           <input
@@ -324,13 +336,16 @@ export function HandoffPhoneFlow({
     );
   }
 
-  if (finalResult === "match") {
+  // This screen reports what the SERVER decided. Earlier it congratulated
+  // anyone whose photos matched, while the desktop still showed "czeka na
+  // weryfikację" — two screens, two stories, one confused user.
+  if (approved) {
     return (
       <div className="flex flex-col items-center gap-4 text-center">
         <h1 className="text-2xl font-bold">Tożsamość potwierdzona ✓</h1>
         <p className="text-base text-muted-foreground">
-          Zdjęcia pasują do siebie automatycznie. Twoje konto jest już zweryfikowane — możesz wrócić
-          do urządzenia, z którego zeskanowałeś kod QR.
+          Gotowe — Twoje konto jest zweryfikowane. Możesz wrócić do urządzenia, z którego
+          zeskanowałeś kod QR, i dodać samochód albo zarezerwować auto.
         </p>
       </div>
     );
@@ -339,9 +354,14 @@ export function HandoffPhoneFlow({
   return (
     <div className="flex flex-col items-center gap-4 text-center">
       <h1 className="text-2xl font-bold">Zdjęcia przesłane ✓</h1>
+      {finalResult === "match" && (
+        <p className="text-base text-primary">
+          Zdjęcia pasują do siebie — automatyczne porównanie wypadło dobrze.
+        </p>
+      )}
       <p className="text-base text-muted-foreground">
-        Nasz zespół sprawdzi zdjęcia ręcznie, zwykle w ciągu 24 godzin. Możesz wrócić do
-        urządzenia, z którego zeskanowałeś kod QR.
+        Zanim potwierdzimy, sprawdzi je jeszcze człowiek z zespołu GoMambo — zwykle w ciągu 24
+        godzin. Powiadomimy Cię mailem. Możesz wrócić do urządzenia, z którego zeskanowałeś kod QR.
       </p>
     </div>
   );

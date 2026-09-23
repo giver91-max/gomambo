@@ -28,7 +28,7 @@ export async function adminCancelBooking(bookingId: string): Promise<{ error: st
     .from("bookings")
     .select(
       `renter_id, owner_id, status, start_date, end_date,
-       payment_status, stripe_checkout_session_id, deposit_status, stripe_deposit_payment_intent_id,
+       payment_status, payment_method, stripe_checkout_session_id, deposit_status, stripe_deposit_payment_intent_id,
        cars(brand, model, year, cancellation_policy)`
     )
     .eq("id", bookingId)
@@ -47,6 +47,7 @@ export async function adminCancelBooking(bookingId: string): Promise<{ error: st
   const cancellation = await cancelBookingWithRefund(admin, bookingId, {
     start_date: booking.start_date,
     payment_status: booking.payment_status,
+    payment_method: booking.payment_method,
     stripe_checkout_session_id: booking.stripe_checkout_session_id,
     deposit_status: booking.deposit_status,
     stripe_deposit_payment_intent_id: booking.stripe_deposit_payment_intent_id,

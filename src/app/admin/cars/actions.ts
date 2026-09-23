@@ -10,10 +10,20 @@ export async function approveCar(carId: string) {
     .from("cars")
     .update({ status: "approved", rejection_reason: null })
     .eq("id", carId)
-    .select("owner_id, brand, model, year")
+    // status is read BACK on purpose: the catalogue invariant in 0042 can
+    // silently force this row to 'paused' when the car belongs to a company
+    // that is not active. That is not an error, so without this the owner
+    // would be emailed "your car is live" about a car nobody can see.
+    .select("owner_id, brand, model, year, status")
     .single();
 
   if (error) throw new Error(error.message);
+
+  if (car.status !== "approved") {
+    throw new Error(
+      "Auto należy do wypożyczalni, która nie jest aktywna — zweryfikuj najpierw firmę w zakładce Wypożyczalnie. Ogłoszenie wróci do katalogu automatycznie."
+    );
+  }
 
   await notifyUser({
     userId: car.owner_id,

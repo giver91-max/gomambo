@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/notify-user";
 import { cancelBookingWithRefund, renterRefundSentence } from "@/lib/cancellation";
+import { hasOverlappingBooking } from "@/lib/booking-availability";
 import { captureDeposit, createExtraChargeCheckoutSession, releaseDeposit } from "@/lib/stripe";
 import { SITE_URL } from "@/lib/site";
 import type { BookingStatus, CancellationPolicy } from "@/types/database";
@@ -23,13 +24,42 @@ export async function updateBookingStatus(
   const { data: booking } = await supabase
     .from("bookings")
     .select(
-      "owner_id, renter_id, start_date, end_date, deposit_status, stripe_deposit_payment_intent_id, cars(brand, model, year)"
+      "car_id, status, owner_id, renter_id, start_date, end_date, deposit_status, stripe_deposit_payment_intent_id, cars(brand, model, year)"
     )
     .eq("id", bookingId)
     .single();
 
   if (!booking || booking.owner_id !== user.id) {
     return { error: "Nie masz dostępu do tej rezerwacji." };
+  }
+
+  // Which transitions are legal. Until Partner cars existed every booking was
+  // born 'accepted', so the Accept button never rendered for a dead one and
+  // nothing checked — the database trigger (0036) lets an owner move their
+  // own booking anywhere. Now 'requested' is a real state, and without this a
+  // cancelled or declined booking could be resurrected with one click.
+  const ALLOWED: Record<string, string[]> = {
+    requested: ["accepted", "declined"],
+    accepted: ["completed"],
+  };
+  if (!ALLOWED[booking.status]?.includes(status)) {
+    return { error: "Tej rezerwacji nie można już zmienić." };
+  }
+
+  if (status === "accepted") {
+    if (booking.start_date < new Date().toISOString().slice(0, 10)) {
+      return { error: "Termin tej rezerwacji już minął — nie można jej potwierdzić." };
+    }
+    // The overlap guard in sendInquiry only counts accepted/completed
+    // bookings, which is correct: several customers may REQUEST the same
+    // dates. Confirmation is where that has to be resolved, or a Partner
+    // could accept two requests for the same car and the same week.
+    if (await hasOverlappingBooking(booking.car_id, booking.start_date, booking.end_date, bookingId)) {
+      return {
+        error:
+          "Ten termin jest już zajęty przez potwierdzoną rezerwację tego auta. Odrzuć to zapytanie albo zaproponuj inny termin.",
+      };
+    }
   }
 
   const { error } = await supabase.from("bookings").update({ status }).eq("id", bookingId);
@@ -43,7 +73,13 @@ export async function updateBookingStatus(
   if (status === "completed" && booking.deposit_status === "held" && booking.stripe_deposit_payment_intent_id) {
     const releaseResult = await releaseDeposit(booking.stripe_deposit_payment_intent_id);
     if (releaseResult.ok) {
-      await supabase.from("bookings").update({ deposit_status: "released" }).eq("id", bookingId);
+      // Money columns are pinned against session writes in the database
+      // (migration 0036), so every write that moves money goes through the
+      // service role after the ownership check above.
+      await createAdminClient()
+        .from("bookings")
+        .update({ deposit_status: "released" })
+        .eq("id", bookingId);
     }
   }
 
@@ -100,7 +136,7 @@ export async function cancelBooking(bookingId: string): Promise<void> {
     .from("bookings")
     .select(
       `renter_id, owner_id, status, start_date, end_date,
-       payment_status, stripe_checkout_session_id, deposit_status, stripe_deposit_payment_intent_id,
+       payment_status, payment_method, stripe_checkout_session_id, deposit_status, stripe_deposit_payment_intent_id,
        cars(brand, model, year, cancellation_policy)`
     )
     .eq("id", bookingId)
@@ -112,9 +148,10 @@ export async function cancelBooking(bookingId: string): Promise<void> {
   const policy: CancellationPolicy =
     (booking.cars as unknown as { cancellation_policy: CancellationPolicy } | null)
       ?.cancellation_policy ?? "moderate";
-  const cancellation = await cancelBookingWithRefund(supabase, bookingId, {
+  const cancellation = await cancelBookingWithRefund(createAdminClient(), bookingId, {
     start_date: booking.start_date,
     payment_status: booking.payment_status,
+    payment_method: booking.payment_method,
     stripe_checkout_session_id: booking.stripe_checkout_session_id,
     deposit_status: booking.deposit_status,
     stripe_deposit_payment_intent_id: booking.stripe_deposit_payment_intent_id,
@@ -138,6 +175,28 @@ export async function cancelBooking(bookingId: string): Promise<void> {
     `,
     link: "/dashboard/bookings",
   });
+
+  // Paid by bank transfer: the card path's automatic refund doesn't exist
+  // here, and payment_status deliberately stays 'paid', so without this the
+  // renter's own screen would say "Opłacono" next to "Anulowana" and nothing
+  // would ever mention their money.
+  if (cancellation.refund === "manual_refund_required") {
+    await notifyUser({
+      userId: user.id,
+      type: "booking_cancelled",
+      subject: `Rezerwacja anulowana: ${carLabel} — zwrot przelewem`,
+      body: `Rezerwacja ${carLabel} została anulowana.${renterRefundSentence(cancellation.refund)}`,
+      emailHtml: `
+        <p>Twoja rezerwacja na GoMambo została anulowana.</p>
+        <ul>
+          <li><strong>Auto:</strong> ${carLabel}</li>
+          <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
+        </ul>
+        <p>Wpłatę zwrócimy przelewem na konto, z którego przyszła — odezwiemy się do Ciebie. Pytania: kontakt@gomambo.pl.</p>
+      `,
+      link: "/dashboard/rentals",
+    });
+  }
 
   // The booking is cancelled either way; don't let the renter assume the
   // money is on its way when Stripe rejected the refund — or when only the
@@ -182,7 +241,7 @@ export async function ownerCancelBooking(bookingId: string): Promise<{ error: st
     .from("bookings")
     .select(
       `owner_id, renter_id, status, start_date, end_date,
-       payment_status, stripe_checkout_session_id, deposit_status, stripe_deposit_payment_intent_id,
+       payment_status, payment_method, stripe_checkout_session_id, deposit_status, stripe_deposit_payment_intent_id,
        cars(brand, model, year, cancellation_policy)`
     )
     .eq("id", bookingId)
@@ -202,11 +261,12 @@ export async function ownerCancelBooking(bookingId: string): Promise<{ error: st
     (booking.cars as unknown as { cancellation_policy: CancellationPolicy } | null)
       ?.cancellation_policy ?? "moderate";
   const cancellation = await cancelBookingWithRefund(
-    supabase,
+    createAdminClient(),
     bookingId,
     {
       start_date: booking.start_date,
       payment_status: booking.payment_status,
+      payment_method: booking.payment_method,
       stripe_checkout_session_id: booking.stripe_checkout_session_id,
       deposit_status: booking.deposit_status,
       stripe_deposit_payment_intent_id: booking.stripe_deposit_payment_intent_id,
@@ -336,7 +396,10 @@ export async function captureDepositForDamage(
     return { error: captureResult.error };
   }
 
-  await supabase.from("bookings").update({ deposit_status: "captured" }).eq("id", bookingId);
+  await createAdminClient()
+    .from("bookings")
+    .update({ deposit_status: "captured" })
+    .eq("id", bookingId);
 
   const car = booking.cars as unknown as { brand: string; model: string; year: number } | null;
   const carLabel = car ? `${car.brand} ${car.model} (${car.year})` : "auto";
@@ -411,9 +474,14 @@ export async function requestExtraCharge(
     model: string;
     owner: { stripe_connect_account_id: string | null; stripe_connect_onboarded: boolean } | null;
   } | null;
-  if (!car?.owner?.stripe_connect_account_id || !car.owner.stripe_connect_onboarded) {
-    return { error: "Konfiguracja wypłat nie jest jeszcze ukończona." };
+  if (!car) {
+    return { error: "Nie znaleziono auta." };
   }
+  // Stripe Connect is NOT required to raise the charge — the renter can
+  // settle it by bank transfer, which needs no payout account at all. It is
+  // only needed to pre-create the card Checkout session below.
+  const connectReady =
+    !!car.owner?.stripe_connect_account_id && car.owner.stripe_connect_onboarded;
 
   const admin = createAdminClient();
   const { data: renterAuth } = await admin.auth.admin.getUserById(booking.renter_id);
@@ -428,24 +496,29 @@ export async function requestExtraCharge(
     return { error: insertError?.message ?? "Nie udało się zapisać zgłoszenia." };
   }
 
-  const checkoutResult = await createExtraChargeCheckoutSession({
-    bookingId,
-    extraChargeId: extraCharge.id,
-    ownerStripeAccountId: car.owner.stripe_connect_account_id,
-    amountPln,
-    description: `Dodatkowa opłata: ${car.brand} ${car.model}`,
-    renterEmail,
-    successUrl: `${SITE_URL}/dashboard/rentals?extra_charge=success`,
-    cancelUrl: `${SITE_URL}/dashboard/rentals?extra_charge=cancelled`,
-  });
-  if (!checkoutResult.ok) {
-    return { error: checkoutResult.error };
+  if (connectReady) {
+    const checkoutResult = await createExtraChargeCheckoutSession({
+      bookingId,
+      extraChargeId: extraCharge.id,
+      ownerStripeAccountId: car.owner!.stripe_connect_account_id!,
+      amountPln,
+      description: `Dodatkowa opłata: ${car.brand} ${car.model}`,
+      renterEmail,
+      successUrl: `${SITE_URL}/dashboard/rentals?extra_charge=success`,
+      cancelUrl: `${SITE_URL}/dashboard/rentals?extra_charge=cancelled`,
+    });
+    // A failed session is not fatal any more: the charge row already exists
+    // and the renter can still pay it by transfer, or retry the card from
+    // their own screen (payExtraCharge re-creates the session).
+    if (checkoutResult.ok) {
+      await admin
+        .from("booking_extra_charges")
+        .update({ stripe_checkout_session_id: checkoutResult.data.sessionId })
+        .eq("id", extraCharge.id);
+    } else {
+      console.error("requestExtraCharge: checkout session failed", checkoutResult.error);
+    }
   }
-
-  await admin
-    .from("booking_extra_charges")
-    .update({ stripe_checkout_session_id: checkoutResult.data.sessionId })
-    .eq("id", extraCharge.id);
 
   const carLabel = `${car.brand} ${car.model}`;
   await notifyUser({

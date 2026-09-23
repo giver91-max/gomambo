@@ -5,9 +5,14 @@ import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/back-button";
 import { cancelBooking } from "../bookings/actions";
 import { ReviewForm } from "../bookings/review-form";
+import { ReportDamageButton } from "@/components/report-damage-button";
+import { DamageReportList, type DamageReportItem } from "@/components/damage-report-list";
+import { BookingVerificationRenter } from "@/components/booking-verification-renter";
+import type { BookingVerificationStatus } from "@/lib/booking-verification";
 import { TripPhotosManager, type TripPhotoItem } from "@/components/trip-photos-manager";
 import { PayBookingButton } from "@/components/pay-booking-button";
-import { InsuranceProtectionNotice } from "@/components/insurance-protection-notice";
+import { RentalLiabilityNotice } from "@/components/rental-liability-notice";
+import { firstNameOnly } from "@/lib/utils";
 import { PayExtraChargeButton } from "@/components/pay-extra-charge-button";
 import { ExtendBookingForm } from "@/components/extend-booking-form";
 import type { BookingStatus, CancellationPolicy } from "@/types/database";
@@ -41,8 +46,10 @@ export default async function RentalHistoryPage() {
     .select(
       `id, start_date, end_date, status, created_at,
        pickup_odometer_km, pickup_fuel_level, return_odometer_km, return_fuel_level,
-       payment_status, deposit_status, total_price, deposit_amount,
-       cars(id, brand, model, city, cancellation_policy)`
+       payment_status, payment_method, deposit_status, total_price, deposit_amount,
+       cars(id, brand, model, city, cancellation_policy, security_deposit_amount,
+            mileage_limit_km, mileage_overage_fee_per_km,
+            partners(trade_name), owner:profiles!cars_owner_id_fkey(full_name))`
     )
     .eq("renter_id", user!.id)
     .order("created_at", { ascending: false });
@@ -66,20 +73,65 @@ export default async function RentalHistoryPage() {
 
   const extraChargesByBooking = new Map<
     string,
-    { id: string; amount_pln: number; reason: string }[]
+    { id: string; amount_pln: number; reason: string; payment_method: "stripe" | "bank_transfer" }[]
   >();
   if (activeBookingIds.length > 0) {
     const { data: extraCharges } = await supabase
       .from("booking_extra_charges")
-      .select("id, booking_id, amount_pln, reason")
+      .select("id, booking_id, amount_pln, reason, payment_method")
       .in("booking_id", activeBookingIds)
       .eq("status", "requested");
     for (const charge of extraCharges ?? []) {
       const list = extraChargesByBooking.get(charge.booking_id) ?? [];
-      list.push({ id: charge.id, amount_pln: Number(charge.amount_pln), reason: charge.reason });
+      list.push({
+        id: charge.id,
+        amount_pln: Number(charge.amount_pln),
+        reason: charge.reason,
+        payment_method: charge.payment_method,
+      });
       extraChargesByBooking.set(charge.booking_id, list);
     }
   }
+  const verificationByBooking = new Map<
+    string,
+    { status: BookingVerificationStatus; face_match_result: "match" | "no_match" | "error" | "not_run" | null }
+  >();
+  if (activeBookingIds.length > 0) {
+    const { data: verifications } = await supabase
+      .from("booking_verifications")
+      .select("booking_id, status, face_match_result")
+      .in("booking_id", activeBookingIds);
+    for (const row of verifications ?? []) {
+      verificationByBooking.set(row.booking_id, {
+        status: row.status,
+        face_match_result: row.face_match_result,
+      });
+    }
+  }
+
+  const damageReportsByBooking = new Map<string, DamageReportItem[]>();
+  if (activeBookingIds.length > 0) {
+    // RLS on damage_reports admits both participants, so the session client
+    // is enough — and is what keeps one booking's reports off another's card.
+    const { data: reports } = await supabase
+      .from("damage_reports")
+      .select("id, booking_id, description, reporter_role, reporter_id, status, created_at")
+      .in("booking_id", activeBookingIds)
+      .order("created_at", { ascending: false });
+    for (const report of reports ?? []) {
+      const list = damageReportsByBooking.get(report.booking_id) ?? [];
+      list.push({
+        id: report.id,
+        description: report.description,
+        reporter_role: report.reporter_role,
+        status: report.status,
+        created_at: report.created_at,
+        mine: report.reporter_id === user!.id,
+      });
+      damageReportsByBooking.set(report.booking_id, list);
+    }
+  }
+
   const tripPhotosByBooking = new Map<string, { pickup: TripPhotoItem[]; return: TripPhotoItem[] }>();
   if (activeBookingIds.length > 0) {
     const { data: photos } = await supabase
@@ -133,8 +185,66 @@ export default async function RentalHistoryPage() {
                 {booking.status === "accepted" && booking.payment_status === "unpaid" && (
                   <div className="space-y-3">
                     {/* Second time they see this, right before the money moves. */}
-                    <InsuranceProtectionNotice compact />
-                    <PayBookingButton bookingId={booking.id} />
+                    <RentalLiabilityNotice
+                      compact
+                      party={{
+                        partnerName:
+                          (booking.cars?.partners as unknown as { trade_name: string } | null)
+                            ?.trade_name ?? null,
+                        ownerName: firstNameOnly(
+                          (booking.cars?.owner as unknown as { full_name: string } | null)
+                            ?.full_name || "Właściciel"
+                        ),
+                      }}
+                      rules={{
+                        depositAmount:
+                          booking.cars?.security_deposit_amount != null
+                            ? Number(booking.cars.security_deposit_amount)
+                            : null,
+                        mileageLimitKm: booking.cars?.mileage_limit_km ?? null,
+                        mileageOverageFeePerKm:
+                          booking.cars?.mileage_overage_fee_per_km != null
+                            ? Number(booking.cars.mileage_overage_fee_per_km)
+                            : null,
+                      }}
+                    />
+                    {booking.payment_method === "bank_transfer" &&
+                      !(
+                        booking.cars === null ||
+                        (booking.cars.security_deposit_amount !== null &&
+                          Number(booking.cars.security_deposit_amount) > 0)
+                      ) && (
+                      <div className="space-y-1 rounded-lg border border-primary/40 bg-primary/5 p-3">
+                        <p className="font-medium text-foreground">Czekamy na Twój przelew</p>
+                        <p>
+                          Kwota:{" "}
+                          <strong className="text-foreground">
+                            {booking.total_price ? Number(booking.total_price).toFixed(2) : "—"} zł
+                          </strong>{" "}
+                          · tytuł przelewu:{" "}
+                          <code className="font-mono text-foreground">{booking.id.slice(0, 8)}</code>
+                        </p>
+                        <p className="text-xs">
+                          Rezerwacja zostanie potwierdzona, gdy zaksięgujemy wpłatę. Dane do
+                          przelewu wysyłamy wiadomością. Możesz też zapłacić od razu kartą poniżej.
+                        </p>
+                      </div>
+                    )}
+                    <PayBookingButton
+                      bookingId={booking.id}
+                      // Fail CLOSED when the car row isn't readable: an owner
+                      // editing their listing sends it back to 'pending', and
+                      // RLS then hides it from the renter. Reading that as
+                      // "no deposit" would put the transfer button back on a
+                      // car that has one.
+                      depositAmount={
+                        booking.cars
+                          ? booking.cars.security_deposit_amount !== null
+                            ? Number(booking.cars.security_deposit_amount)
+                            : null
+                          : Infinity
+                      }
+                    />
                   </div>
                 )}
                 {booking.payment_status === "paid" && (
@@ -145,12 +255,25 @@ export default async function RentalHistoryPage() {
                       ` · kaucja ${Number(booking.deposit_amount).toFixed(2)} zł zablokowana`}
                   </p>
                 )}
+                {/* A wire has no card charge to reverse, so payment_status
+                    stays 'paid' until someone sends the money back by hand —
+                    without this the card would read "Anulowana / Opłacono"
+                    and say nothing about the refund. */}
+                {booking.status === "cancelled" &&
+                  booking.payment_status === "paid" &&
+                  booking.payment_method === "bank_transfer" && (
+                    <p className="text-xs text-foreground">
+                      Zwrot wpłaty wykonamy przelewem na konto, z którego przyszła — odezwiemy się
+                      do Ciebie.
+                    </p>
+                  )}
                 {(extraChargesByBooking.get(booking.id) ?? []).map((charge) => (
                   <PayExtraChargeButton
                     key={charge.id}
                     extraChargeId={charge.id}
                     amountPln={charge.amount_pln}
                     reason={charge.reason}
+                    paymentMethod={charge.payment_method}
                   />
                 ))}
                 {booking.status === "accepted" && booking.payment_status === "paid" && (
@@ -192,6 +315,18 @@ export default async function RentalHistoryPage() {
                     returnOdometerKm={booking.return_odometer_km}
                     returnFuelLevel={booking.return_fuel_level}
                   />
+                )}
+                {booking.status === "accepted" && verificationByBooking.has(booking.id) && (
+                  <BookingVerificationRenter
+                    bookingId={booking.id}
+                    status={verificationByBooking.get(booking.id)!.status}
+                  />
+                )}
+                {(booking.status === "accepted" || booking.status === "completed") && (
+                  <>
+                    <DamageReportList reports={damageReportsByBooking.get(booking.id) ?? []} />
+                    <ReportDamageButton bookingId={booking.id} />
+                  </>
                 )}
                 {booking.status === "completed" && !reviewedBookingIds.has(booking.id) && (
                   <ReviewForm bookingId={booking.id} />

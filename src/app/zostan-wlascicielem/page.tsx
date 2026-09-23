@@ -10,7 +10,7 @@ import { EarningsCalculator } from "./earnings-calculator";
 export const metadata: Metadata = {
   title: "Zostań właścicielem — wynajmuj auto lub flotę na GoMambo",
   description:
-    "Dodaj swoje auto — albo całą flotę wypożyczalni — na GoMambo. Ty ustalasz cenę i dostępność, dodanie ogłoszeń jest darmowe, a floty przez pierwsze 6 miesięcy nie płacą prowizji.",
+    "Dodaj swoje auto — albo całą flotę wypożyczalni — na GoMambo. Ty ustalasz cenę i dostępność, wystawienie ogłoszenia jest darmowe, a z wynajmu dostajesz pełną swoją stawkę.",
   alternates: { canonical: "/zostan-wlascicielem" },
 };
 
@@ -60,8 +60,8 @@ const FACTS = [
 ];
 
 const FLEET_TERMS = [
-  { value: "0 zł", label: "Za dodanie floty" },
-  { value: "0%", label: "Prowizji przez pierwsze 6 miesięcy" },
+  { value: "0 zł", label: "Za dodanie floty i za wystawienie ogłoszeń" },
+  { value: "100%", label: "Twojej stawki trafia do Ciebie — prowizję dopłaca najemca" },
   { value: "Ty decydujesz", label: "Ceny i dostępność każdego auta" },
 ];
 

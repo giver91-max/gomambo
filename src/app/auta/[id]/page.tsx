@@ -11,9 +11,11 @@ import { toISODate } from "@/lib/calendar";
 import { BackButton } from "@/components/back-button";
 import { FavoriteButton } from "@/components/favorite-button";
 import { MaintenanceNotice } from "@/components/maintenance-notice";
+import { RentalLiabilityNotice } from "@/components/rental-liability-notice";
 import { firstNameOnly } from "@/lib/utils";
 import { getVerificationStatus } from "@/lib/verification-gate";
 import { getOwnerCommissionRate } from "@/lib/commission";
+import { isMaintenanceMode } from "@/lib/maintenance";
 import type { IdentityVerificationStatus } from "@/types/database";
 import {
   CANCELLATION_POLICY_DESCRIPTIONS,
@@ -29,7 +31,7 @@ const getCar = cache(async (id: string) => {
   const supabase = await createClient();
   const { data: car } = await supabase
     .from("cars")
-    .select("*, car_images(storage_path, position)")
+    .select("*, car_images(storage_path, position), partners(trade_name, city, description, logo_path)")
     .eq("id", id)
     .eq("status", "approved")
     .order("position", { referencedTable: "car_images", ascending: true })
@@ -69,6 +71,12 @@ export async function generateMetadata({
   if (!car) {
     return { title: "Auto nie znalezione" };
   }
+  // The maintenance gate below only swaps the page BODY. Without this, the
+  // title, description, price and og:image still describe the real listing
+  // in every response, in every link preview and to every crawler.
+  if (await isMaintenanceMode()) {
+    return { title: "GoMambo", robots: { index: false, follow: false } };
+  }
 
   const title = `${car.brand} ${car.model} (${car.year}) — ${car.city}`;
   const description =
@@ -107,10 +115,12 @@ export default async function CarDetailPage({
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, maintenance_bypass")
       .eq("id", user.id)
       .single();
-    isAdmin = profile?.role === "admin";
+    // maintenance_bypass lets a test account browse and book while
+    // the listings stay hidden from everyone else.
+    isAdmin = profile?.role === "admin" || profile?.maintenance_bypass === true;
   }
 
   if (!isAdmin) {
@@ -179,6 +189,20 @@ export default async function CarDetailPage({
     ? supabase.storage.from("avatars").getPublicUrl(ownerProfile.avatar_path).data.publicUrl
     : null;
   const ownerName = firstNameOnly(ownerProfile?.full_name || "Właściciel");
+  const partner = car.partners as unknown as {
+    trade_name: string;
+    city: string | null;
+    description: string | null;
+    logo_path: string | null;
+  } | null;
+  // The embed returns null when the company is not 'active' (its RLS policy
+  // admits only active partners to the public). Falling through to the
+  // private-owner block would then present a suspended rental company's car
+  // as an individual's — the opposite of the disclosure this section exists
+  // for. A car that names a company we cannot vouch for is not shown at all.
+  if (car.partner_id && !partner) {
+    notFound();
+  }
 
   return (
     <div className="space-y-6">
@@ -296,12 +320,53 @@ export default async function CarDetailPage({
             pricePerDay={Number(car.price_per_day)}
             pricePerMonth={car.price_per_month ? Number(car.price_per_month) : null}
             commissionRate={await getOwnerCommissionRate(car.owner_id)}
+            party={{ partnerName: partner?.trade_name ?? null, ownerName }}
           />
         </CardContent>
       </Card>
 
+      <RentalLiabilityNotice
+        party={{ partnerName: partner?.trade_name ?? null, ownerName }}
+        rules={{
+          depositAmount:
+            car.security_deposit_amount !== null ? Number(car.security_deposit_amount) : null,
+          mileageLimitKm: car.mileage_limit_km,
+          mileageOverageFeePerKm:
+            car.mileage_overage_fee_per_km !== null
+              ? Number(car.mileage_overage_fee_per_km)
+              : null,
+        }}
+      />
+
+      {/* Who the customer is actually renting from. A platform has to say
+          whether the other side is a trader (art. 12a ustawy o prawach
+          konsumenta), and showing a company's fleet under a private
+          individual's first name would say the opposite. */}
       <div className="space-y-4">
-        <h2 className="font-semibold">O właścicielu</h2>
+        <h2 className="font-semibold">{partner ? "Wynajmujący" : "O właścicielu"}</h2>
+        {partner ? (
+          <div className="space-y-2 rounded-lg border p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium">{partner.trade_name}</p>
+              <Badge>Wypożyczalnia</Badge>
+            </div>
+            {partner.city && <p className="text-sm text-muted-foreground">{partner.city}</p>}
+            {partner.description && (
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {partner.description}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Auto wynajmuje i wydaje {partner.trade_name} — to ta firma odpowiada za stan
+              techniczny pojazdu, dokumenty i ubezpieczenie. GoMambo prowadzi platformę,
+              obsługuje rezerwację i płatność.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Rezerwacja wymaga potwierdzenia przez wypożyczalnię — zapłacisz dopiero po
+              potwierdzeniu.
+            </p>
+          </div>
+        ) : (
         <div className="flex items-center gap-3">
           <Avatar size="lg" className="size-14">
             <AvatarImage src={ownerAvatarUrl ?? undefined} alt={ownerName} />
@@ -324,6 +389,7 @@ export default async function CarDetailPage({
             )}
           </div>
         </div>
+        )}
 
         {reviews.map((review) => (
           <div key={review.id} className="rounded-lg border p-3 text-sm">

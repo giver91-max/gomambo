@@ -15,6 +15,10 @@ const systemTypeLabel: Record<AdminNotification["type"], string> = {
   commission_fallback: "Prowizja: naliczono stawkę domyślną",
   refund_failed: "Zwrot w Stripe nie powiódł się",
   deposit_release_failed: "Nie zwolniono kaucji",
+  bank_transfer_declared: "Zadeklarowany przelew",
+  damage_reported: "Zgłoszenie do wynajmu",
+  booking_verification_escalated: "Weryfikacja przed wynajmem",
+  new_partner_pending: "Nowa wypożyczalnia do weryfikacji",
 };
 
 const personalTypeLabel: Record<Notification["type"], string> = {
@@ -31,6 +35,10 @@ const personalTypeLabel: Record<Notification["type"], string> = {
   extra_charge_requested: "Prośba o dodatkową opłatę",
   booking_extended: "Wynajem przedłużony",
   payment_failed: "Płatność nie powiodła się",
+  damage_reported: "Zgłoszenie do wynajmu",
+  booking_verification_requested: "Potwierdź tożsamość przed odbiorem",
+  booking_verification_pending_owner: "Najemca czeka na Twoje potwierdzenie",
+  booking_verification_approved: "Tożsamość potwierdzona",
 };
 
 type FeedItem = {

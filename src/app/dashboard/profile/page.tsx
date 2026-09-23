@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
@@ -43,7 +44,10 @@ export default async function ProfilePage() {
   if (profile.stripe_connect_account_id && !stripeConnectOnboarded) {
     stripeConnectOnboarded = await isConnectAccountOnboarded(profile.stripe_connect_account_id);
     if (stripeConnectOnboarded) {
-      await supabase
+      // Service role: 0036 pins stripe_connect_onboarded against session
+      // writes, and PostgREST reports success either way — this page would
+      // show payouts as configured while every checkout kept refusing.
+      await createAdminClient()
         .from("profiles")
         .update({ stripe_connect_onboarded: true })
         .eq("id", user.id);

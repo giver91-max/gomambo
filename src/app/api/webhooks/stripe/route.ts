@@ -9,6 +9,7 @@ import {
   releaseDeposit,
 } from "@/lib/stripe";
 import { reportMoneyFailure } from "@/lib/money-alerts";
+import { requestVerificationIfDue } from "@/lib/booking-verification";
 import { notifyUser } from "@/lib/notify-user";
 import { SITE_URL } from "@/lib/site";
 
@@ -112,15 +113,35 @@ export async function POST(request: Request) {
         if (!extraChargeId) break;
         const { data: currentCharge } = await admin
           .from("booking_extra_charges")
-          .select("status, stripe_checkout_session_id")
+          .select("status, payment_method, stripe_checkout_session_id")
           .eq("id", extraChargeId)
           .single();
         if (!currentCharge) break;
 
+        // The charge was called off (its booking was cancelled) while the
+        // renter still had the Checkout page open. Nothing below would match
+        // a 'cancelled' row, so without this the money would just sit here.
+        if (currentCharge.status === "cancelled") {
+          const refundCancelled = await refundCheckoutSession(session.id);
+          if (!refundCancelled.ok) {
+            await reportMoneyFailure(
+              "refund_failed",
+              `Dopłata ${extraChargeId} (rezerwacja ${bookingId}) została opłacona po jej anulowaniu, a automatyczny zwrot się nie powiódł (${refundCancelled.error}). Zwróć płatność ${session.id} ręcznie w Stripe.`
+            );
+          }
+          break;
+        }
+
         if (currentCharge.status === "paid") {
           // Same session = redelivery. A different one means the renter paid
           // twice (a superseded session stayed alive) — send that back.
-          if (currentCharge.stripe_checkout_session_id === session.id) break;
+          // Unless it was settled by bank transfer: then NO card payment can
+          // be a redelivery of this row, whatever session it came from.
+          if (
+            currentCharge.payment_method !== "bank_transfer" &&
+            currentCharge.stripe_checkout_session_id === session.id
+          )
+            break;
           const duplicateCharge = await refundCheckoutSession(session.id);
           if (!duplicateCharge.ok) {
             await reportMoneyFailure(
@@ -173,7 +194,7 @@ export async function POST(request: Request) {
         if (!extensionId) break;
         const { data: extension } = await admin
           .from("booking_extensions")
-          .select("new_end_date, additional_amount_pln, status, refunded_at")
+          .select("new_end_date, additional_amount_pln, platform_fee_pln, status, refunded_at")
           .eq("id", extensionId)
           .single();
         if (!extension) break;
@@ -232,14 +253,24 @@ export async function POST(request: Request) {
 
         const { data: updatedBooking } = await admin
           .from("bookings")
-          .select("total_price, owner_id, renter_id, cars(brand, model)")
+          .select("total_price, platform_fee_amount, owner_id, renter_id, cars(brand, model)")
           .eq("id", bookingId)
           .single();
         if (updatedBooking) {
+          // additional_amount_pln is GROSS, so the booking's fee column has
+          // to grow with it — the owner's payout is shown as
+          // total_price - platform_fee_amount, and leaving the fee behind
+          // overstates it by exactly the extension's commission.
           const newTotal = Number(updatedBooking.total_price ?? 0) + Number(extension.additional_amount_pln);
+          const newFee =
+            Number(updatedBooking.platform_fee_amount ?? 0) + Number(extension.platform_fee_pln ?? 0);
           await admin
             .from("bookings")
-            .update({ end_date: extension.new_end_date, total_price: newTotal })
+            .update({
+              end_date: extension.new_end_date,
+              total_price: newTotal,
+              platform_fee_amount: newFee,
+            })
             .eq("id", bookingId);
 
           const car = updatedBooking.cars as unknown as { brand: string; model: string } | null;
@@ -266,7 +297,7 @@ export async function POST(request: Request) {
 
       const { data: current } = await admin
         .from("bookings")
-        .select("status, payment_status, stripe_checkout_session_id")
+        .select("status, payment_status, payment_method, stripe_checkout_session_id")
         .eq("id", bookingId)
         .single();
       if (!current) break;
@@ -284,8 +315,15 @@ export async function POST(request: Request) {
         break;
       }
       if (current.payment_status === "paid") {
-        // Same session: Stripe simply redelivered the event.
-        if (current.stripe_checkout_session_id === session.id) break;
+        // Same session: Stripe simply redelivered the event. That shortcut
+        // only holds while the webhook is the ONLY thing that can set 'paid'
+        // — an admin confirming a bank transfer also sets it, and then money
+        // arriving from Stripe is a genuine second payment, not a redelivery.
+        if (
+          current.payment_method !== "bank_transfer" &&
+          current.stripe_checkout_session_id === session.id
+        )
+          break;
         // Different session: the rental was genuinely paid twice (two
         // sessions stayed alive). Refunding is idempotent, so a redelivery
         // of this same second payment won't double-refund or false-alarm.
@@ -321,6 +359,9 @@ export async function POST(request: Request) {
         .single();
 
       if (booking) {
+        // A trip starting within the lead window needs its pre-pickup
+        // verification opened now — the daily job may already have run.
+        await requestVerificationIfDue(admin, bookingId);
         const car = booking.cars as unknown as { brand: string; model: string } | null;
         await notifyUser({
           userId: booking.owner_id,

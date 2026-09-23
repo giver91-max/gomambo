@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate": "node scripts/migrate.mjs",
+    "migrate:status": "node scripts/migrate.mjs --status"
   },
   "dependencies": {
     "@aws-sdk/client-rekognition": "^3.1086.0",
@@ -38,6 +40,7 @@
     "@types/react-dom": "^18",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
+    "pg": "^8.23.0",
     "postcss": "^8",
     "tailwindcss": "^4.3.2",
     "typescript": "^5"

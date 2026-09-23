@@ -1,13 +1,17 @@
 import type { MetadataRoute } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { SITE_URL } from "@/lib/site";
+import { isMaintenanceMode } from "@/lib/maintenance";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // While the catalogue is hidden, the sitemap must not hand crawlers a
+  // machine-readable list of every listing id — that is the whole fleet,
+  // enumerated, for anyone who asks.
+  const maintenance = await isMaintenanceMode();
   const supabase = await createClient();
-  const { data: cars } = await supabase
-    .from("cars")
-    .select("id, updated_at")
-    .eq("status", "approved");
+  const { data: cars } = maintenance
+    ? { data: [] }
+    : await supabase.from("cars").select("id, updated_at").eq("status", "approved");
 
   const carEntries: MetadataRoute.Sitemap = (cars ?? []).map((car) => ({
     url: `${SITE_URL}/auta/${car.id}`,

@@ -19,7 +19,11 @@ async function requireOwnedCar(carId: string) {
   }
 
   const [{ data: car }, { data: profile }] = await Promise.all([
-    supabase.from("cars").select("owner_id, status").eq("id", carId).single(),
+    supabase
+      .from("cars")
+      .select("owner_id, status, partner_id, partners(status)")
+      .eq("id", carId)
+      .single(),
     supabase.from("profiles").select("role").eq("id", user.id).single(),
   ]);
   const isAdmin = profile?.role === "admin";
@@ -28,7 +32,12 @@ async function requireOwnedCar(carId: string) {
     return {
       supabase,
       user,
-      car: null as null | { owner_id: string; status: string },
+      car: null as null | {
+        owner_id: string;
+        status: string;
+        partner_id: string | null;
+        partners: { status: string } | null;
+      },
       isAdmin,
     };
   }
@@ -124,7 +133,6 @@ export async function updateCarDetails(
       year,
       price_per_day: pricePerDay,
       city,
-      registration_number: registrationNumber,
       description: description || null,
       vehicle_type: vehicleType as Car["vehicle_type"],
       fuel_type: fuelType as Car["fuel_type"],
@@ -146,6 +154,14 @@ export async function updateCarDetails(
     return { error: error.message };
   }
 
+  // Plate is kept out of the public listing row (see 0037).
+  const { error: privateError } = await admin
+    .from("car_private")
+    .upsert({ car_id: carId, registration_number: registrationNumber || null });
+  if (privateError) {
+    return { error: privateError.message };
+  }
+
   revalidatePath("/dashboard");
   revalidatePath(`/dashboard/cars/${carId}/edit`);
   revalidatePath(`/auta/${carId}`);
@@ -162,16 +178,16 @@ export async function setCarInsuranceDocument(
     return { error: "Nie masz dostępu do tego ogłoszenia." };
   }
 
-  const { data: existing } = await supabase
-    .from("cars")
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("car_private")
     .select("insurance_document_path")
-    .eq("id", carId)
-    .single();
+    .eq("car_id", carId)
+    .maybeSingle();
 
-  const { error } = await supabase
-    .from("cars")
-    .update({ insurance_document_path: path })
-    .eq("id", carId);
+  const { error } = await admin
+    .from("car_private")
+    .upsert({ car_id: carId, insurance_document_path: path });
 
   if (error) {
     return { error: error.message };
@@ -323,6 +339,13 @@ export async function bulkSetCarStatus(
       succeeded.push(carId);
       continue;
     }
+    if (nextStatus === "approved" && car.partner_id && car.partners?.status !== "active") {
+      failed.push({
+        carId,
+        error: "Wypożyczalnia nie jest aktywna — auta wrócą do katalogu po weryfikacji.",
+      });
+      continue;
+    }
     const { error } = await supabase.from("cars").update({ status: nextStatus }).eq("id", carId);
     if (error) {
       failed.push({ carId, error: error.message });
@@ -349,6 +372,15 @@ export async function toggleCarPause(carId: string): Promise<{ error: string | n
   }
 
   const nextStatus = car.status === "approved" ? "paused" : "approved";
+  // The database refuses to publish a car whose company is not active
+  // (enforce_car_update_rules, 0042), so without this the resume would
+  // silently do nothing and still report success.
+  if (nextStatus === "approved" && car.partner_id && car.partners?.status !== "active") {
+    return {
+      error:
+        "Twoja wypożyczalnia nie jest w tej chwili aktywna w GoMambo — auta wrócą do katalogu po weryfikacji.",
+    };
+  }
   const { error } = await supabase.from("cars").update({ status: nextStatus }).eq("id", carId);
   if (error) {
     return { error: error.message };

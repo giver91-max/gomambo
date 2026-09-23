@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getPartnerContext } from "@/lib/partner";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
@@ -18,17 +19,26 @@ export default async function DashboardPage() {
     supabase.from("cars").select("*").eq("owner_id", user!.id).order("created_at", { ascending: false }),
     supabase
       .from("bookings")
-      .select("status, start_date, end_date, cars(price_per_day)")
+      .select("status, start_date, end_date, total_price, platform_fee_amount, cars(price_per_day)")
       .eq("owner_id", user!.id),
     supabase.from("reviews").select("rating").eq("reviewee_id", user!.id).is("deleted_at", null),
   ]);
+
+  const partner = await getPartnerContext(supabase, user!.id);
 
   const activeListings = (cars ?? []).filter(
     (c) => c.status === "approved" || c.status === "paused"
   ).length;
   const pendingRequests = (bookings ?? []).filter((b) => b.status === "requested").length;
   const completedBookings = (bookings ?? []).filter((b) => b.status === "completed");
+  // What actually landed on the owner's account: the amount charged minus
+  // the platform fee. Multiplying nights by today's daily rate ignores the
+  // monthly rate, ignores paid extensions and follows later price edits —
+  // for a monthly rental it can read double the real payout.
   const estimatedRevenue = completedBookings.reduce((sum, b) => {
+    if (b.total_price !== null) {
+      return sum + (Number(b.total_price) - Number(b.platform_fee_amount ?? 0));
+    }
     const nights = eachDateInRange(b.start_date, b.end_date).length;
     const pricePerDay = Number((b.cars as { price_per_day: number } | null)?.price_per_day ?? 0);
     return sum + nights * pricePerDay;
@@ -78,6 +88,9 @@ export default async function DashboardPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Moje auta</h1>
         <div className="flex items-center gap-3">
+          <Link href="/dashboard/firma" className="text-sm text-primary hover:underline">
+            {partner ? "Moja wypożyczalnia" : "Prowadzisz wypożyczalnię?"} →
+          </Link>
           <Link href="/dashboard/kalendarz" className="text-sm text-primary hover:underline">
             Kalendarz floty →
           </Link>

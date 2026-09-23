@@ -199,7 +199,7 @@ export default async function AdminUserDetailPage({
             <Button type="submit">Zapisz</Button>
           </form>
           <p className="text-xs text-muted-foreground">
-            Puste pole stawki przywraca domyślne 15%. Zmiana dotyczy tylko nowych płatności — już
+            Puste pole stawki przywraca domyślną stawkę platformy (10%). Zmiana dotyczy tylko nowych płatności — już
             opłacone rezerwacje zostają bez zmian.
           </p>
         </CardContent>

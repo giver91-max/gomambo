@@ -58,7 +58,7 @@ const RESPONSIBILITIES = [
 const FAQS = [
   {
     q: "Czy muszę mieć własne ubezpieczenie?",
-    a: "Każde auto na GoMambo ma obowiązkową polisę OC właściciela — w Polsce ubezpieczenie OC jest przypisane do pojazdu, więc obejmuje szkody wobec osób trzecich niezależnie od tego, kto prowadzi, o ile ma ważne prawo jazdy. Dodatkowo GoMambo wprowadza własne ubezpieczenie na czas wynajmu — szczegóły ogłosimy, gdy tylko zostaną ustalone.",
+    a: "Każde auto na GoMambo ma obowiązkową polisę OC właściciela — w Polsce ubezpieczenie OC jest przypisane do pojazdu, więc obejmuje szkody wobec osób trzecich niezależnie od tego, kto prowadzi, o ile ma ważne prawo jazdy. Pracujemy nad dodatkowymi pakietami ochrony na czas wynajmu; ogłosimy je, gdy będą gotowe. GoMambo nie jest ubezpieczycielem — ochrona pochodzi od właściciela pojazdu i jego ubezpieczyciela.",
   },
   {
     q: "Kto odpowiada za uszkodzenia auta w trakcie wynajmu?",
@@ -93,8 +93,10 @@ export default async function RentACarInfoPage() {
 
   let isAdmin = false;
   if (user) {
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-    isAdmin = profile?.role === "admin";
+    const { data: profile } = await supabase.from("profiles").select("role, maintenance_bypass").eq("id", user.id).single();
+    // maintenance_bypass lets a test account browse and book while
+    // the listings stay hidden from everyone else.
+    isAdmin = profile?.role === "admin" || profile?.maintenance_bypass === true;
   }
 
   let maintenanceMode = false;
@@ -218,8 +220,13 @@ export default async function RentACarInfoPage() {
             ważne prawo jazdy.
           </p>
           <p className="text-muted-foreground">
-            Dodatkowo GoMambo wprowadza własne ubezpieczenie obejmujące okres wynajmu —
-            szczegółowe warunki ogłosimy, gdy tylko zostaną ustalone z naszym brokerem.
+            {/* GoMambo is not an insurer and must never say it is: selling
+                insurance in Poland requires an agent or broker licence under
+                the ustawa o dystrybucji ubezpieczeń. Until a concrete product
+                is signed, we describe what exists — the owner's policy. */}
+            Pracujemy nad dodatkowymi pakietami ochrony na czas wynajmu i ogłosimy je,
+            gdy będą gotowe. GoMambo nie jest ubezpieczycielem — ochrona pochodzi od
+            właściciela pojazdu i jego ubezpieczyciela.
             Niezależnie od tego, przy odbiorze i zwrocie warto udokumentować stan auta
             zdjęciami w panelu rezerwacji — to podstawa w razie jakiegokolwiek sporu.
           </p>

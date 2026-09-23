@@ -1,7 +1,9 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const DEFAULT_COMMISSION_RATE = 0.15;
+// Charged to the RENTER on top of the owner's price (see applyCommission in
+// src/lib/pricing.ts) — the owner pays nothing to list or to be booked.
+export const DEFAULT_COMMISSION_RATE = 0.1;
 
 type CommissionFields = {
   commission_rate: number | string | null | undefined;
@@ -32,7 +34,8 @@ export function resolveCommissionRate(
 // PostgREST codes for "migration 0033 hasn't been applied yet" (table not in
 // the schema cache / undefined table). Expected during the deploy window, so
 // they fall back quietly. Anything else is logged in full and surfaced to
-// admins: a silent fallback bills 15% to an owner who was promised 0%.
+// admins: a silent fallback bills the default rate to an owner who was
+// promised 0%.
 const EXPECTED_PRE_MIGRATION_CODES = new Set(["PGRST205", "42P01"]);
 
 type FallbackContext = { bookingId?: string; extensionId?: string };
@@ -51,7 +54,7 @@ export async function getOwnerCommissionRate(
       .eq("owner_id", ownerId)
       .maybeSingle();
     if (error) {
-      // Always log — a 0%-promo owner being billed 15% must never be
+      // Always log — a 0%-promo owner billed the default rate must never be
       // invisible. Only the admin notification is suppressed pre-migration,
       // because its own type CHECK doesn't exist yet either.
       const preMigration = EXPECTED_PRE_MIGRATION_CODES.has(error.code);
@@ -96,7 +99,7 @@ async function reportCommissionFallback(
     // violation) — read it explicitly.
     const { error: insertError } = await admin.from("admin_notifications").insert({
       type: "commission_fallback",
-      body: `Nie udało się odczytać stawki prowizji właściciela (${error.message}) — naliczono domyślne 15%.${where}`,
+      body: `Nie udało się odczytać stawki prowizji właściciela (${error.message}) — naliczono stawkę domyślną.${where}`,
       link: `/admin/users/${ownerId}`,
     });
     if (insertError) {

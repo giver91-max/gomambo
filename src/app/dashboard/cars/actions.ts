@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
 import { getVerificationStatus } from "@/lib/verification-gate";
+import { getPartnerContext, partnerCanList } from "@/lib/partner";
 import type { Car } from "@/types/database";
 
 export type CarFormState = { error: string | null };
@@ -30,9 +31,26 @@ export async function createCarDraft(
     redirect("/login");
   }
 
-  const { status: verificationStatus } = await getVerificationStatus(supabase, user.id);
-  if (verificationStatus !== "approved") {
-    return { error: "Musisz najpierw zweryfikować tożsamość i prawo jazdy, zanim dodasz auto." };
+  // Two different gates, because two different things are being checked. An
+  // individual listing their own car is vouched for by their identity and
+  // driving licence. A rental company has no driving licence — what matters
+  // is that the COMPANY is real and verified, which is what makes it
+  // possible for a Partner to list at all (it was not, before 0042).
+  const partner = await getPartnerContext(supabase, user.id);
+  if (partner) {
+    if (!partnerCanList(partner.status)) {
+      return {
+        error:
+          partner.status === "pending"
+            ? "Weryfikujemy jeszcze Twoją wypożyczalnię — damy znać, gdy będziesz mógł dodawać auta."
+            : "Twoja wypożyczalnia nie może w tej chwili dodawać aut. Napisz do nas.",
+      };
+    }
+  } else {
+    const { status: verificationStatus } = await getVerificationStatus(supabase, user.id);
+    if (verificationStatus !== "approved") {
+      return { error: "Musisz najpierw zweryfikować tożsamość i prawo jazdy, zanim dodasz auto." };
+    }
   }
 
   const brand = String(formData.get("brand") ?? "").trim();
@@ -98,12 +116,15 @@ export async function createCarDraft(
     .from("cars")
     .insert({
       owner_id: user.id,
+      // The company that operates the car, and Rafał's decision that a
+      // Partner confirms each booking rather than having it auto-confirm.
+      // Peer-to-peer listings keep instant book.
+      ...(partner ? { partner_id: partner.partnerId, instant_book: false } : {}),
       brand,
       model,
       year,
       price_per_day: pricePerDay,
       city,
-      registration_number: registrationNumber,
       description: description || null,
       vehicle_type: vehicleType as Car["vehicle_type"],
       fuel_type: fuelType as Car["fuel_type"],
@@ -123,6 +144,20 @@ export async function createCarDraft(
 
   if (carError || !car) {
     return { error: carError?.message ?? "Nie udało się zapisać auta." };
+  }
+
+  // The plate lives in car_private, not on the public listing row — an
+  // approved car is readable by anyone, and RLS filters rows, not columns.
+  if (registrationNumber) {
+    const { error: privateError } = await supabase
+      .from("car_private")
+      .upsert({ car_id: car.id, registration_number: registrationNumber });
+    if (privateError) {
+      // Not fatal for the listing itself, but an admin reviewing this car
+      // needs the plate, so make the failure visible rather than silent.
+      console.error("createCar: car_private upsert failed", privateError);
+      return { error: "Auto zapisane, ale nie udało się zapisać numeru rejestracyjnego. Uzupełnij go w edycji ogłoszenia." , carId: car.id };
+    }
   }
 
   return { error: null, carId: car.id };
@@ -165,9 +200,8 @@ export async function attachCarImages(
   }
 
   const { error: insuranceError } = await supabase
-    .from("cars")
-    .update({ insurance_document_path: insuranceDocumentPath })
-    .eq("id", carId);
+    .from("car_private")
+    .upsert({ car_id: carId, insurance_document_path: insuranceDocumentPath });
 
   if (insuranceError) {
     return { error: insuranceError.message };

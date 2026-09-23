@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AvailabilityView, type SelectedRange } from "./availability-view";
 import { InquiryForm } from "./inquiry-form";
 import type { IdentityVerificationStatus } from "@/types/database";
+import type { RentalParty } from "@/components/rental-liability-notice";
 
 export function AvailabilityAndInquiry({
   carId,
@@ -14,6 +15,7 @@ export function AvailabilityAndInquiry({
   pricePerDay,
   pricePerMonth,
   commissionRate,
+  party,
 }: {
   carId: string;
   availableDates: string[];
@@ -23,6 +25,7 @@ export function AvailabilityAndInquiry({
   pricePerDay: number;
   pricePerMonth: number | null;
   commissionRate: number;
+  party: RentalParty;
 }) {
   const [range, setRange] = useState<SelectedRange>({ start: "", end: null });
 
@@ -38,6 +41,7 @@ export function AvailabilityAndInquiry({
         pricePerDay={pricePerDay}
         pricePerMonth={pricePerMonth}
         commissionRate={commissionRate}
+        party={party}
       />
     </div>
   );

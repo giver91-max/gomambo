@@ -26,16 +26,30 @@ export async function purgeUserDataAndDeleteAccount(
         .from("identity_verification_handoffs")
         .select("document_front_path, document_back_path, selfie_path")
         .eq("user_id", userId),
-      admin.from("cars").select("id, insurance_document_path").eq("owner_id", userId),
+      admin
+        .from("cars")
+        .select("id, car_private(insurance_document_path)")
+        .eq("owner_id", userId),
       admin.from("bookings").select("id").eq("owner_id", userId),
       admin.from("bookings").select("id").eq("renter_id", userId),
     ]);
+
+  // Face photos taken before each pickup live in the same private bucket.
+  // The rows cascade away with the bookings, which is exactly why the files
+  // have to be collected BEFORE anything is deleted — afterwards nothing
+  // points at them and they would sit there indefinitely.
+  const { data: bookingSelfies } = await admin
+    .from("booking_verifications")
+    .select("selfie_path, bookings!inner(renter_id)")
+    .eq("bookings.renter_id", userId)
+    .not("selfie_path", "is", null);
 
   const idDocumentPaths = [
     verification?.document_path,
     verification?.document_back_path,
     verification?.selfie_path,
     ...(handoffs ?? []).flatMap((h) => [h.document_front_path, h.document_back_path, h.selfie_path]),
+    ...(bookingSelfies ?? []).map((v) => v.selfie_path),
   ].filter((path): path is string => !!path);
   if (idDocumentPaths.length > 0) {
     await admin.storage.from("id-documents").remove(idDocumentPaths);
@@ -51,8 +65,11 @@ export async function purgeUserDataAndDeleteAccount(
     if (imagePaths.length > 0) {
       await admin.storage.from("car-images").remove(imagePaths);
     }
-    if (car.insurance_document_path) {
-      await admin.storage.from("car-insurance").remove([car.insurance_document_path]);
+    const carPrivate = car.car_private as unknown as {
+      insurance_document_path: string | null;
+    } | null;
+    if (carPrivate?.insurance_document_path) {
+      await admin.storage.from("car-insurance").remove([carPrivate.insurance_document_path]);
     }
   }
 

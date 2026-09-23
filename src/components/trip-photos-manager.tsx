@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FUEL_LEVEL_LABELS } from "@/lib/car-options";
+import { resizeImageForUpload } from "@/lib/image-resize";
 import type { FuelLevel, TripPhotoStage } from "@/types/database";
 
 const selectClassName =
@@ -147,11 +148,16 @@ function PhotoStageSection({
     startTransition(async () => {
       const supabase = createClient();
       for (const file of files) {
-        const ext = file.name.split(".").pop() || "jpg";
+        // Downscaled before upload, like the listing photos already are. A
+        // phone shot is 3-5 MB and there are two sets of these per rental;
+        // uploading them raw would burn the storage quota for evidence
+        // nobody ever views at full resolution.
+        const image = await resizeImageForUpload(file);
+        const ext = image.name.split(".").pop() || "jpg";
         const path = `${bookingId}/${stage}/${crypto.randomUUID()}.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("trip-photos")
-          .upload(path, file, { contentType: file.type });
+          .upload(path, image, { contentType: image.type });
         if (uploadError) {
           setError(`Błąd wgrywania: ${uploadError.message}`);
           continue;

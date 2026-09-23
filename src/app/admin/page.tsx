@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
@@ -13,6 +14,10 @@ const notificationTypeLabel: Record<AdminNotification["type"], string> = {
   commission_fallback: "Prowizja: naliczono stawkę domyślną",
   refund_failed: "Zwrot w Stripe nie powiódł się",
   deposit_release_failed: "Nie zwolniono kaucji",
+  bank_transfer_declared: "Zadeklarowany przelew",
+  damage_reported: "Zgłoszenie do wynajmu",
+  booking_verification_escalated: "Weryfikacja przed wynajmem",
+  new_partner_pending: "Nowa wypożyczalnia do weryfikacji",
 };
 
 export default async function AdminOverviewPage() {
@@ -28,7 +33,10 @@ export default async function AdminOverviewPage() {
   ] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase.from("cars").select("status"),
-    supabase
+    // Service role: bookings has no admin SELECT policy — only the two
+    // participants can read a row — so a session client counts the admin's
+    // own bookings, which is almost always none.
+    createAdminClient()
       .from("bookings")
       .select("id", { count: "exact", head: true })
       .in("status", ["requested", "accepted"]),

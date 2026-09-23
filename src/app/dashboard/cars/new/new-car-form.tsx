@@ -393,7 +393,15 @@ export function NewCarForm({ initialValues }: { initialValues?: NewCarInitialVal
             defaultValue={initialValues?.security_deposit_amount ?? undefined}
           />
           <p className="text-xs text-muted-foreground">
-            Blokowana na karcie najemcy przy płatności, zwalniana po zakończeniu wynajmu.
+            Blokowana na karcie najemcy przy płatności, zwalniana po zakończeniu wynajmu.{" "}
+            {/* A wire transfer leaves no card to hold the deposit on, so
+                setting an amount here removes that payment route entirely —
+                the owner has to know that before they type a number. */}
+            <strong className="text-foreground">
+              Ustawienie kaucji oznacza, że to auto można opłacić wyłącznie kartą lub BLIK-iem
+            </strong>{" "}
+            — przelewem nie da się zablokować kaucji. Zostaw puste, jeśli chcesz przyjmować
+            przelewy.
           </p>
         </div>
         <div className="space-y-2">

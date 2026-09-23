@@ -19,6 +19,7 @@ import { getOwnerCommissionRate } from "@/lib/commission";
 import { reportMoneyFailure } from "@/lib/money-alerts";
 import { notifyUser } from "@/lib/notify-user";
 import { SITE_URL } from "@/lib/site";
+import type { BookingStatus } from "@/types/database";
 
 type PreviousSessionState =
   | { kind: "clear" }
@@ -101,6 +102,45 @@ async function settlePreviousSession(sessionId: string | null): Promise<Previous
   return { kind: "clear" };
 }
 
+
+/**
+ * What this booking costs, in the order of trust: the amounts locked on the
+ * row when the renter confirmed it, otherwise the listing's current price
+ * (bookings created before the lock existed). Both payment routes go
+ * through here so a card payment and a declared transfer can never quote
+ * two different numbers for the same booking.
+ */
+async function resolveBookingAmounts(
+  booking: {
+    total_price: number | null;
+    platform_fee_amount: number | null;
+    owner_id: string;
+    start_date: string;
+    end_date: string;
+  },
+  car: { price_per_day: number; price_per_month: number | null },
+  bookingId: string
+): Promise<{ commission: number; gross: number }> {
+  if (booking.total_price !== null && booking.platform_fee_amount !== null) {
+    return {
+      gross: Number(booking.total_price),
+      commission: Number(booking.platform_fee_amount),
+    };
+  }
+
+  const { total: rentalTotal } = calculateBookingPrice(
+    Number(car.price_per_day),
+    car.price_per_month !== null ? Number(car.price_per_month) : null,
+    booking.start_date,
+    booking.end_date
+  );
+  const { commission, gross } = applyCommission(
+    rentalTotal,
+    await getOwnerCommissionRate(booking.owner_id, { bookingId })
+  );
+  return { commission, gross };
+}
+
 export async function createBookingCheckoutSession(
   bookingId: string
 ): Promise<{ error: string | null }> {
@@ -114,7 +154,7 @@ export async function createBookingCheckoutSession(
     .from("bookings")
     .select(
       `id, owner_id, renter_id, status, payment_status, start_date, end_date,
-       stripe_checkout_session_id,
+       stripe_checkout_session_id, total_price, platform_fee_amount,
        cars(brand, model, price_per_day, price_per_month, security_deposit_amount,
             owner:profiles!cars_owner_id_fkey(stripe_connect_account_id, stripe_connect_onboarded))`
     )
@@ -141,8 +181,12 @@ export async function createBookingCheckoutSession(
   } | null;
 
   if (!car?.owner?.stripe_connect_account_id || !car.owner.stripe_connect_onboarded) {
+    // "Spróbuj później" was a false promise: nothing about waiting fixes
+    // this, and for a car with a deposit the transfer route is closed too,
+    // so the renter had no way forward at all and no idea why.
     return {
-      error: "Właściciel nie ukończył konfiguracji wypłat. Spróbuj ponownie później.",
+      error:
+        "Wynajmujący nie dokończył konfiguracji wypłat, więc nie możemy przyjąć płatności za to auto. Daliśmy mu znać — napisz do nas, jeśli zależy Ci na tym terminie.",
     };
   }
 
@@ -190,18 +234,12 @@ export async function createBookingCheckoutSession(
     redirect(`${SITE_URL}/dashboard/rentals?payment=success`);
   }
 
-  const { total: rentalTotal } = calculateBookingPrice(
-    Number(car.price_per_day),
-    car.price_per_month !== null ? Number(car.price_per_month) : null,
-    booking.start_date,
-    booking.end_date
-  );
   // The renter pays the owner's price plus the platform fee; the owner is
-  // transferred their full listed price.
-  const { commission: platformFee, gross } = applyCommission(
-    rentalTotal,
-    await getOwnerCommissionRate(booking.owner_id, { bookingId })
-  );
+  // transferred their full listed price. The pair was locked onto the
+  // booking when it was confirmed — recomputing here would silently follow
+  // a price the owner changed afterwards. Older bookings predate the lock
+  // and still have to be priced from the listing.
+  const { commission: platformFee, gross } = await resolveBookingAmounts(booking, car, bookingId);
   const ownerAccountId = car.owner.stripe_connect_account_id;
   const renterEmail = user.email ?? "";
 
@@ -250,6 +288,10 @@ export async function createBookingCheckoutSession(
       total_price: gross,
       platform_fee_amount: platformFee,
       stripe_checkout_session_id: rentalResult.data.sessionId,
+      // The renter may have declared a bank transfer earlier and changed
+      // their mind — take the booking back off the admin's transfer list
+      // so nobody confirms a transfer that is never coming.
+      payment_method: "stripe",
       ...(depositAmount && depositAmount > 0 ? { deposit_amount: depositAmount } : {}),
     })
     .eq("id", bookingId);
@@ -263,6 +305,247 @@ export async function createBookingCheckoutSession(
   }
 
   redirect(rentalResult.data.url);
+}
+
+/**
+ * Alternative to Stripe Checkout: the renter declares they are paying by
+ * bank transfer. Nothing is marked paid here — an admin confirms the money
+ * actually arrived (src/app/admin/przelewy). The amounts are locked in now
+ * so the renter and the admin are looking at the same number.
+ *
+ * No deposit hold is possible on this path: a card hold needs a card.
+ */
+export async function declareBankTransfer(bookingId: string): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select(
+      `id, owner_id, renter_id, status, payment_status, start_date, end_date,
+       stripe_checkout_session_id, total_price, platform_fee_amount,
+       cars(brand, model, price_per_day, price_per_month, security_deposit_amount)`
+    )
+    .eq("id", bookingId)
+    .single();
+
+  if (!booking || booking.renter_id !== user.id) {
+    return { error: "Nie masz dostępu do tej rezerwacji." };
+  }
+  if (booking.status !== "accepted") {
+    return { error: "Ta rezerwacja nie jest jeszcze potwierdzona." };
+  }
+  if (booking.payment_status !== "unpaid") {
+    return { error: "Ta rezerwacja została już opłacona." };
+  }
+
+  const car = booking.cars as unknown as {
+    brand: string;
+    model: string;
+    price_per_day: number;
+    price_per_month: number | null;
+    security_deposit_amount: number | null;
+  } | null;
+  if (!car) return { error: "Nie znaleziono auta." };
+  // Enforced here and not only by hiding the button: a wire leaves no card
+  // to hold the deposit on, so the renter would take the car with nothing
+  // securing it.
+  if (car.security_deposit_amount !== null && Number(car.security_deposit_amount) > 0) {
+    return {
+      error: `To auto ma kaucję ${Math.round(Number(car.security_deposit_amount))} zł blokowaną na karcie — ten wynajem opłać kartą lub BLIK-iem.`,
+    };
+  }
+
+  const { commission, gross } = await resolveBookingAmounts(booking, car, bookingId);
+
+  const admin = createAdminClient();
+
+  // A Checkout Session the renter opened a moment ago stays payable for
+  // ~24h. Switching to a transfer without killing it is how the same rental
+  // gets paid twice — once by card and once by wire — so this path settles
+  // the old session exactly like createBookingCheckoutSession does.
+  const previous = await settlePreviousSession(booking.stripe_checkout_session_id);
+  if (previous.kind === "blocked") {
+    return { error: previous.error };
+  }
+  if (previous.kind === "paid") {
+    // The card went through after all; there is nothing left to transfer.
+    const { data: healed } = await admin
+      .from("bookings")
+      .update({
+        payment_status: "paid",
+        stripe_checkout_session_id: previous.sessionId,
+        ...(previous.amountTotalPln !== null ? { total_price: previous.amountTotalPln } : {}),
+        ...(previous.applicationFeePln !== null
+          ? { platform_fee_amount: previous.applicationFeePln }
+          : {}),
+      })
+      .eq("id", bookingId)
+      .eq("payment_status", "unpaid")
+      .select("id")
+      .single();
+    if (healed) {
+      await notifyUser({
+        userId: booking.owner_id,
+        type: "booking_paid",
+        subject: "Płatność za wynajem otrzymana",
+        body: `Najemca opłacił wynajem ${car.brand} ${car.model}. Rezerwacja jest potwierdzona.`,
+        emailHtml: `
+          <p>Najemca opłacił rezerwację — ${car.brand} ${car.model}.</p>
+          <p><a href="${SITE_URL}/dashboard/bookings">Przejdź do rezerwacji →</a></p>
+        `,
+        link: "/dashboard/bookings",
+      });
+    }
+    revalidatePath("/dashboard/rentals");
+    return {
+      error: "Ta rezerwacja została już opłacona kartą — właśnie ją zaksięgowaliśmy. Odśwież stronę.",
+    };
+  }
+
+  const { data: declared, error } = await admin
+    .from("bookings")
+    .update({
+      payment_method: "bank_transfer",
+      total_price: gross,
+      platform_fee_amount: commission,
+      // Dropped on purpose: the session above is dead, and leaving its id
+      // here would make the webhook mistake a real second payment for a
+      // redelivered event and skip the refund.
+      stripe_checkout_session_id: null,
+    })
+    .eq("id", bookingId)
+    .eq("payment_status", "unpaid")
+    // Re-declaring changes nothing — this is what keeps a repeated click (or
+    // a script) from filling the admin's inbox with the same alert.
+    .neq("payment_method", "bank_transfer")
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (declared) {
+    const { error: notifyError } = await admin.from("admin_notifications").insert({
+      type: "bank_transfer_declared",
+      body: `Najemca zadeklarował przelew ${gross.toFixed(2)} zł za wynajem ${car.brand} ${car.model} (rezerwacja ${bookingId}). Potwierdź wpłatę, żeby rezerwacja została opłacona.`,
+      link: "/admin/przelewy",
+    });
+    if (notifyError) {
+      console.error("[bank-transfer] admin notification insert failed", notifyError);
+    }
+  }
+
+  revalidatePath("/dashboard/rentals");
+  return { error: null };
+}
+
+export async function declareExtraChargeBankTransfer(
+  extraChargeId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: extraCharge } = await supabase
+    .from("booking_extra_charges")
+    .select(
+      "id, booking_id, amount_pln, reason, status, stripe_checkout_session_id, bookings(renter_id, status)"
+    )
+    .eq("id", extraChargeId)
+    .single();
+
+  const chargeBooking = extraCharge?.bookings as unknown as {
+    renter_id: string;
+    status: BookingStatus;
+  } | null;
+  if (!extraCharge || chargeBooking?.renter_id !== user.id) {
+    return { error: "Nie masz dostępu do tego zgłoszenia." };
+  }
+  if (extraCharge.status !== "requested") {
+    return { error: "Ta dopłata została już opłacona lub anulowana." };
+  }
+  if (chargeBooking.status !== "accepted" && chargeBooking.status !== "completed") {
+    return { error: "Ta rezerwacja jest już zamknięta." };
+  }
+
+  const admin = createAdminClient();
+
+  // Same reason as on the booking: an open card session for this charge
+  // would otherwise stay payable next to the declared transfer.
+  const previous = await settlePreviousSession(extraCharge.stripe_checkout_session_id);
+  if (previous.kind === "blocked") {
+    return { error: previous.error };
+  }
+  if (previous.kind === "paid") {
+    const { data: healedCharge } = await admin
+      .from("booking_extra_charges")
+      .update({ status: "paid", stripe_checkout_session_id: previous.sessionId })
+      .eq("id", extraChargeId)
+      .eq("status", "requested")
+      .select("id, bookings(owner_id, cars(brand, model))")
+      .maybeSingle();
+    // This branch runs precisely when the webhook never arrived, so it is
+    // the only thing that can tell the owner their money came in. Guarded on
+    // the update actually flipping the row so a concurrent webhook can't
+    // produce a second notification.
+    if (healedCharge) {
+      const healedBooking = healedCharge.bookings as unknown as {
+        owner_id: string;
+        cars: { brand: string; model: string } | null;
+      } | null;
+      if (healedBooking) {
+        const label = healedBooking.cars
+          ? `${healedBooking.cars.brand} ${healedBooking.cars.model}`
+          : "auto";
+        await notifyUser({
+          userId: healedBooking.owner_id,
+          type: "extra_charge_requested",
+          subject: `Dopłata opłacona: ${label}`,
+          body: `Najemca opłacił dopłatę ${Number(extraCharge.amount_pln).toFixed(2)} zł za ${label}.`,
+          emailHtml: `
+            <p>Najemca opłacił zgłoszoną przez Ciebie dopłatę — ${label}.</p>
+            <p><strong>Kwota:</strong> ${Number(extraCharge.amount_pln).toFixed(2)} zł</p>
+            <p><a href="${SITE_URL}/dashboard/bookings">Zobacz rezerwacje →</a></p>
+          `,
+          link: "/dashboard/bookings",
+        });
+      }
+    }
+    revalidatePath("/dashboard/rentals");
+    return { error: "Ta dopłata została już opłacona kartą — odśwież stronę." };
+  }
+
+  const { data: declared, error } = await admin
+    .from("booking_extra_charges")
+    .update({ payment_method: "bank_transfer", stripe_checkout_session_id: null })
+    .eq("id", extraChargeId)
+    .eq("status", "requested")
+    .neq("payment_method", "bank_transfer")
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (declared) {
+    const { error: notifyError } = await admin.from("admin_notifications").insert({
+      type: "bank_transfer_declared",
+      body: `Najemca zadeklarował przelew ${Number(extraCharge.amount_pln).toFixed(2)} zł za dopłatę (${extraCharge.reason}). Potwierdź wpłatę, żeby zamknąć rozliczenie.`,
+      link: "/admin/przelewy",
+    });
+    if (notifyError) {
+      console.error("[bank-transfer] admin notification insert failed", notifyError);
+    }
+  }
+
+  revalidatePath("/dashboard/rentals");
+  return { error: null };
 }
 
 // Extending an already-accepted, already-paid booking — auto-approved if
@@ -340,7 +623,14 @@ export async function requestBookingExtension(
   // subtracting it from a rental total would mix the two and undercharge.
   const additionalRental = Math.round((newRental - currentRental) * 100) / 100;
   if (additionalRental <= 0) {
-    return { error: "Nie udało się wyliczyć dopłaty za przedłużenie." };
+    // Not a computation failure: past 28 nights the monthly rate takes over
+    // and a longer rental can cost the same or less than the current one.
+    // Charging 0 would silently hand the owner extra days for nothing, so
+    // this stays manual — but say what actually happened.
+    return {
+      error:
+        "Przy stawce miesięcznej cena nie rośnie liniowo i tego przedłużenia nie da się wycenić automatycznie. Napisz do nas przez czat — ustalimy je ręcznie.",
+    };
   }
   const { commission: platformFee, gross: additionalGross } = applyCommission(
     additionalRental,
@@ -538,7 +828,11 @@ export async function payExtraCharge(extraChargeId: string): Promise<{ error: st
 
   await admin
     .from("booking_extra_charges")
-    .update({ stripe_checkout_session_id: checkoutResult.data.sessionId })
+    // payment_method back to stripe: same reason as on the booking above.
+    .update({
+      stripe_checkout_session_id: checkoutResult.data.sessionId,
+      payment_method: "stripe",
+    })
     .eq("id", extraChargeId);
 
   redirect(checkoutResult.data.url);

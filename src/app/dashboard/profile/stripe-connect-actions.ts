@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { ensureConnectAccount, createAccountOnboardingLink } from "@/lib/stripe";
 import { SITE_URL } from "@/lib/site";
@@ -27,7 +28,11 @@ export async function createStripeConnectOnboardingLink(): Promise<{ error: stri
   }
 
   if (!profile?.stripe_connect_account_id) {
-    await supabase
+    // Service role: which Connect account an owner is paid into is pinned
+    // against session writes in the database (migration 0036), so a user
+    // can't point someone else's payouts — or their own — at another
+    // account by PATCHing their profile row.
+    await createAdminClient()
       .from("profiles")
       .update({ stripe_connect_account_id: accountResult.data.accountId })
       .eq("id", user.id);

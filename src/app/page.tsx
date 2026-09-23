@@ -12,10 +12,12 @@ export default async function Home() {
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, full_name")
+      .select("role, full_name, maintenance_bypass")
       .eq("id", user.id)
       .single();
-    isAdmin = profile?.role === "admin";
+    // maintenance_bypass lets a test account browse and book while
+    // the listings stay hidden from everyone else.
+    isAdmin = profile?.role === "admin" || profile?.maintenance_bypass === true;
     displayName = profile?.full_name || "Panel";
   }
 

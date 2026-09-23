@@ -26,6 +26,9 @@ type Props = {
     registration_number: string | null;
   };
   ownerName: string;
+  // Set when the car belongs to a rental company rather than an individual.
+  partnerName: string | null;
+  partnerStatus: string | null;
   imageUrls: string[];
   insuranceUrl: string | null;
   insuranceIsPdf: boolean;
@@ -34,6 +37,8 @@ type Props = {
 export function CarReviewCard({
   car,
   ownerName,
+  partnerName,
+  partnerStatus,
   imageUrls,
   insuranceUrl,
   insuranceIsPdf,
@@ -87,9 +92,19 @@ export function CarReviewCard({
             {car.brand} {car.model} ({car.year})
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Właściciel: {ownerName || "brak danych"} · {car.city} ·{" "}
+            {partnerName ? "Wypożyczalnia" : "Właściciel"}:{" "}
+            {partnerName || ownerName || "brak danych"} · {car.city} ·{" "}
             {Number(car.price_per_day).toFixed(2)} zł/dzień
           </p>
+          {/* Approving a car whose company is not active silently does
+              nothing — the database invariant forces it straight back to
+              'paused' — so the reviewer has to see this before clicking. */}
+          {partnerName && partnerStatus !== "active" && (
+            <p className="text-sm text-destructive">
+              Wypożyczalnia nie jest aktywna ({partnerStatus}) — zatwierdzenie nie opublikuje
+              tego auta, dopóki nie zweryfikujesz firmy.
+            </p>
+          )}
         </div>
         <Badge
           variant={
