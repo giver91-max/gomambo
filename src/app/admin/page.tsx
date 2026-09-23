@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
 import { MaintenanceModeToggle } from "./maintenance-mode-toggle";
+import { RecentActivityItem } from "./recent-activity-item";
 import type { AdminNotification } from "@/types/database";
 
 const notificationTypeLabel: Record<AdminNotification["type"], string> = {
@@ -22,6 +23,9 @@ const notificationTypeLabel: Record<AdminNotification["type"], string> = {
 
 export default async function AdminOverviewPage() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const [
     { count: userCount },
@@ -45,13 +49,24 @@ export default async function AdminOverviewPage() {
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
     supabase.from("site_settings").select("maintenance_mode").eq("id", 1).single(),
+    // Read a wider window than we display: the list shows what is still
+    // UNREAD, so it has to be filtered after the read markers come back.
     supabase
       .from("admin_notifications")
       .select("id, type, body, link, created_at")
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
-      .limit(8),
+      .limit(50),
   ]);
+
+  const { data: activityReads } = await supabase
+    .from("admin_notification_reads")
+    .select("notification_id")
+    .eq("user_id", user!.id);
+  const readActivityIds = new Set((activityReads ?? []).map((r) => r.notification_id));
+  const unreadActivity = (recentActivity ?? [])
+    .filter((n) => !readActivityIds.has(n.id))
+    .slice(0, 8);
 
   const pendingCars = (carStatuses ?? []).filter((c) => c.status === "pending").length;
   const approvedCars = (carStatuses ?? []).filter((c) => c.status === "approved").length;
@@ -94,28 +109,26 @@ export default async function AdminOverviewPage() {
       </div>
 
       <div className="space-y-3">
-        <h2 className="font-semibold">Ostatnia aktywność</h2>
-        {!recentActivity || recentActivity.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Brak ostatniej aktywności.</p>
+        <h2 className="font-semibold">Do sprawdzenia</h2>
+        {unreadActivity.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nic nie czeka. Wszystkie powiadomienia znajdziesz w{" "}
+            <Link href="/dashboard/notifications" className="text-primary hover:underline">
+              Powiadomieniach
+            </Link>
+            .
+          </p>
         ) : (
           <div className="space-y-2">
-            {recentActivity.map((item) => (
-              <Card key={item.id}>
-                <CardContent className="space-y-1 py-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium">{notificationTypeLabel[item.type]}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(item.created_at).toLocaleString("pl-PL")}
-                    </p>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{item.body}</p>
-                  {item.link && (
-                    <Link href={item.link} className="block text-xs text-primary hover:underline">
-                      Zobacz →
-                    </Link>
-                  )}
-                </CardContent>
-              </Card>
+            {unreadActivity.map((item) => (
+              <RecentActivityItem
+                key={item.id}
+                id={item.id}
+                label={notificationTypeLabel[item.type]}
+                body={item.body}
+                link={item.link}
+                createdAt={item.created_at}
+              />
             ))}
           </div>
         )}

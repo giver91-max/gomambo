@@ -4,6 +4,17 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+// The unread badge lives in the LAYOUT (see dashboard/layout.tsx and
+// admin/layout.tsx, both calling getUnreadCounts). Revalidating only
+// "/dashboard/notifications" left it untouched, so the count next to your
+// name kept showing notifications you had just read — you clicked, and
+// nothing disappeared. Both layouts have to be revalidated, on both trees,
+// because an admin sees the same badge under /admin.
+function revalidateNotificationSurfaces(): void {
+  revalidatePath("/dashboard", "layout");
+  revalidatePath("/admin", "layout");
+}
+
 export async function markAdminNotificationsRead(notificationIds: string[]): Promise<void> {
   if (notificationIds.length === 0) return;
 
@@ -14,11 +25,39 @@ export async function markAdminNotificationsRead(notificationIds: string[]): Pro
   if (!user) return;
 
   const rows = notificationIds.map((notificationId) => ({ notification_id: notificationId, user_id: user.id }));
-  await supabase
+  // DO NOTHING, not DO UPDATE. A read marker has nothing to update — it
+  // either exists or it doesn't — and admin_notification_reads has no UPDATE
+  // policy (0012 grants SELECT and INSERT only), so the ON CONFLICT DO UPDATE
+  // that upsert defaults to was rejected by RLS whenever two tabs raced. The
+  // error was then swallowed by the missing error check below.
+  const { error } = await supabase
     .from("admin_notification_reads")
-    .upsert(rows, { onConflict: "notification_id,user_id" });
+    .upsert(rows, { onConflict: "notification_id,user_id", ignoreDuplicates: true });
+  if (error) console.error("markAdminNotificationsRead failed", error);
 
-  revalidatePath("/dashboard/notifications");
+  revalidateNotificationSurfaces();
+}
+
+/** One notification, marked read from the admin dashboard's activity list. */
+export async function markAdminNotificationRead(
+  notificationId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Zaloguj się ponownie." };
+
+  const { error } = await supabase
+    .from("admin_notification_reads")
+    .upsert(
+      { notification_id: notificationId, user_id: user.id },
+      { onConflict: "notification_id,user_id", ignoreDuplicates: true }
+    );
+  if (error) return { error: error.message };
+
+  revalidateNotificationSurfaces();
+  return { error: null };
 }
 
 export async function markNotificationsRead(notificationIds: string[]): Promise<void> {
@@ -37,7 +76,7 @@ export async function markNotificationsRead(notificationIds: string[]): Promise<
     .in("id", notificationIds)
     .is("read_at", null);
 
-  revalidatePath("/dashboard/notifications");
+  revalidateNotificationSurfaces();
 }
 
 // Own notification, own choice — notifications_update_own RLS already
@@ -58,7 +97,7 @@ export async function deleteNotification(notificationId: string): Promise<{ erro
     return { error: error.message };
   }
 
-  revalidatePath("/dashboard/notifications");
+  revalidateNotificationSurfaces();
   return { error: null };
 }
 
@@ -86,6 +125,6 @@ export async function deleteAdminNotification(notificationId: string): Promise<{
     return { error: error.message };
   }
 
-  revalidatePath("/dashboard/notifications");
+  revalidateNotificationSurfaces();
   return { error: null };
 }

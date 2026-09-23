@@ -5,6 +5,7 @@ import { BackButton } from "@/components/back-button";
 import { cn } from "@/lib/utils";
 import { markAdminNotificationsRead, markNotificationsRead } from "./actions";
 import { NotificationDeleteButton } from "./notification-delete-button";
+import { RefreshOnce } from "./refresh-once";
 import type { AdminNotification, Notification } from "@/types/database";
 
 const systemTypeLabel: Record<AdminNotification["type"], string> = {
@@ -113,6 +114,9 @@ export default async function NotificationsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <BackButton />
+      {/* Clears the stale unread badge in the header the moment this page has
+          marked things read, instead of on the next full reload. */}
+      <RefreshOnce when={unreadSystemIds.length > 0 || unreadPersonalIds.length > 0} />
       <h1 className="text-2xl font-bold">Powiadomienia</h1>
 
       {feed.length === 0 ? (
