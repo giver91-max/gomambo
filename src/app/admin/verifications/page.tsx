@@ -1,14 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
 import { BackButton } from "@/components/back-button";
 import { VerificationReviewCard } from "./verification-review-card";
-import type { FaceMatchResult, IdentityVerificationStatus, VerificationMethod } from "@/types/database";
+import type {
+  AutoReview,
+  FaceMatchResult,
+  IdentityVerificationStatus,
+  VerificationMethod,
+} from "@/types/database";
 
 export default async function AdminVerificationsPage() {
   const supabase = await createClient();
   const { data: rawVerifications } = await supabase
     .from("identity_verifications")
     .select(
-      "id, document_path, document_back_path, selfie_path, status, rejection_reason, verification_method, face_match_result, face_match_score, user:profiles!identity_verifications_user_id_fkey(full_name)"
+      "id, document_path, document_back_path, selfie_path, status, rejection_reason, verification_method, face_match_result, face_match_score, auto_review, user:profiles!identity_verifications_user_id_fkey(full_name)"
     )
     .order("created_at", { ascending: false });
 
@@ -22,6 +27,7 @@ export default async function AdminVerificationsPage() {
     verification_method: VerificationMethod;
     face_match_result: FaceMatchResult;
     face_match_score: number | null;
+    auto_review: AutoReview | null;
     user: { full_name: string } | null;
   }[];
 

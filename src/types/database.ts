@@ -326,6 +326,17 @@ export type IdentityVerificationStatus = "pending" | "approved" | "rejected";
 export type FaceMatchResult = "not_run" | "match" | "no_match" | "error";
 export type VerificationMethod = "manual" | "phone_handoff";
 
+/** Why the automatic approval did or did not pass a verification (0047). */
+export type AutoReview = {
+  /** Failed gates, in the reviewer's language. Empty when it passed. */
+  reasons: string[];
+  /** Field 4b of the licence as read, or null when unreadable. */
+  licenceExpiry: string | null;
+  licenceExpired: boolean | null;
+  /** A human rejection blocked the automat regardless of the gates. */
+  previouslyRejected: boolean;
+};
+
 export type IdentityVerification = {
   id: string;
   user_id: string;
@@ -340,6 +351,7 @@ export type IdentityVerification = {
   biometric_consent_at: string | null;
   /** When the admins were last alerted about this verification (0046). */
   admin_alerted_at: string | null;
+  auto_review: AutoReview | null;
   created_at: string;
   updated_at: string;
 };

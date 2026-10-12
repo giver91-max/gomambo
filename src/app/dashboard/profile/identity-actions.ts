@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkDocumentLegibility, detectFace } from "@/lib/face-match";
-import { assessIdentity } from "@/lib/identity-gates";
+import { assessIdentity, buildAutoReview } from "@/lib/identity-gates";
 import { alertAdminsAboutVerification } from "@/lib/identity-alerts";
 
 type Slot = "front" | "back" | "selfie";
@@ -156,6 +156,7 @@ export async function submitIdentityVerification(
     biometric_consent_at: new Date().toISOString(),
     status: autoApproved ? ("approved" as const) : ("pending" as const),
     rejection_reason: null,
+    auto_review: buildAutoReview(assessment, previouslyRejected),
   };
 
   let verificationId: string;

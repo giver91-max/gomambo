@@ -1,4 +1,5 @@
 import "server-only";
+import type { AutoReview } from "@/types/database";
 import {
   FACE_MATCH_AUTO_APPROVE_THRESHOLD,
   FACE_MATCH_MIN_PER_FACE_THRESHOLD,
@@ -117,6 +118,23 @@ export function assessmentReasons(assessment: IdentityAssessment): string[] {
     reasons.push("selfie nieostre — sprawdź, czy to żywe zdjęcie, a nie zdjęcie zdjęcia");
   }
   return reasons;
+}
+
+/**
+ * What gets stored WITH the verification, so the review card can show why the
+ * automat did or did not let it through — instead of sending the admin off to
+ * find the reason in a notification.
+ */
+export function buildAutoReview(
+  assessment: IdentityAssessment,
+  previouslyRejected: boolean
+): AutoReview {
+  return {
+    reasons: assessmentReasons(assessment),
+    licenceExpiry: assessment.licence.expiry,
+    licenceExpired: assessment.licence.expired,
+    previouslyRejected,
+  };
 }
 
 /** "Prawo jazdy ważne do …", or that it could not be read. */

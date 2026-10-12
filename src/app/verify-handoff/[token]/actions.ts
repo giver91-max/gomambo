@@ -6,6 +6,7 @@ import { sendCodeEmail } from "@/lib/email";
 import { checkDocumentLegibility, detectFace } from "@/lib/face-match";
 import {
   assessIdentity,
+  buildAutoReview,
   emptyAssessment,
   type IdentityAssessment,
 } from "@/lib/identity-gates";
@@ -302,6 +303,7 @@ export async function finalizeHandoff(
     biometric_consent_at: new Date().toISOString(),
     status: autoApproved ? ("approved" as const) : ("pending" as const),
     rejection_reason: null,
+    auto_review: buildAutoReview(assessment, previouslyRejected),
   };
 
   let verificationId: string;

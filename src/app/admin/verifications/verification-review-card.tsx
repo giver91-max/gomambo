@@ -6,7 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { FaceMatchResult, IdentityVerificationStatus, VerificationMethod } from "@/types/database";
+import type {
+  AutoReview,
+  FaceMatchResult,
+  IdentityVerificationStatus,
+  VerificationMethod,
+} from "@/types/database";
 
 type Props = {
   verification: {
@@ -16,6 +21,7 @@ type Props = {
     verification_method: VerificationMethod;
     face_match_result: FaceMatchResult;
     face_match_score: number | null;
+    auto_review: AutoReview | null;
   };
   userName: string;
   documentUrl: string | null;
@@ -38,7 +44,8 @@ type Props = {
 function faceMatchContext(
   result: FaceMatchResult,
   score: number | null,
-  status: IdentityVerificationStatus
+  status: IdentityVerificationStatus,
+  reasonsOnCard: boolean
 ): string | null {
   const pct = score !== null ? `${score.toFixed(1)}%` : "brak wyniku";
 
@@ -53,7 +60,10 @@ function faceMatchContext(
       return null;
     case "match":
       // Matched as a person, but something stopped the automatic approval.
-      return `Automatyczne dopasowanie: ${pct} — automat NIE zatwierdził tego zgłoszenia. Powód znajdziesz w powiadomieniu; sprawdź dokument samodzielnie.`;
+      return reasonsOnCard
+        ? `Automatyczne dopasowanie: ${pct} — automat NIE zatwierdził tego zgłoszenia.`
+        : // Submitted before the reasons were stored with the verification.
+          `Automatyczne dopasowanie: ${pct} — automat NIE zatwierdził tego zgłoszenia. Powód jest w powiadomieniu z dnia zgłoszenia.`;
     case "no_match":
       return score !== null
         ? `Automatyczne dopasowanie: ${pct} — poniżej progu, wymaga ręcznej weryfikacji.`
@@ -125,16 +135,22 @@ export function VerificationReviewCard({
         {faceMatchContext(
           verification.face_match_result,
           verification.face_match_score,
-          verification.status
+          verification.status,
+          !!verification.auto_review
         ) && (
           <p className="text-sm text-muted-foreground">
             {faceMatchContext(
               verification.face_match_result,
               verification.face_match_score,
-              verification.status
+              verification.status,
+              !!verification.auto_review
             )}
           </p>
         )}
+        <AutoReviewDetails
+          review={verification.auto_review}
+          status={verification.status}
+        />
         <div className="flex flex-wrap gap-3">
           {documentUrl && (
             // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
@@ -192,5 +208,54 @@ export function VerificationReviewCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Why the automat did or did not let this verification through, shown where
+ * the decision is made. It used to live only in the notification and e-mail
+ * text, so the admin looking at the photos had to go and find it.
+ */
+function AutoReviewDetails({
+  review,
+  status,
+}: {
+  review: AutoReview | null;
+  status: IdentityVerificationStatus;
+}) {
+  if (!review) return null;
+
+  const expiry = review.licenceExpiry
+    ? `${review.licenceExpiry}${review.licenceExpired ? " — PRZETERMINOWANE" : ""}`
+    : "nie odczytano z dokumentu";
+  const blocked = review.reasons.length > 0 || review.previouslyRejected;
+
+  return (
+    <div className="space-y-2 rounded-md border bg-muted/40 p-3 text-sm">
+      {review.previouslyRejected && (
+        <p className="font-medium text-destructive">
+          Ponowne zgłoszenie po odrzuceniu — automat nigdy nie zatwierdza takiego sam.
+        </p>
+      )}
+      {review.reasons.length > 0 ? (
+        <div className="space-y-1">
+          <p className="font-medium">
+            {status === "pending"
+              ? "Dlaczego automat nie zatwierdził:"
+              : "Automat nie zatwierdził, bo:"}
+          </p>
+          <ul className="list-disc space-y-0.5 pl-5">
+            {review.reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        !blocked && <p className="font-medium">Automat: wszystkie sprawdzenia zaliczone.</p>
+      )}
+      <p className={review.licenceExpired ? "font-medium text-destructive" : "text-muted-foreground"}>
+        Prawo jazdy ważne do (pole 4b): {expiry}
+      </p>
+    </div>
   );
 }
