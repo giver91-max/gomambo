@@ -338,6 +338,8 @@ export type IdentityVerification = {
   face_match_result: FaceMatchResult;
   verification_method: VerificationMethod;
   biometric_consent_at: string | null;
+  /** When the admins were last alerted about this verification (0046). */
+  admin_alerted_at: string | null;
   created_at: string;
   updated_at: string;
 };

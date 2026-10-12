@@ -99,17 +99,13 @@ export async function assessIdentity(
  * What the admin queue is told. Says WHICH gate stopped it, so the reviewer
  * knows what to look at instead of re-deriving it from a bare score.
  */
-export function describeAssessment(assessment: IdentityAssessment): string {
-  const { match, licence, gates } = assessment;
-
-  const hint =
-    match.score !== null
-      ? ` Automat: zgodność ${match.score.toFixed(1)}%`
-      : " Automat: brak wyniku";
-  const expiry = licence.expiry
-    ? `, prawo jazdy ważne do ${licence.expiry}${licence.expired ? " (PRZETERMINOWANE)" : ""}`
-    : ", daty ważności nie odczytano";
-
+/**
+ * Why the automatic approval did not fire, one plain sentence per failed gate.
+ * Shared by the in-app queue entry and the admin e-mail so the two can never
+ * disagree about what the reviewer should look at.
+ */
+export function assessmentReasons(assessment: IdentityAssessment): string[] {
+  const { gates } = assessment;
   const reasons: string[] = [];
   if (!gates.strongMatch) {
     reasons.push(`zgodność poniżej progu ${FACE_MATCH_AUTO_APPROVE_THRESHOLD}%`);
@@ -120,6 +116,26 @@ export function describeAssessment(assessment: IdentityAssessment): string {
   if (!gates.selfieIsSharp) {
     reasons.push("selfie nieostre — sprawdź, czy to żywe zdjęcie, a nie zdjęcie zdjęcia");
   }
+  return reasons;
+}
 
+/** "Prawo jazdy ważne do …", or that it could not be read. */
+export function describeExpiry(assessment: IdentityAssessment): string {
+  const { licence } = assessment;
+  return licence.expiry
+    ? `${licence.expiry}${licence.expired ? " (PRZETERMINOWANE)" : ""}`
+    : "nie odczytano";
+}
+
+export function describeAssessment(assessment: IdentityAssessment): string {
+  const { match } = assessment;
+  const hint =
+    match.score !== null
+      ? ` Automat: zgodność ${match.score.toFixed(1)}%`
+      : " Automat: brak wyniku";
+  const expiry = assessment.licence.expiry
+    ? `, prawo jazdy ważne do ${describeExpiry(assessment)}`
+    : ", daty ważności nie odczytano";
+  const reasons = assessmentReasons(assessment);
   return `${hint}${expiry}.${reasons.length ? ` Do sprawdzenia: ${reasons.join("; ")}.` : ""}`;
 }

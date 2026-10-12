@@ -34,7 +34,10 @@ export async function rejectVerification(verificationId: string, reason: string)
   const rejectionReason = reason || "Brak podanego powodu.";
   const { data: verification, error } = await supabase
     .from("identity_verifications")
-    .update({ status: "rejected", rejection_reason: rejectionReason })
+    // Clearing admin_alerted_at reopens the alert window (0046), so if this
+    // person resubmits — the one case that must never pass quietly — the
+    // admins hear about it straight away rather than after the cooldown.
+    .update({ status: "rejected", rejection_reason: rejectionReason, admin_alerted_at: null })
     .eq("id", verificationId)
     .select("user_id")
     .single();

@@ -6,7 +6,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkDocumentLegibility, detectFace } from "@/lib/face-match";
-import { assessIdentity, describeAssessment } from "@/lib/identity-gates";
+import { assessIdentity } from "@/lib/identity-gates";
+import { alertAdminsAboutVerification } from "@/lib/identity-alerts";
 
 type Slot = "front" | "back" | "selfie";
 
@@ -157,35 +158,44 @@ export async function submitIdentityVerification(
     rejection_reason: null,
   };
 
+  let verificationId: string;
   if (existing) {
     const { error } = await admin.from("identity_verifications").update(row).eq("id", existing.id);
     if (error) return { error: error.message };
+    verificationId = existing.id;
     const stale = [existing.document_path, existing.document_back_path, existing.selfie_path].filter(
       (p): p is string => !!p && !Object.values(paths).includes(p)
     );
     if (stale.length > 0) await admin.storage.from("id-documents").remove(stale);
   } else {
-    const { error } = await admin
+    const { data: inserted, error } = await admin
       .from("identity_verifications")
-      .insert({ user_id: user.id, ...row });
-    if (error) return { error: error.message };
+      .insert({ user_id: user.id, ...row })
+      .select("id")
+      .single();
+    if (error || !inserted) {
+      return { error: error?.message ?? "Nie udało się zapisać weryfikacji." };
+    }
+    verificationId = inserted.id;
   }
 
-  if (!autoApproved) {
-    const fullName = String(user.user_metadata?.full_name ?? user.email ?? "nieznany");
-    const rejected = previouslyRejected
-      ? `UWAGA: to konto było wcześniej ODRZUCONE${
-          existing?.rejection_reason ? ` (powód: ${existing.rejection_reason})` : ""
-        }. `
-      : "";
-    await admin.from("admin_notifications").insert({
-      type: "new_identity_verification",
-      body: `${rejected}Nowe zgłoszenie weryfikacji tożsamości: ${fullName}.${describeAssessment(
-        assessment
-      )}`,
-      link: "/admin/verifications",
-    });
-  }
+  // Every verification reaches the admins by e-mail; the ones that need a
+  // decision also land in the panel queue. See lib/identity-alerts.ts.
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .single();
+  await alertAdminsAboutVerification(admin, {
+    verificationId,
+    fullName: profile?.full_name || user.email || "nieznany",
+    email: user.email,
+    route: "komputer",
+    assessment,
+    autoApproved,
+    previouslyRejected,
+    previousRejectionReason: existing?.rejection_reason,
+  });
 
   revalidatePath("/dashboard/profile");
   return { error: null, approved: autoApproved };

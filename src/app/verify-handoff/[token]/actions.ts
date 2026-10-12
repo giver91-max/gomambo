@@ -6,10 +6,10 @@ import { sendCodeEmail } from "@/lib/email";
 import { checkDocumentLegibility, detectFace } from "@/lib/face-match";
 import {
   assessIdentity,
-  describeAssessment,
   emptyAssessment,
   type IdentityAssessment,
 } from "@/lib/identity-gates";
+import { alertAdminsAboutVerification } from "@/lib/identity-alerts";
 import {
   codeMatches,
   generateEmailCode,
@@ -326,30 +326,23 @@ export async function finalizeHandoff(
     verificationId = inserted.id;
   }
 
-  // The queue is a to-do list, so only what still needs doing goes on it.
-  // Auto-approved verifications stay visible in /admin/verifications with
-  // their score, so they can still be spot-checked — they just don't ask
-  // anyone to act.
-  if (!autoApproved) {
-    const { data: profile } = await admin.from("profiles").select("full_name").eq("id", handoff.user_id).single();
-    const detail = describeAssessment(assessment);
-
-    // A resubmission after a rejection is the case that must never pass
-    // quietly, so it leads the message.
-    const rejected = previouslyRejected
-      ? `UWAGA: to konto było wcześniej ODRZUCONE${
-          existing?.rejection_reason ? ` (powód: ${existing.rejection_reason})` : ""
-        }. `
-      : "";
-
-    await admin.from("admin_notifications").insert({
-      type: "new_identity_verification",
-      body: `${rejected}Nowe zgłoszenie weryfikacji tożsamości (telefon): ${
-        profile?.full_name ?? "nieznany"
-      }.${detail}`,
-      link: "/admin/verifications",
-    });
-  }
+  // Every verification reaches the admins by e-mail; the ones that need a
+  // decision also land in the panel queue. See lib/identity-alerts.ts.
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("full_name")
+    .eq("id", handoff.user_id)
+    .single();
+  await alertAdminsAboutVerification(admin, {
+    verificationId,
+    fullName: profile?.full_name || "nieznany",
+    email: handoff.email,
+    route: "telefon",
+    assessment,
+    autoApproved,
+    previouslyRejected,
+    previousRejectionReason: existing?.rejection_reason,
+  });
 
   await admin
     .from("identity_verification_handoffs")
