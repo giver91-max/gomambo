@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { notifyAdmins } from "@/lib/notify-admins";
 import type { Car } from "@/types/database";
 
 export type EditCarState = { error: string | null; success?: boolean };
@@ -22,7 +21,7 @@ async function requireOwnedCar(carId: string) {
   const [{ data: car }, { data: profile }] = await Promise.all([
     supabase
       .from("cars")
-      .select("owner_id, status, rejection_reason, partner_id, partners(status)")
+      .select("owner_id, status, partner_id, partners(status)")
       .eq("id", carId)
       .single(),
     supabase.from("profiles").select("role").eq("id", user.id).single(),
@@ -36,7 +35,6 @@ async function requireOwnedCar(carId: string) {
       car: null as null | {
         owner_id: string;
         status: string;
-        rejection_reason: string | null;
         partner_id: string | null;
         partners: { status: string } | null;
       },
@@ -47,99 +45,16 @@ async function requireOwnedCar(carId: string) {
   return { supabase, user, car, isAdmin };
 }
 
-// Any edit by the owner to an APPROVED or a REJECTED car sends it back to
-// "pending" for an admin to look at.
-//
-// Approved: the new content has not been reviewed. Rejected: the rejection
-// e-mail tells the owner "Popraw ogłoszenie i wyślij je do ponownej
-// weryfikacji" — but until now there was no way to do that. An owner edit
-// left the car "rejected" (the DB trigger pins status for owners) and told no
-// one, so a corrected listing stayed dead until an admin happened to reopen it.
-//
-// Owners can't set status themselves (see enforce_car_update_rules) — only the
-// service-role client can. Admins editing a car are themselves the reviewer,
-// so their edits don't trigger a review.
-//
-// The revert is conditional on the row still holding the status we read, and
-// only the request that actually performs it announces it. Several photo
-// uploads in a row each call this; without the condition every one of them
-// would have sent the admins another e-mail about the same car.
-const REVIEWABLE_STATUSES = ["approved", "rejected"] as const;
-type ReviewableStatus = (typeof REVIEWABLE_STATUSES)[number];
-
-function sendsBackToReview(status: string, isAdmin: boolean): status is ReviewableStatus {
-  return !isAdmin && (REVIEWABLE_STATUSES as readonly string[]).includes(status);
-}
-
-async function sendBackToReview(
-  carId: string,
-  car: { status: string; rejection_reason: string | null },
-  isAdmin: boolean,
-  what: string
-) {
-  if (!sendsBackToReview(car.status, isAdmin)) return;
+// Any edit to an already-approved car (details, photos) reverts it to
+// "pending" so an admin re-reviews the new content. Owners can't set status
+// themselves (see enforce_car_update_rules trigger) — only the admin client
+// can, and only because auth.uid() is null for service-role calls. Admins
+// editing a car are themselves the reviewer, so their edits don't need
+// re-review and the status is left untouched.
+async function revertToPendingIfApproved(carId: string, wasApproved: boolean, isAdmin: boolean) {
+  if (!wasApproved || isAdmin) return;
   const admin = createAdminClient();
-  const { data: reverted } = await admin
-    .from("cars")
-    .update({ status: "pending", rejection_reason: null })
-    .eq("id", carId)
-    .eq("status", car.status)
-    .select("id");
-  if (reverted && reverted.length > 0) {
-    await announceBackInReview(admin, carId, what, car.status, car.rejection_reason);
-  }
-}
-
-// A car that goes back to "pending" needs an admin, and until now nobody was
-// told: no queue entry, no e-mail. An approved one vanished from the site; a
-// corrected rejected one never came back at all.
-async function announceBackInReview(
-  admin: ReturnType<typeof createAdminClient>,
-  carId: string,
-  what: string,
-  from: ReviewableStatus,
-  previousRejectionReason: string | null
-) {
-  const { data: car } = await admin
-    .from("cars")
-    .select("brand, model, year, city, owner_id")
-    .eq("id", carId)
-    .single();
-  if (!car) return;
-  const [{ data: owner }, { data: authUser }] = await Promise.all([
-    admin.from("profiles").select("full_name").eq("id", car.owner_id).single(),
-    admin.auth.admin.getUserById(car.owner_id),
-  ]);
-  const ownerEmail = authUser?.user?.email;
-  const ownerName = owner?.full_name || ownerEmail || "nieznany";
-
-  const wasRejected = from === "rejected";
-  await notifyAdmins(admin, {
-    queue: {
-      type: "new_car_pending",
-      body: wasRejected
-        ? `Poprawione po odrzuceniu (${what}): ${car.brand} ${car.model} — ${ownerName}`
-        : `Auto wróciło do weryfikacji po edycji (${what}): ${car.brand} ${car.model} — ${ownerName}`,
-    },
-    link: "/admin/cars",
-    email: {
-      subject: wasRejected
-        ? `Poprawione auto do weryfikacji: ${car.brand} ${car.model}`
-        : `Auto do ponownej weryfikacji: ${car.brand} ${car.model}`,
-      intro: wasRejected
-        ? `Właściciel poprawił odrzucone ogłoszenie (${what}) i czeka na Twoją ponowną decyzję.`
-        : `Właściciel zmienił zatwierdzone ogłoszenie (${what}). Zniknęło ze strony i wróci, gdy je ponownie zatwierdzisz.`,
-      rows: [
-        ["Auto", `${car.brand} ${car.model} (${car.year})`],
-        ["Miasto", car.city],
-        ["Co się zmieniło", what],
-        ["Wcześniejszy powód odrzucenia", wasRejected ? previousRejectionReason : null],
-        ["Właściciel", ownerName],
-        ["E-mail", ownerEmail],
-      ],
-      cta: "Sprawdź zmiany",
-    },
-  });
+  await admin.from("cars").update({ status: "pending", rejection_reason: null }).eq("id", carId);
 }
 
 export async function updateCarDetails(
@@ -209,8 +124,7 @@ export async function updateCarDetails(
   }
 
   const admin = createAdminClient();
-  const previousStatus = car.status;
-  const backToReview = sendsBackToReview(previousStatus, isAdmin);
+  const wasApproved = car.status === "approved";
   const { error } = await admin
     .from("cars")
     .update({
@@ -232,22 +146,12 @@ export async function updateCarDetails(
       delivery_available: deliveryAvailable,
       delivery_info: deliveryAvailable && deliveryInfo ? deliveryInfo : null,
       cancellation_policy: cancellationPolicy as Car["cancellation_policy"],
-      ...(backToReview ? { status: "pending", rejection_reason: null } : {}),
+      ...(wasApproved && !isAdmin ? { status: "pending", rejection_reason: null } : {}),
     })
     .eq("id", carId);
 
   if (error) {
     return { error: error.message };
-  }
-
-  if (backToReview) {
-    await announceBackInReview(
-      admin,
-      carId,
-      "zmienione dane ogłoszenia",
-      previousStatus,
-      car.rejection_reason
-    );
   }
 
   // Plate is kept out of the public listing row (see 0037).
@@ -293,7 +197,7 @@ export async function setCarInsuranceDocument(
     await supabase.storage.from("car-insurance").remove([existing.insurance_document_path]);
   }
 
-  await sendBackToReview(carId, car, isAdmin, "nowy dokument OC");
+  await revertToPendingIfApproved(carId, car.status === "approved", isAdmin);
 
   revalidatePath(`/dashboard/cars/${carId}/edit`);
   revalidatePath("/dashboard");
@@ -319,7 +223,7 @@ export async function addCarPhoto(
     return { error: error.message };
   }
 
-  await sendBackToReview(carId, car, isAdmin, "dodane zdjęcie");
+  await revertToPendingIfApproved(carId, car.status === "approved", isAdmin);
 
   revalidatePath(`/dashboard/cars/${carId}/edit`);
   revalidatePath(`/auta/${carId}`);
@@ -345,7 +249,7 @@ export async function removeCarPhoto(
     return { error: error.message };
   }
 
-  await sendBackToReview(carId, car, isAdmin, "usunięte zdjęcie");
+  await revertToPendingIfApproved(carId, car.status === "approved", isAdmin);
 
   revalidatePath(`/dashboard/cars/${carId}/edit`);
   revalidatePath(`/auta/${carId}`);
@@ -457,7 +361,7 @@ export async function bulkSetCarStatus(
 
 // Toggling between "approved" and "paused" is the one status change the
 // enforce_car_update_rules trigger lets an owner make directly (no admin
-// client needed, unlike sendBackToReview above).
+// client needed, unlike revertToPendingIfApproved above).
 export async function toggleCarPause(carId: string): Promise<{ error: string | null }> {
   const { supabase, car } = await requireOwnedCar(carId);
   if (!car) {

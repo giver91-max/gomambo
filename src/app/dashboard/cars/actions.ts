@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { notifyAdmins } from "@/lib/notify-admins";
+import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
 import { getVerificationStatus } from "@/lib/verification-gate";
 import { getPartnerContext, partnerCanList } from "@/lib/partner";
@@ -219,36 +219,28 @@ export async function attachCarImages(
     return { error: imagesError.message };
   }
 
-  const admin = createAdminClient();
-  const { data: ownerProfile } = await admin
-    .from("profiles")
-    .select("full_name")
-    .eq("id", user.id)
-    .single();
-  const ownerName = ownerProfile?.full_name || user.email || "nieznany";
+  const ownerName = String(user.user_metadata?.full_name ?? user.email ?? "nieznany");
 
-  // To the admins' own inboxes — it used to go to a hardcoded
-  // auto@gomambo.pl, which is not the address of any admin account. See
-  // lib/notify-admins.ts.
-  await notifyAdmins(admin, {
-    queue: {
-      type: "new_car_pending",
-      body: `Nowe auto do weryfikacji: ${car.brand} ${car.model} — ${ownerName}`,
-    },
+  await sendNotificationEmail({
+    to: "auto@gomambo.pl",
+    subject: `Nowe auto do weryfikacji: ${car.brand} ${car.model}`,
+    html: `
+      <p>Właściciel dodał nowe auto oczekujące na zatwierdzenie.</p>
+      <ul>
+        <li><strong>Auto:</strong> ${car.brand} ${car.model} (${car.year})</li>
+        <li><strong>Miasto:</strong> ${car.city}</li>
+        <li><strong>Cena:</strong> ${Number(car.price_per_day).toFixed(2)} zł/dzień</li>
+        <li><strong>Właściciel:</strong> ${ownerName} (${user.email})</li>
+      </ul>
+      <p><a href="https://www.gomambo.pl/admin/cars">Przejdź do panelu admina</a></p>
+    `,
+  });
+
+  const admin = createAdminClient();
+  await admin.from("admin_notifications").insert({
+    type: "new_car_pending",
+    body: `Nowe auto do weryfikacji: ${car.brand} ${car.model} — ${ownerName}`,
     link: "/admin/cars",
-    email: {
-      subject: `Nowe auto do weryfikacji: ${car.brand} ${car.model}`,
-      intro:
-        "Właściciel dodał auto. Nie pojawi się na stronie, dopóki go nie zatwierdzisz.",
-      rows: [
-        ["Auto", `${car.brand} ${car.model} (${car.year})`],
-        ["Miasto", car.city],
-        ["Cena", `${Math.round(Number(car.price_per_day))} zł/dzień`],
-        ["Właściciel", ownerName],
-        ["E-mail", user.email],
-      ],
-      cta: "Sprawdź auto",
-    },
   });
 
   revalidatePath("/dashboard");

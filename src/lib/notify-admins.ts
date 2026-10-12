@@ -27,22 +27,18 @@ export type AdminAlert = {
 
 /**
  * Tells GoMambo's admins that something happened — in the panel AND by
- * e-mail — and never throws.
- *
- * Before this, the queue entry was the only signal for most events, and it
- * is only seen by someone who opens the panel. Identity verifications sent
- * no e-mail at all, so people waited days for an approval nobody knew was
- * pending. New cars did send one, but to a hardcoded auto@gomambo.pl rather
- * than to anyone's account, and a car that went back to review after an
- * edit was not announced anywhere — it simply disappeared from the site.
+ * e-mail — and never throws. Used for identity verifications (see
+ * lib/identity-alerts.ts), which until now only added a row to a panel queue
+ * nobody was watching, so people waited days for an approval.
  *
  * Recipients are whoever has role = 'admin', read at send time, so adding a
- * second admin needs no code change.
+ * second admin needs no code change. (New-car e-mails are separate and go to
+ * auto@gomambo.pl — see dashboard/cars/actions.ts.)
  *
  * The HTML is built HERE from plain values, and every value is escaped.
  * Callers pass text, never markup, because almost everything in these mails
- * — names, car makes, a rejection reason — was typed by a user, and a mail
- * from the GoMambo domain is exactly where an injected link would be trusted.
+ * — names, a rejection reason — was typed by a user, and a mail from the
+ * GoMambo domain is exactly where an injected link would be trusted.
  */
 export async function notifyAdmins(
   admin: SupabaseClient<Database>,
