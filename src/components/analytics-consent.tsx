@@ -1,14 +1,42 @@
 "use client";
 
 import Script from "next/script";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CONSENT_COOKIE, type Consent } from "@/lib/consent";
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
-export function AnalyticsConsent({ initialConsent }: { initialConsent: Consent }) {
-  const [consent, setConsent] = useState<Consent>(initialConsent);
+function readConsentCookie(): Consent {
+  const match = document.cookie
+    .split("; ")
+    .find((part) => part.startsWith(`${CONSENT_COOKIE}=`));
+  const value = match?.slice(CONSENT_COOKIE.length + 1);
+  return value === "accepted" || value === "rejected" ? value : null;
+}
+
+/**
+ * The consent decision is read HERE, in the browser, not passed down from the
+ * root layout.
+ *
+ * It used to be read on the server with cookies() in app/layout.tsx — and a
+ * single cookies() call in the root layout opts every route in the app out of
+ * static rendering. All 48 pages, the terms and the privacy policy included,
+ * were rendered by a serverless function on every request and never cached at
+ * the CDN, so the first visit after a quiet spell always waited for that
+ * function to boot. That cold start is what made the first load of
+ * gomambo.pl slow.
+ *
+ * `undefined` means "not read yet". Nothing renders until the cookie has been
+ * read, so someone who already chose never sees the banner flash up, and the
+ * server and first client render agree (no hydration mismatch).
+ */
+export function AnalyticsConsent() {
+  const [consent, setConsent] = useState<Consent | undefined>(undefined);
+
+  useEffect(() => {
+    setConsent(readConsentCookie());
+  }, []);
 
   function choose(value: "accepted" | "rejected") {
     document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=31536000; SameSite=Lax`;

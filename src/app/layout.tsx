@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { cookies } from "next/headers";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { AnalyticsConsent } from "@/components/analytics-consent";
-import { CONSENT_COOKIE, type Consent } from "@/lib/consent";
 import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "@/lib/site";
 
 const geistSans = localFont({
@@ -13,10 +11,16 @@ const geistSans = localFont({
   variable: "--font-sans",
   weight: "100 900",
 });
+// Not preloaded. It is used in four places — the transfer title in the admin
+// and rental screens — yet preloading it put 65 kB on the critical path of
+// every first visit to every page, the landing page included. Without the
+// preload the browser fetches it only when a page actually renders
+// monospace text.
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-mono",
   weight: "100 900",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -72,21 +76,20 @@ const organizationJsonLd = {
   areaServed: "PL",
 };
 
-export default async function RootLayout({
+// No cookies() or headers() here, ever. A request-time read in the ROOT
+// layout makes every page in the app dynamic — see analytics-consent.tsx for
+// what that cost.
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const cookieStore = await cookies();
-  const stored = cookieStore.get(CONSENT_COOKIE)?.value;
-  const initialConsent: Consent = stored === "accepted" || stored === "rejected" ? stored : null;
-
   return (
     <html lang="pl" className={cn("font-sans", geistSans.variable, geistMono.variable)}>
       <body className="antialiased">
         {children}
         <Toaster />
-        <AnalyticsConsent initialConsent={initialConsent} />
+        <AnalyticsConsent />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}

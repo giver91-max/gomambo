@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Inter } from "next/font/google";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./landing-page.module.css";
 
 const inter = Inter({
@@ -11,13 +11,60 @@ const inter = Inter({
   weight: ["400", "500", "600", "700", "900"],
 });
 
-export function LandingPage({
-  isLoggedIn,
-  displayName,
-}: {
-  isLoggedIn: boolean;
-  displayName: string;
-}) {
+/**
+ * The landing page is served as STATIC HTML from Vercel's CDN, so it answers
+ * from the edge in tens of milliseconds and never waits for a serverless
+ * function to boot. That is why it no longer receives the signed-in user as
+ * props: reading the session on the server made the page dynamic, and the
+ * first visit after a quiet spell sat through a cold start.
+ *
+ * The one thing that depends on who you are — the nav buttons — is worked out
+ * here instead. The HTML ships the signed-out buttons, which is right for
+ * nearly everyone who lands here; a signed-in visitor sees them swap to their
+ * name a moment after the page appears. getSession() reads the session cookie
+ * locally, with no network round trip, so the swap is near-immediate.
+ *
+ * The Supabase client is imported LAZILY and only when a session cookie is
+ * present. A static import put the whole client — about 67 kB of JavaScript —
+ * on the landing page for every visitor, to answer a question whose answer is
+ * "nobody is signed in" for almost all of them.
+ */
+export function LandingPage() {
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const isLoggedIn = displayName !== null;
+
+  useEffect(() => {
+    // Only a signed-in browser carries a Supabase auth cookie (sb-<ref>-auth-token,
+    // chunked as .0/.1 when long). No cookie, nothing to do, nothing to download.
+    const hasSession = document.cookie
+      .split("; ")
+      .some((part) => /^sb-[^=]+-auth-token(\.\d+)?=/.test(part));
+    if (!hasSession) return;
+
+    let cancelled = false;
+    (async () => {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user || cancelled) return;
+      // Show something straight away, then the name from the profile — the
+      // same source the server used, in case it was edited after sign-up.
+      setDisplayName(String(user.user_metadata?.full_name || "Panel"));
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!cancelled && profile?.full_name) setDisplayName(profile.full_name);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const heroRef = useRef<HTMLElement>(null);
   const counterRef = useRef<HTMLSpanElement>(null);
 
