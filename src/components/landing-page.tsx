@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Inter } from "next/font/google";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import styles from "./landing-page.module.css";
 
 const inter = Inter({
@@ -11,42 +11,15 @@ const inter = Inter({
   weight: ["400", "500", "600", "700", "900"],
 });
 
-type Tab = "owner" | "renter";
-
-export type LandingCar = {
-  id: string;
-  brand: string;
-  model: string;
-  year: number;
-  city: string;
-  pricePerDay: number;
-  imageUrl: string | null;
-};
-
 export function LandingPage({
-  cars,
   isLoggedIn,
   displayName,
 }: {
-  cars: LandingCar[];
   isLoggedIn: boolean;
   displayName: string;
 }) {
-  const addCarHref = isLoggedIn
-    ? "/dashboard/cars/new"
-    : { pathname: "/register", query: { next: "/dashboard/cars/new" } };
-
-  const [activeTab, setActiveTab] = useState<Tab>("owner");
-  const [ownerSubmitted, setOwnerSubmitted] = useState(false);
-  const [renterSubmitted, setRenterSubmitted] = useState(false);
-  const [ownerSubmitting, setOwnerSubmitting] = useState(false);
-  const [renterSubmitting, setRenterSubmitting] = useState(false);
-
   const heroRef = useRef<HTMLElement>(null);
   const counterRef = useRef<HTMLSpanElement>(null);
-
-  const ownerEmail = useRef<HTMLInputElement>(null);
-  const renterEmail = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const el = counterRef.current;
@@ -79,56 +52,6 @@ export function LandingPage({
     observer.observe(heroEl);
     return () => observer.disconnect();
   }, []);
-
-  async function submitSignup(type: Tab) {
-    const isOwner = type === "owner";
-    const emailRef = isOwner ? ownerEmail : renterEmail;
-    const email = emailRef.current?.value.trim() ?? "";
-
-    if (!email) {
-      const target = emailRef.current;
-      if (target) {
-        target.style.borderColor = "rgba(255,80,80,.6)";
-        setTimeout(() => {
-          if (target) target.style.borderColor = "";
-        }, 2000);
-      }
-      return;
-    }
-
-    const table = isOwner ? "owner_signups" : "renter_signups";
-    const payload = { email };
-
-    const setSubmitting = isOwner ? setOwnerSubmitting : setRenterSubmitting;
-    const setSubmitted = isOwner ? setOwnerSubmitted : setRenterSubmitted;
-
-    try {
-      setSubmitting(true);
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${table}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-            Prefer: "return=minimal",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (res.ok || res.status === 201) {
-        setSubmitted(true);
-      } else {
-        throw new Error(`Błąd serwera: ${res.status}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Coś poszło nie tak. Spróbuj ponownie.");
-      setSubmitting(false);
-    }
-  }
 
   return (
     <div
@@ -327,156 +250,6 @@ export function LandingPage({
               porównują oferty na GoMambo. Ceny ustalasz Ty, dodanie floty jest
               darmowe.
             </p>
-          </div>
-        </div>
-      </section>
-
-      <section id="waitlist">
-        <div className={styles.waitlistInner}>
-          <p className={styles.sectionLabel}>Dołącz teraz</p>
-          <h2 className={styles.sectionTitle} style={{ marginBottom: 12 }}>
-            Platforma już działa
-          </h2>
-          <p style={{ color: "var(--gray)", fontSize: 15, lineHeight: 1.6, marginBottom: 36 }}>
-            Przeglądaj dostępne auta od lokalnych wypożyczalni i właścicieli albo
-            dodaj swoje auto w kilka minut — bez czekania.
-          </p>
-
-          <div className={styles.waitlistTabs}>
-            <button
-              type="button"
-              className={`${styles.tabBtn}${activeTab === "owner" ? ` ${styles.active}` : ""}`}
-              onClick={() => setActiveTab("owner")}
-            >
-              Mam auto
-            </button>
-            <button
-              type="button"
-              className={`${styles.tabBtn}${activeTab === "renter" ? ` ${styles.active}` : ""}`}
-              onClick={() => setActiveTab("renter")}
-            >
-              Szukam auta
-            </button>
-          </div>
-
-          <div
-            className={`${styles.tabContent}${activeTab === "owner" ? ` ${styles.active}` : ""}`}
-          >
-            <Link href={addCarHref} className={styles.choiceCta}>
-              Dodaj auto i zacznij zarabiać już teraz →
-            </Link>
-            <p className={styles.choiceDivider}>albo zostaw tylko e-mail, jeśli jeszcze się zastanawiasz</p>
-
-            <div className={styles.formGroup}>
-              <label>E-mail</label>
-              <input type="email" placeholder="rafal@example.com" ref={ownerEmail} />
-            </div>
-            {!ownerSubmitted && (
-              <>
-                <button
-                  type="button"
-                  className={styles.submitBtn}
-                  disabled={ownerSubmitting}
-                  onClick={() => submitSignup("owner")}
-                >
-                  {ownerSubmitting ? "Zapisywanie..." : "Zapisz mnie na listę →"}
-                </button>
-                <p className={styles.formNote}>
-                  Bez spamu. Odezwiemy się, gdy będziesz gotowy dodać auto. Zapisani
-                  na liście otrzymają obniżoną prowizję przez 6 miesięcy.
-                </p>
-              </>
-            )}
-            <div
-              className={styles.successMsg}
-              style={{ display: ownerSubmitted ? "block" : "none" }}
-            >
-              <strong>Zapisano! 🎉</strong>
-              <br />
-              Odezwiemy się, gdy będziesz gotowy dodać auto. Zapisani na liście
-              otrzymają{" "}
-              <strong>obniżoną prowizję przez pierwsze 6 miesięcy</strong>.
-            </div>
-          </div>
-
-          <div
-            className={`${styles.tabContent}${activeTab === "renter" ? ` ${styles.active}` : ""}`}
-          >
-            {cars.length > 0 ? (
-              <>
-                <p className={styles.choiceDivider} style={{ marginTop: 0 }}>
-                  Dostępne auta w tej chwili
-                </p>
-                <div className={styles.miniCarGrid}>
-                  {cars.map((car) => (
-                    <Link key={car.id} href={`/auta/${car.id}`} className={styles.miniCarCard}>
-                      <div className={styles.miniCarVisual}>
-                        {car.imageUrl && (
-                          <Image
-                            src={car.imageUrl}
-                            alt={`${car.brand} ${car.model}`}
-                            fill
-                            sizes="(min-width: 640px) 140px, 45vw"
-                          />
-                        )}
-                      </div>
-                      <div className={styles.miniCarInfo}>
-                        <div className={styles.miniCarName}>
-                          {car.brand} {car.model}
-                        </div>
-                        <div className={styles.miniCarMeta}>
-                          {car.city} · {car.pricePerDay.toFixed(0)} zł/dzień
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-                <Link href="/auta" className={styles.choiceCta} style={{ marginTop: 20 }}>
-                  Zobacz wszystkie dostępne auta →
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link href="/auta" className={styles.choiceCta}>
-                  Przeglądaj dostępne auta →
-                </Link>
-                <p className={styles.choiceDivider}>
-                  Na razie żadne auto nie czeka jeszcze w Twojej okolicy — zostaw e-mail,
-                  a powiadomimy Cię jako pierwszego
-                </p>
-              </>
-            )}
-
-            <div className={styles.formGroup}>
-              <label>E-mail</label>
-              <input type="email" placeholder="anna@example.com" ref={renterEmail} />
-            </div>
-            {!renterSubmitted && (
-              <>
-                <button
-                  type="button"
-                  className={styles.submitBtn}
-                  disabled={renterSubmitting}
-                  onClick={() => submitSignup("renter")}
-                >
-                  {renterSubmitting ? "Zapisywanie..." : "Powiadom mnie o nowych autach →"}
-                </button>
-                <p className={styles.formNote}>
-                  Bez spamu. Odezwiemy się gdy pierwsze auta będą dostępne w
-                  Twoim mieście.
-                </p>
-              </>
-            )}
-            <div
-              className={styles.successMsg}
-              style={{ display: renterSubmitted ? "block" : "none" }}
-            >
-              <strong>Jesteś na liście! 🎉</strong>
-              <br />
-              Gdy pierwsze auta pojawią się w Twoim mieście, dostaniesz SMS i
-              e-mail jako pierwszy.{" "}
-              <strong>Dla osób z listy — pierwsza rezerwacja bez opłaty serwisowej.</strong>
-            </div>
           </div>
         </div>
       </section>
