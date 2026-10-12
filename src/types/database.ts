@@ -333,6 +333,10 @@ export type AutoReview = {
   /** Field 4b of the licence as read, or null when unreadable. */
   licenceExpiry: string | null;
   licenceExpired: boolean | null;
+  /** 4b empty on a pre-2013 licence: probably indefinite (valid to
+   *  19.01.2033). A hint for the reviewer, never an automatic approval.
+   *  Absent on reviews stored before this existed. */
+  licencePossiblyIndefinite?: boolean;
   /** A human rejection blocked the automat regardless of the gates. */
   previouslyRejected: boolean;
 };

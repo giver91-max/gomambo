@@ -4,8 +4,10 @@ import {
   FACE_MATCH_AUTO_APPROVE_THRESHOLD,
   FACE_MATCH_MIN_PER_FACE_THRESHOLD,
   SELFIE_MIN_SHARPNESS,
+  UNCOMPARED_FACE_MAX_RELATIVE_AREA,
   compareFaces,
   readFaceSharpness,
+  INDEFINITE_REPLACE_BY,
   readLicence,
 } from "@/lib/face-match";
 
@@ -62,11 +64,39 @@ export function emptyAssessment(): IdentityAssessment {
     selfieIsSharp: false,
   };
   return {
-    match: { result: "error", score: null, minScore: null, unmatchedFaces: 0 },
-    licence: { isDrivingLicence: false, expiry: null, expired: null, dates: [] },
+    match: { result: "error", score: null, minScore: null, unmatchedFaces: 0, faces: [] },
+    licence: { isDrivingLicence: false, expiry: null, expired: null, possiblyIndefinite: false, dates: [] },
     gates,
     passes: false,
   };
+}
+
+/**
+ * The document shows the holder TWICE, and only the holder.
+ *
+ * A Polish licence carries the main photo and a small, pale second portrait.
+ * Requiring both to be found and to match does two jobs:
+ *
+ *  - It binds the ≥99 match to an actual document. Without it, someone could
+ *    cover the photo on another person's licence with a thumb and hold their
+ *    own face in the frame: one face, theirs, matching perfectly. (Found by an
+ *    adversarial review; it predates the ghost-portrait threshold change.)
+ *  - It catches a different person in the frame, or a photo swapped onto a
+ *    real licence: the other portrait then no longer matches.
+ *
+ * Each compared face must clear FACE_MATCH_MIN_PER_FACE_THRESHOLD — the second
+ * portrait scores well below the main one (65–99 on real licences). A face
+ * that could not be compared at all is accepted only if it is ghost-sized.
+ */
+function onlyTheHolderInFrame(match: IdentityAssessment["match"]): boolean {
+  const compared = match.faces.filter((f) => f.similarity !== null);
+  if (compared.length < 2) return false;
+  const largest = Math.max(...match.faces.map((f) => f.area));
+  return match.faces.every((face) =>
+    face.similarity === null
+      ? largest > 0 && face.area / largest <= UNCOMPARED_FACE_MAX_RELATIVE_AREA
+      : face.similarity >= FACE_MATCH_MIN_PER_FACE_THRESHOLD
+  );
 }
 
 export async function assessIdentity(
@@ -84,10 +114,7 @@ export async function assessIdentity(
       match.result === "match" &&
       match.score !== null &&
       match.score >= FACE_MATCH_AUTO_APPROVE_THRESHOLD,
-    onlyOnePerson:
-      match.unmatchedFaces === 0 &&
-      match.minScore !== null &&
-      match.minScore >= FACE_MATCH_MIN_PER_FACE_THRESHOLD,
+    onlyOnePerson: onlyTheHolderInFrame(match),
     isLicence: licence.isDrivingLicence,
     notExpired: licence.expiry !== null && licence.expired === false,
     selfieIsSharp: selfieSharpness !== null && selfieSharpness >= SELFIE_MIN_SHARPNESS,
@@ -111,9 +138,19 @@ export function assessmentReasons(assessment: IdentityAssessment): string[] {
   if (!gates.strongMatch) {
     reasons.push(`zgodność poniżej progu ${FACE_MATCH_AUTO_APPROVE_THRESHOLD}%`);
   }
-  if (!gates.onlyOnePerson) reasons.push("w kadrze dokumentu jest więcej niż jedna osoba");
-  if (!gates.isLicence) reasons.push("dokument nie wygląda na prawo jazdy");
-  if (!gates.notExpired) reasons.push("nie potwierdzono ważności (pole 4b)");
+  if (!gates.onlyOnePerson) reasons.push(describeFaceProblem(assessment));
+  if (!gates.isLicence) {
+    reasons.push("nie odczytano napisu PRAWO JAZDY — sprawdź, czy to prawo jazdy i czy zdjęcie jest wyraźne");
+  }
+  if (!gates.notExpired) {
+    reasons.push(
+      assessment.licence.expired
+        ? "prawo jazdy jest PRZETERMINOWANE (pole 4b)"
+        : assessment.licence.possiblyIndefinite
+          ? `pole 4b jest puste, a prawo jazdy wydano przed 2013 r. — prawdopodobnie bezterminowe (ważne do ${INDEFINITE_REPLACE_BY}); sprawdź, czy data nie jest zasłonięta lub nieczytelna`
+          : "nie odczytano daty ważności (pole 4b) — sprawdź ją na zdjęciu"
+    );
+  }
   if (!gates.selfieIsSharp) {
     reasons.push("selfie nieostre — sprawdź, czy to żywe zdjęcie, a nie zdjęcie zdjęcia");
   }
@@ -133,16 +170,44 @@ export function buildAutoReview(
     reasons: assessmentReasons(assessment),
     licenceExpiry: assessment.licence.expiry,
     licenceExpired: assessment.licence.expired,
+    licencePossiblyIndefinite: assessment.licence.possiblyIndefinite,
     previouslyRejected,
   };
+}
+
+/** The face gate in words, with the numbers the reviewer needs to judge it. */
+function describeFaceProblem({ match }: IdentityAssessment): string {
+  if (match.result === "error") {
+    return "automat nie mógł porównać twarzy (błąd usługi) — oceń zdjęcia samodzielnie";
+  }
+  const compared = match.faces.filter((f) => f.similarity !== null) as {
+    similarity: number;
+    area: number;
+  }[];
+  const weak = compared.filter((f) => f.similarity < FACE_MATCH_MIN_PER_FACE_THRESHOLD);
+  if (weak.length > 0) {
+    const worst = Math.min(...weak.map((f) => f.similarity));
+    return `na dokumencie jest twarz, która pasuje do selfie tylko w ${worst.toFixed(0)}% — sprawdź, czy to ta sama osoba`;
+  }
+  const uncompared = match.faces.length - compared.length;
+  if (compared.length === 0) return "nie znaleziono twarzy na zdjęciu dokumentu";
+  if (compared.length === 1 && uncompared > 0) {
+    return "drugiego zdjęcia na dokumencie nie dało się porównać (zbyt blade lub zasłonięte) — sprawdź, czy to ta sama osoba";
+  }
+  if (compared.length === 1) {
+    return "na dokumencie widać tylko jedno zdjęcie — polskie prawo jazdy ma dwa; sprawdź, czy dokument nie jest zasłonięty i czy to na pewno ta osoba";
+  }
+  return "na zdjęciu dokumentu jest dodatkowa twarz, której nie dało się porównać — sprawdź, czy w kadrze nie ma innej osoby";
 }
 
 /** "Prawo jazdy ważne do …", or that it could not be read. */
 export function describeExpiry(assessment: IdentityAssessment): string {
   const { licence } = assessment;
-  return licence.expiry
-    ? `${licence.expiry}${licence.expired ? " (PRZETERMINOWANE)" : ""}`
-    : "nie odczytano";
+  if (licence.expiry) return `${licence.expiry}${licence.expired ? " (PRZETERMINOWANE)" : ""}`;
+  if (licence.possiblyIndefinite) {
+    return `pole 4b puste — prawdopodobnie bezterminowe (wymiana do ${INDEFINITE_REPLACE_BY})`;
+  }
+  return "nie odczytano";
 }
 
 export function describeAssessment(assessment: IdentityAssessment): string {

@@ -227,7 +227,9 @@ function AutoReviewDetails({
 
   const expiry = review.licenceExpiry
     ? `${review.licenceExpiry}${review.licenceExpired ? " — PRZETERMINOWANE" : ""}`
-    : "nie odczytano z dokumentu";
+    : review.licencePossiblyIndefinite
+      ? "pole puste — prawdopodobnie bezterminowe, wydane przed 2013 (ważne do 19.01.2033); sprawdź, czy data nie jest zasłonięta"
+      : "nie odczytano z dokumentu";
   const blocked = review.reasons.length > 0 || review.previouslyRejected;
 
   return (
