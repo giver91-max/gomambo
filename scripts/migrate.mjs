@@ -93,12 +93,20 @@ function versionOf(file) {
 async function main() {
   await client.connect();
 
+  // The tracking table lives in the public schema, which PostgREST exposes to
+  // the anon key that ships in the browser. Without RLS anyone could read it,
+  // and worse, INSERT a future version so that migration is silently skipped,
+  // or DELETE rows so old ones re-run. RLS with no policies plus revoked
+  // grants leaves it to this script, which connects as the table's owner.
+  // Idempotent, so an existing database is locked down on the next run too.
   await client.query(`
     create table if not exists public.schema_migrations (
       version text primary key,
       filename text not null,
       applied_at timestamptz not null default now()
     );
+    alter table public.schema_migrations enable row level security;
+    revoke all on table public.schema_migrations from anon, authenticated;
   `);
 
   const { rows } = await client.query("select version from public.schema_migrations");
