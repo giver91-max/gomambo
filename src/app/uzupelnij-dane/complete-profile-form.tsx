@@ -6,6 +6,7 @@ import { updateProfile, type ProfileState } from "@/app/dashboard/profile/action
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 const initialState: ProfileState = { error: null };
 
@@ -30,7 +31,7 @@ export function CompleteProfileForm({
       if (result.error) {
         setState(result);
       } else {
-        router.push(redirectTo);
+        router.push(safeRedirectPath(redirectTo));
       }
     });
   }

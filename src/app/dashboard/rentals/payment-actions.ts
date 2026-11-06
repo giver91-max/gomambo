@@ -659,7 +659,11 @@ export async function requestBookingExtension(
       // booked by someone else. Give the money back instead, so the renter
       // can simply extend again, rather than stranding them with a charge
       // and no extension.
-      const refund = await refundCheckoutSession(state.sessionId);
+      const refund = await refundCheckoutSession(state.sessionId, {
+        bookingId,
+        kind: "trip_extension",
+        extensionId: row.id,
+      });
       await admin
         .from("booking_extensions")
         .update({

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CompleteProfileForm } from "./complete-profile-form";
 
@@ -9,7 +10,7 @@ export default async function CompleteProfilePage({
 }: {
   searchParams: { redirect?: string };
 }) {
-  const redirectTo = searchParams.redirect ?? "/dashboard";
+  const redirectTo = safeRedirectPath(searchParams.redirect);
   const supabase = await createClient();
   const {
     data: { user },

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getRecaptchaToken } from "@/lib/recaptcha-client";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { BackButton } from "@/components/back-button";
 
 const initialState: AuthActionState = { error: null };
@@ -36,7 +37,7 @@ function LoginForm() {
   const [mode, setMode] = useState<Mode>("password");
   const [otpEmail, setOtpEmail] = useState("");
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") ?? "/dashboard";
+  const redirectTo = safeRedirectPath(searchParams.get("redirect"));
 
   function switchMode(next: Mode) {
     setState(initialState);

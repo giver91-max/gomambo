@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 export type AuthActionState = { error: string | null; success?: boolean };
 
@@ -17,7 +18,7 @@ export async function signUp(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const fullName = String(formData.get("fullName") ?? "").trim();
-  const next = String(formData.get("next") ?? "/dashboard");
+  const next = safeRedirectPath(String(formData.get("next") ?? ""));
   const acceptTerms = formData.get("acceptTerms") === "on";
   const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
   const refRaw = String(formData.get("ref") ?? "").trim();
@@ -101,7 +102,7 @@ export async function signIn(
 ): Promise<AuthActionState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const redirectTo = String(formData.get("redirectTo") ?? "/dashboard");
+  const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""));
   const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
 
   if (!email || !password) {
@@ -154,7 +155,7 @@ export async function verifyLoginCode(
 ): Promise<AuthActionState> {
   const email = String(formData.get("email") ?? "").trim();
   const code = String(formData.get("code") ?? "").trim();
-  const redirectTo = String(formData.get("redirectTo") ?? "/dashboard");
+  const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""));
 
   if (!email || !code) {
     return { error: "Podaj email i kod." };

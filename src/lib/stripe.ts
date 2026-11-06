@@ -239,14 +239,56 @@ export async function expireCheckoutSession(
   }
 }
 
+/**
+ * What a session's metadata must say before money goes back from it.
+ *
+ * Outside the webhook — where the session IS the event — the id to refund
+ * is read from a database row, and a row is only as trustworthy as whoever
+ * could write it. A renter once could insert a booking_extensions row
+ * carrying the session id of a different, paid booking; cancelling then
+ * refunded that booking in full while it stayed "paid". The insert policy is
+ * gone (migration 0050), and this is the second lock: Stripe's own record of
+ * what the session was created for has to agree with the row. `kind: null`
+ * is the base rental payment, which is created without a kind.
+ */
+export type SessionOwnership = {
+  bookingId: string;
+  kind: "trip_extension" | null;
+  extensionId?: string;
+};
+
+function sessionBelongsTo(
+  metadata: Stripe.Metadata | null | undefined,
+  expected: SessionOwnership
+): boolean {
+  if (metadata?.bookingId !== expected.bookingId) return false;
+  if ((metadata?.kind ?? null) !== expected.kind) return false;
+  if (expected.extensionId !== undefined && metadata?.extensionId !== expected.extensionId) {
+    return false;
+  }
+  return true;
+}
+
 export async function refundCheckoutSession(
-  sessionId: string
+  sessionId: string,
+  expected?: SessionOwnership
 ): Promise<StripeResult<{ refundId: string }>> {
   if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ["payment_intent", "payment_intent.latest_charge"],
     });
+    if (expected && !sessionBelongsTo(session.metadata, expected)) {
+      console.error("[stripe] refund refused: session metadata does not match", {
+        sessionId,
+        expected,
+        metadata: session.metadata,
+      });
+      return {
+        ok: false,
+        error: `sesja ${sessionId} nie należy do tej rezerwacji (dane w Stripe się nie zgadzają) — zwrot wstrzymany, sprawdź to ręcznie`,
+      };
+    }
     if (!session.payment_intent) return { ok: false, error: "Brak płatności do zwrotu." };
     const intent =
       typeof session.payment_intent === "string"

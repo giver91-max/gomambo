@@ -172,7 +172,10 @@ export async function cancelBookingWithRefund(
     return { refund: "not_due", deposit };
   }
 
-  const refundResult = await refundCheckoutSession(booking.stripe_checkout_session_id);
+  const refundResult = await refundCheckoutSession(booking.stripe_checkout_session_id, {
+    bookingId,
+    kind: null,
+  });
   if (!refundResult.ok) {
     await reportMoneyFailure(
       "refund_failed",
@@ -230,7 +233,11 @@ async function neutralisePendingExtensions(bookingId: string): Promise<void> {
       (state.data.paymentStatus === "paid" || state.data.paymentIntentStatus === "succeeded");
 
     if (alreadyPaid) {
-      const refund = await refundCheckoutSession(sessionId);
+      const refund = await refundCheckoutSession(sessionId, {
+        bookingId,
+        kind: "trip_extension",
+        extensionId: extension.id,
+      });
       await admin
         .from("booking_extensions")
         .update({
@@ -260,7 +267,11 @@ async function neutralisePendingExtensions(bookingId: string): Promise<void> {
       recheck.ok &&
       (recheck.data.paymentStatus === "paid" || recheck.data.paymentIntentStatus === "succeeded")
     ) {
-      const refund = await refundCheckoutSession(sessionId);
+      const refund = await refundCheckoutSession(sessionId, {
+        bookingId,
+        kind: "trip_extension",
+        extensionId: extension.id,
+      });
       await admin
         .from("booking_extensions")
         .update({
@@ -341,7 +352,11 @@ async function refundPaidExtensions(bookingId: string): Promise<ExtensionRefundR
   const failed: string[] = [];
   for (const extension of extensions ?? []) {
     if (!extension.stripe_checkout_session_id) continue;
-    const result = await refundCheckoutSession(extension.stripe_checkout_session_id);
+    const result = await refundCheckoutSession(extension.stripe_checkout_session_id, {
+      bookingId,
+      kind: "trip_extension",
+      extensionId: extension.id,
+    });
     if (result.ok) {
       await admin
         .from("booking_extensions")

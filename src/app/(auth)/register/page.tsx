@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getRecaptchaToken } from "@/lib/recaptcha-client";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { BackButton } from "@/components/back-button";
 
 const initialState: AuthActionState = { error: null };
@@ -32,7 +33,7 @@ function RegisterForm() {
   const [state, setState] = useState<AuthActionState>(initialState);
   const [isPending, startTransition] = useTransition();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = safeRedirectPath(searchParams.get("next"));
   const ref = searchParams.get("ref") ?? "";
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
