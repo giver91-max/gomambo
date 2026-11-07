@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
+import { stripeMode, type StripeMode } from "@/lib/stripe";
 import { MaintenanceModeToggle } from "./maintenance-mode-toggle";
 import { RecentActivityItem } from "./recent-activity-item";
 import type { AdminNotification } from "@/types/database";
@@ -19,6 +20,30 @@ const notificationTypeLabel: Record<AdminNotification["type"], string> = {
   damage_reported: "Zgłoszenie do wynajmu",
   booking_verification_escalated: "Weryfikacja przed wynajmem",
   new_partner_pending: "Nowa wypożyczalnia do weryfikacji",
+};
+
+// Read from the key's prefix on the server; the key itself is never sent.
+const stripeModeNotice: Record<StripeMode, { title: string; body: string; warn: boolean }> = {
+  live: {
+    title: "Stripe: tryb produkcyjny",
+    body: "Płatności i wypłaty są prawdziwe.",
+    warn: false,
+  },
+  test: {
+    title: "Stripe: tryb testowy",
+    body: "Prawdziwe pieniądze nie płyną. Właściciele nie widzą jeszcze konfiguracji wypłat — pojawi się, gdy w Vercel zostanie ustawiony klucz produkcyjny (sk_live_…).",
+    warn: true,
+  },
+  unknown: {
+    title: "Stripe: nierozpoznany klucz",
+    body: "STRIPE_SECRET_KEY nie zaczyna się od sk_test_/sk_live_ — sprawdź zmienną w Vercel.",
+    warn: true,
+  },
+  none: {
+    title: "Stripe: brak klucza",
+    body: "Płatności są wyłączone — w Vercel nie ma STRIPE_SECRET_KEY.",
+    warn: true,
+  },
 };
 
 export default async function AdminOverviewPage() {
@@ -81,12 +106,25 @@ export default async function AdminOverviewPage() {
     { label: "Weryfikacje oczekujące", value: pendingVerifications ?? 0, href: "/admin/verifications" },
   ];
 
+  const stripeNotice = stripeModeNotice[stripeMode()];
+
   return (
     <div className="space-y-6">
       <BackButton />
       <h1 className="text-2xl font-bold">Przegląd</h1>
 
       <MaintenanceModeToggle initialEnabled={siteSettings?.maintenance_mode ?? false} />
+
+      <div
+        className={
+          stripeNotice.warn
+            ? "rounded-lg border border-yellow-600/30 bg-yellow-600/10 p-3"
+            : "rounded-lg border p-3"
+        }
+      >
+        <p className="font-medium">{stripeNotice.title}</p>
+        <p className="text-sm text-muted-foreground">{stripeNotice.body}</p>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {stats.map((stat) => {

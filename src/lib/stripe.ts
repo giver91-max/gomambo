@@ -15,6 +15,24 @@ export function isStripeConfigured(): boolean {
   return stripe !== null;
 }
 
+/**
+ * Which Stripe environment the secret key belongs to, read from its prefix —
+ * the key itself never leaves the server. In "test" no real money moves, and
+ * every Connect account created is a test account that will not exist once a
+ * live key is set: asking owners to fill in Stripe's payout form now would
+ * have them hand real identity and bank details to a sandbox, only to repeat
+ * it later. So until the key is live, the payout step stays closed for
+ * everyone but admins (see StripeConnectManager).
+ */
+export type StripeMode = "test" | "live" | "unknown" | "none";
+
+export function stripeMode(): StripeMode {
+  if (!SECRET_KEY) return "none";
+  if (/^(sk|rk)_test_/.test(SECRET_KEY)) return "test";
+  if (/^(sk|rk)_live_/.test(SECRET_KEY)) return "live";
+  return "unknown";
+}
+
 export type StripeResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; code?: string };
@@ -38,10 +56,22 @@ function failure<T>(context: string, error: unknown): StripeResult<T> {
 export async function ensureConnectAccount(
   existingAccountId: string | null,
   email: string
-): Promise<StripeResult<{ accountId: string }>> {
+): Promise<StripeResult<{ accountId: string; created: boolean }>> {
   if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
   try {
-    if (existingAccountId) return { ok: true, data: { accountId: existingAccountId } };
+    if (existingAccountId) {
+      try {
+        await stripe.accounts.retrieve(existingAccountId);
+        return { ok: true, data: { accountId: existingAccountId, created: false } };
+      } catch (error) {
+        // An id saved under the other key — a test account once the live key
+        // is set — does not exist here, and the owner needs a fresh one.
+        // Anything else is a real failure: minting a second account for the
+        // same owner on a network blip would orphan the first.
+        const code = error instanceof Stripe.errors.StripeError ? error.code : undefined;
+        if (code !== "resource_missing" && code !== "account_invalid") throw error;
+      }
+    }
     const account = await stripe.accounts.create({
       type: "express",
       country: "PL",
@@ -51,7 +81,7 @@ export async function ensureConnectAccount(
         transfers: { requested: true },
       },
     });
-    return { ok: true, data: { accountId: account.id } };
+    return { ok: true, data: { accountId: account.id, created: true } };
   } catch (error) {
     return failure("ensureConnectAccount", error);
   }

@@ -12,7 +12,7 @@ import { NotificationForm } from "./notification-form";
 import { ReferralLink } from "@/components/referral-link";
 import { StripeConnectManager } from "@/components/stripe-connect-manager";
 import { DeleteAccountButton } from "./delete-account-button";
-import { isConnectAccountOnboarded } from "@/lib/stripe";
+import { isConnectAccountOnboarded, stripeMode } from "@/lib/stripe";
 import { SITE_URL } from "@/lib/site";
 
 export default async function ProfilePage() {
@@ -141,7 +141,11 @@ export default async function ProfilePage() {
           <CardTitle>Konto do wypłat</CardTitle>
         </CardHeader>
         <CardContent>
-          <StripeConnectManager onboarded={stripeConnectOnboarded} />
+          <StripeConnectManager
+            onboarded={stripeConnectOnboarded}
+            mode={stripeMode()}
+            isAdmin={profile.role === "admin"}
+          />
         </CardContent>
       </Card>
 
