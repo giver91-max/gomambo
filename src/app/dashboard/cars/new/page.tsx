@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { NewCarForm, type NewCarInitialValues } from "./new-car-form";
+import { NewCarForm } from "./new-car-form";
 import { BackButton } from "@/components/back-button";
 import { VerificationRequiredNotice } from "@/components/verification-required-notice";
 import { createClient } from "@/lib/supabase/server";
 import { getVerificationStatus } from "@/lib/verification-gate";
 import { getPartnerContext, partnerCanList } from "@/lib/partner";
+import { loadCarAsInitialValues } from "@/lib/car-form";
 
 export default async function NewCarPage({
   searchParams,
@@ -26,41 +27,9 @@ export default async function NewCarPage({
   const { status, rejectionReason } = await getVerificationStatus(supabase, user.id);
   const canAddCar = partner ? partnerCanList(partner.status) : status === "approved";
 
-  let initialValues: NewCarInitialValues | undefined;
-  if (searchParams.duplicateFrom) {
-    const { data: source } = await supabase
-      .from("cars")
-      .select(
-        `owner_id, brand, model, year, price_per_day, city, vehicle_type, fuel_type,
-         transmission, seats, mileage_limit_km, mileage_overage_fee_per_km, price_per_month,
-         security_deposit_amount, fuel_policy, delivery_available, delivery_info,
-         cancellation_policy, description`
-      )
-      .eq("id", searchParams.duplicateFrom)
-      .single();
-    if (source && source.owner_id === user.id) {
-      initialValues = {
-        brand: source.brand,
-        model: source.model,
-        year: source.year,
-        price_per_day: source.price_per_day,
-        city: source.city,
-        vehicle_type: source.vehicle_type,
-        fuel_type: source.fuel_type,
-        transmission: source.transmission,
-        seats: source.seats,
-        mileage_limit_km: source.mileage_limit_km,
-        mileage_overage_fee_per_km: source.mileage_overage_fee_per_km,
-        price_per_month: source.price_per_month,
-        security_deposit_amount: source.security_deposit_amount,
-        fuel_policy: source.fuel_policy,
-        delivery_available: source.delivery_available,
-        delivery_info: source.delivery_info,
-        cancellation_policy: source.cancellation_policy,
-        description: source.description,
-      };
-    }
-  }
+  const initialValues = searchParams.duplicateFrom
+    ? await loadCarAsInitialValues(supabase, searchParams.duplicateFrom, user.id)
+    : undefined;
 
   return (
     <div className="mx-auto max-w-lg space-y-6">

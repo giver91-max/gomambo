@@ -3,9 +3,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/back-button";
+import { buttonVariants } from "@/components/ui/button";
 import { PARTNER_STATUS_LABELS } from "@/lib/partner";
 import { DecidePartner, VerifyDocumentButton } from "./decide-partner";
 import type { PartnerStatus } from "@/types/database";
+
+// Whose account a car added by the admin goes on: the company's owner-role
+// member, else whoever is there. A company car carries the partner_id either
+// way; owner_id is just the person who manages the listing.
+function listerId(members: { profile_id: string; role: string }[]): string | null {
+  return (members.find((m) => m.role === "owner") ?? members[0])?.profile_id ?? null;
+}
 
 const TABS: { value: PartnerStatus; label: string }[] = [
   { value: "pending", label: "Do weryfikacji" },
@@ -39,7 +47,7 @@ export default async function AdminPartnersPage({
       `id, trade_name, city, description, status, created_at,
        partner_private(legal_name, nip, regon, krs, address_street,
                        address_postal_code, address_city, contact_email, contact_phone),
-       partner_members(role, profiles(full_name, phone)),
+       partner_members(profile_id, role, profiles(full_name, phone)),
        partner_documents(id, kind, original_name, storage_path, verified_at)`
     )
     .eq("status", status)
@@ -63,7 +71,11 @@ export default async function AdminPartnersPage({
       contact_email: string | null;
       contact_phone: string | null;
     } | null;
-    partner_members: { role: string; profiles: { full_name: string; phone: string | null } | null }[];
+    partner_members: {
+      profile_id: string;
+      role: string;
+      profiles: { full_name: string; phone: string | null } | null;
+    }[];
     partner_documents: {
       id: string;
       kind: string;
@@ -226,6 +238,15 @@ export default async function AdminPartnersPage({
                     <p className="text-xs text-destructive">
                       Brak dokumentów — poproś o odpis z KRS albo wydruk z CEIDG przed weryfikacją.
                     </p>
+                  )}
+
+                  {partner.status === "active" && listerId(partner.partner_members) && (
+                    <Link
+                      href={`/admin/cars/new?owner=${listerId(partner.partner_members)}`}
+                      className={buttonVariants({ variant: "outline", size: "sm" })}
+                    >
+                      Dodaj auto do floty
+                    </Link>
                   )}
 
                   <DecidePartner partnerId={partner.id} status={partner.status} />

@@ -2,6 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { createCarDraft, deleteCarDraft, attachCarImages } from "../actions";
+import {
+  adminAttachCarImages,
+  adminCreateCarDraft,
+  adminDeleteCarDraft,
+} from "@/app/admin/cars/new/actions";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,7 +61,16 @@ export type NewCarInitialValues = {
   description: string | null;
 };
 
-export function NewCarForm({ initialValues }: { initialValues?: NewCarInitialValues }) {
+// `forOwnerId` turns this into the admin's "add a car for this owner" form
+// (src/app/admin/cars/new): the same fields, photos and plate cover, saved
+// onto the owner's account by the admin actions instead of the caller's own.
+export function NewCarForm({
+  initialValues,
+  forOwnerId,
+}: {
+  initialValues?: NewCarInitialValues;
+  forOwnerId?: string;
+}) {
   const [previews, setPreviews] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [stickers, setStickers] = useState<(StickerRect | null)[]>([]);
@@ -136,7 +150,10 @@ export function NewCarForm({ initialValues }: { initialValues?: NewCarInitialVal
       setStatus("Zapisywanie danych auta…");
       const token = await getRecaptchaToken("add_car");
       formData.set("recaptchaToken", token ?? "");
-      const draft = await createCarDraft({ error: null }, formData);
+      const draft = forOwnerId
+        ? await adminCreateCarDraft(forOwnerId, { error: null }, formData)
+        : await createCarDraft({ error: null }, formData);
+      const dropDraft = (id: string) => (forOwnerId ? adminDeleteCarDraft(id) : deleteCarDraft(id));
       if (draft.error || !draft.carId) {
         setError(draft.error ?? "Nie udało się zapisać auta.");
         setStatus(null);
@@ -152,7 +169,7 @@ export function NewCarForm({ initialValues }: { initialValues?: NewCarInitialVal
       if (!user) {
         setError("Sesja wygasła. Zaloguj się ponownie.");
         setStatus(null);
-        await deleteCarDraft(carId);
+        await dropDraft(carId);
         return;
       }
 
@@ -174,7 +191,7 @@ export function NewCarForm({ initialValues }: { initialValues?: NewCarInitialVal
           if (uploaded.length > 0) {
             await supabase.storage.from("car-images").remove(uploaded.map((u) => u.path));
           }
-          await deleteCarDraft(carId);
+          await dropDraft(carId);
           return;
         }
 
@@ -194,12 +211,14 @@ export function NewCarForm({ initialValues }: { initialValues?: NewCarInitialVal
         if (uploaded.length > 0) {
           await supabase.storage.from("car-images").remove(uploaded.map((u) => u.path));
         }
-        await deleteCarDraft(carId);
+        await dropDraft(carId);
         return;
       }
 
       setStatus("Finalizowanie…");
-      const finalize = await attachCarImages(carId, uploaded, insurancePath);
+      const finalize = forOwnerId
+        ? await adminAttachCarImages(forOwnerId, carId, uploaded, insurancePath)
+        : await attachCarImages(carId, uploaded, insurancePath);
       // attachCarImages redirects on success instead of returning a value —
       // only handle the result on failure, otherwise the page is navigating away.
       if (finalize?.error) {
@@ -547,7 +566,11 @@ export function NewCarForm({ initialValues }: { initialValues?: NewCarInitialVal
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <Button type="submit" className="w-full" disabled={isPending}>
-        {isPending ? status ?? "Chwileczkę…" : "Dodaj auto do weryfikacji"}
+        {isPending
+          ? status ?? "Chwileczkę…"
+          : forOwnerId
+            ? "Dodaj i zatwierdź auto"
+            : "Dodaj auto do weryfikacji"}
       </Button>
     </form>
   );

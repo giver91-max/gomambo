@@ -6,7 +6,7 @@ import { resolveCommissionRate } from "@/lib/commission";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BackButton } from "@/components/back-button";
@@ -119,6 +119,9 @@ export default async function AdminUserDetailPage({
         <form action={startConversationWithUser.bind(null, params.id)}>
           <Button type="submit">Napisz wiadomość</Button>
         </form>
+        <Link href={`/admin/cars/new?owner=${params.id}`} className={buttonVariants({ variant: "outline" })}>
+          Dodaj auto za tego użytkownika
+        </Link>
         <DeleteUserButton userId={params.id} userName={profile.full_name || "ten użytkownik"} />
       </div>
 

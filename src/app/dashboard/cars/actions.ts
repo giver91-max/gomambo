@@ -8,7 +8,7 @@ import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
 import { getVerificationStatus } from "@/lib/verification-gate";
 import { getPartnerContext, partnerCanList } from "@/lib/partner";
-import type { Car } from "@/types/database";
+import { parseCarListingForm } from "@/lib/car-form";
 
 export type CarFormState = { error: string | null };
 export type CarDraftResult = { error: string | null; carId?: string };
@@ -53,61 +53,12 @@ export async function createCarDraft(
     }
   }
 
-  const brand = String(formData.get("brand") ?? "").trim();
-  const model = String(formData.get("model") ?? "").trim();
-  const year = Number(formData.get("year"));
-  const pricePerDay = Number(formData.get("price_per_day"));
-  const city = String(formData.get("city") ?? "").trim();
-  const registrationNumber = String(formData.get("registration_number") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  const vehicleType = String(formData.get("vehicle_type") ?? "").trim();
-  const fuelType = String(formData.get("fuel_type") ?? "").trim();
-  const transmission = String(formData.get("transmission") ?? "").trim();
-  const seats = Number(formData.get("seats"));
-  const mileageLimitRaw = String(formData.get("mileage_limit_km") ?? "").trim();
-  const mileageLimit = mileageLimitRaw ? Number(mileageLimitRaw) : null;
-  const mileageOverageFeeRaw = String(formData.get("mileage_overage_fee_per_km") ?? "").trim();
-  const mileageOverageFee = mileageOverageFeeRaw ? Number(mileageOverageFeeRaw) : null;
-  const fuelPolicy = String(formData.get("fuel_policy") ?? "full_to_full").trim();
-  const securityDepositRaw = String(formData.get("security_deposit_amount") ?? "").trim();
-  const securityDeposit = securityDepositRaw ? Number(securityDepositRaw) : null;
-  const pricePerMonthRaw = String(formData.get("price_per_month") ?? "").trim();
-  const pricePerMonth = pricePerMonthRaw ? Number(pricePerMonthRaw) : null;
-  const deliveryAvailable = formData.get("delivery_available") === "true";
-  const deliveryInfo = String(formData.get("delivery_info") ?? "").trim();
-  const cancellationPolicy = String(formData.get("cancellation_policy") ?? "moderate").trim();
+  const parsed = parseCarListingForm(formData);
+  if (!parsed.ok) {
+    return { error: parsed.error };
+  }
+  const { fields, registrationNumber } = parsed;
   const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
-
-  if (!brand || !model || !city) {
-    return { error: "Wypełnij markę, model i miasto." };
-  }
-  if (!registrationNumber) {
-    return { error: "Podaj numer rejestracyjny." };
-  }
-  if (!Number.isInteger(year) || year < 1990 || year > new Date().getFullYear() + 1) {
-    return { error: "Podaj prawidłowy rok produkcji." };
-  }
-  if (!(pricePerDay > 0)) {
-    return { error: "Cena za dzień musi być większa od zera." };
-  }
-  if (!vehicleType || !fuelType || !transmission) {
-    return { error: "Wybierz typ pojazdu, rodzaj paliwa i skrzynię biegów." };
-  }
-  if (!Number.isInteger(seats) || seats < 1 || seats > 9) {
-    return { error: "Podaj prawidłową liczbę miejsc (1–9)." };
-  }
-  if (mileageLimit !== null && !(mileageLimit > 0)) {
-    return { error: "Limit kilometrów musi być większy od zera." };
-  }
-  if (mileageOverageFee !== null && mileageOverageFee < 0) {
-    return { error: "Opłata za km ponad limit nie może być ujemna." };
-  }
-  if (securityDeposit !== null && securityDeposit < 0) {
-    return { error: "Kaucja nie może być ujemna." };
-  }
-  if (pricePerMonth !== null && !(pricePerMonth > 0)) {
-    return { error: "Cena za miesiąc musi być większa od zera." };
-  }
   if (!(await verifyRecaptcha(recaptchaToken, "add_car"))) {
     return { error: "Weryfikacja antyspamowa nie powiodła się. Spróbuj ponownie." };
   }
@@ -120,24 +71,7 @@ export async function createCarDraft(
       // Partner confirms each booking rather than having it auto-confirm.
       // Peer-to-peer listings keep instant book.
       ...(partner ? { partner_id: partner.partnerId, instant_book: false } : {}),
-      brand,
-      model,
-      year,
-      price_per_day: pricePerDay,
-      city,
-      description: description || null,
-      vehicle_type: vehicleType as Car["vehicle_type"],
-      fuel_type: fuelType as Car["fuel_type"],
-      transmission: transmission as Car["transmission"],
-      seats,
-      mileage_limit_km: mileageLimit,
-      mileage_overage_fee_per_km: mileageOverageFee,
-      fuel_policy: fuelPolicy as Car["fuel_policy"],
-      security_deposit_amount: securityDeposit,
-      price_per_month: pricePerMonth,
-      delivery_available: deliveryAvailable,
-      delivery_info: deliveryAvailable && deliveryInfo ? deliveryInfo : null,
-      cancellation_policy: cancellationPolicy as Car["cancellation_policy"],
+      ...fields,
     })
     .select("id")
     .single();
