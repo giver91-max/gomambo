@@ -5,6 +5,7 @@ import { EditCarForm } from "./edit-car-form";
 import { PhotoManager } from "./photo-manager";
 import { InsuranceManager } from "./insurance-manager";
 import { DeleteCarButton } from "./delete-car-button";
+import { ResubmitCarButton } from "./resubmit-car-button";
 
 export default async function EditCarPage({
   params,
@@ -85,7 +86,26 @@ export default async function EditCarPage({
         <DeleteCarButton carId={car.id} redirectTo={viewingAsAdmin ? "/admin/cars" : undefined} />
       </div>
 
-      {car.status === "approved" && !isAdmin && (
+      {car.status === "rejected" && isOwner && (
+        <div className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+          <p className="font-medium">To ogłoszenie zostało odrzucone.</p>
+          {car.rejection_reason && (
+            <p className="text-muted-foreground">Powód: {car.rejection_reason}</p>
+          )}
+          <p className="text-muted-foreground">
+            Popraw zdjęcia, polisę albo dane poniżej, a potem wyślij auto do ponownej weryfikacji.
+          </p>
+          <ResubmitCarButton carId={car.id} />
+        </div>
+      )}
+
+      {car.status === "pending" && isOwner && (
+        <p className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
+          Auto czeka na weryfikację GoMambo — damy znać mailem, gdy je sprawdzimy.
+        </p>
+      )}
+
+      {(car.status === "approved" || car.status === "paused") && !isAdmin && (
         <p className="rounded-lg border border-yellow-600/30 bg-yellow-600/10 p-3 text-sm text-yellow-700 dark:text-yellow-400">
           To auto jest już zatwierdzone. Jeśli zmienisz zdjęcia lub dane, ogłoszenie
           wróci do statusu „Oczekuje na zatwierdzenie&rdquo; do czasu ponownej weryfikacji.

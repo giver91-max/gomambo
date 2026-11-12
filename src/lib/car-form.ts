@@ -2,6 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Car, Database } from "@/types/database";
 import type { NewCarInitialValues } from "@/app/dashboard/cars/new/new-car-form";
+import { getVerificationStatus } from "@/lib/verification-gate";
+import { getPartnerContext, partnerCanList, type PartnerContext } from "@/lib/partner";
 
 /**
  * The listing fields of the "add a car" form, read and validated in one
@@ -158,4 +160,39 @@ export async function loadCarAsInitialValues(
     cancellation_policy: source.cancellation_policy,
     description: source.description,
   };
+}
+
+/**
+ * May this account put a car in front of GoMambo for review? Two different
+ * gates, because two different things are being checked. An individual
+ * listing their own car is vouched for by their identity and driving
+ * licence. A rental company has no driving licence — what matters is that
+ * the COMPANY is real and verified (see 0042). Messages are worded for the
+ * account holder; the admin's "add for an owner" path words its own.
+ */
+export async function ownerListingGate(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<{ partner: PartnerContext | null; error: string | null }> {
+  const partner = await getPartnerContext(supabase, userId);
+  if (partner) {
+    if (!partnerCanList(partner.status)) {
+      return {
+        partner,
+        error:
+          partner.status === "pending"
+            ? "Weryfikujemy jeszcze Twoją wypożyczalnię — damy znać, gdy będziesz mógł dodawać auta."
+            : "Twoja wypożyczalnia nie może w tej chwili dodawać aut. Napisz do nas.",
+      };
+    }
+    return { partner, error: null };
+  }
+  const { status } = await getVerificationStatus(supabase, userId);
+  if (status !== "approved") {
+    return {
+      partner: null,
+      error: "Musisz najpierw zweryfikować tożsamość i prawo jazdy, zanim dodasz auto.",
+    };
+  }
+  return { partner: null, error: null };
 }

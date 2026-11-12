@@ -126,7 +126,10 @@ export function FleetCarList({
               <p>{car.city}</p>
               <p>{Number(car.price_per_day).toFixed(2)} zł / dzień</p>
               {car.status === "rejected" && car.rejection_reason && (
-                <p className="text-destructive">Powód odrzucenia: {car.rejection_reason}</p>
+                <p className="text-destructive">
+                  Powód odrzucenia: {car.rejection_reason} — popraw auto w edycji i wyślij je
+                  ponownie.
+                </p>
               )}
               {(car.status === "approved" || car.status === "paused") &&
                 (() => {
@@ -146,6 +149,9 @@ export function FleetCarList({
               <div className="flex flex-wrap gap-x-4 gap-y-1">
                 <Link href={`/dashboard/cars/${car.id}/edit`} className="inline-block text-sm text-primary hover:underline">
                   Edytuj →
+                </Link>
+                <Link href={`/auta/${car.id}`} className="inline-block text-sm text-primary hover:underline">
+                  Podgląd ogłoszenia →
                 </Link>
                 <Link href={`/dashboard/cars/${car.id}/availability`} className="inline-block text-sm text-primary hover:underline">
                   {(availabilityByCarId[car.id]?.length ?? 0) > 0 ? "Zarządzaj dostępnością →" : "Ustaw dostępność →"}

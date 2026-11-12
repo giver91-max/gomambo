@@ -8,6 +8,7 @@ import { notifyUser } from "@/lib/notify-user";
 import { escapeHtml } from "@/lib/html";
 import { SITE_URL } from "@/lib/site";
 import type { PartnerStatus } from "@/types/database";
+import { PARTNER_STATUS_LABELS } from "@/lib/partner";
 
 
 async function requireAdmin() {
@@ -76,7 +77,7 @@ export async function decidePartner(
       body:
         status === "active"
           ? "Możecie dodawać auta do GoMambo. Każde ogłoszenie przechodzi jeszcze krótką moderację."
-          : `Status współpracy: ${status}. ${trimmed}`,
+          : `Status współpracy: ${PARTNER_STATUS_LABELS[status]}. ${trimmed}`,
       emailHtml:
         status === "active"
           ? `
@@ -87,7 +88,7 @@ export async function decidePartner(
             <p><a href="${SITE_URL}/dashboard/cars/new">Dodaj pierwsze auto →</a></p>
           `
           : `
-            <p>Status współpracy z ${escapeHtml(partner.trade_name)}: <strong>${escapeHtml(status)}</strong>.</p>
+            <p>Status współpracy z ${escapeHtml(partner.trade_name)}: <strong>${escapeHtml(PARTNER_STATUS_LABELS[status])}</strong>.</p>
             <p>${escapeHtml(trimmed)}</p>
             <p><a href="${SITE_URL}/dashboard/firma">Przejdź do panelu firmy →</a></p>
           `,

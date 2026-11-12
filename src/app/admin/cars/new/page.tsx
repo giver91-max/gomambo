@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getVerificationStatus } from "@/lib/verification-gate";
 import { getPartnerContext, partnerCanList } from "@/lib/partner";
 import { loadCarAsInitialValues } from "@/lib/car-form";
+import { getOwnerCommissionRate } from "@/lib/commission";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -119,7 +120,12 @@ export default async function AdminNewCarPage({
             Auto trafi na konto właściciela i od razu będzie zatwierdzone — sprawdzasz je teraz,
             więc nie czeka w kolejce. Właściciel może je potem edytować jak swoje.
           </p>
-          <NewCarForm key={searchParams.added ?? "new"} initialValues={initialValues} forOwnerId={ownerId} />
+          <NewCarForm
+            key={searchParams.added ?? "new"}
+            initialValues={initialValues}
+            forOwnerId={ownerId}
+            commissionRate={await getOwnerCommissionRate(ownerId)}
+          />
         </>
       )}
     </div>

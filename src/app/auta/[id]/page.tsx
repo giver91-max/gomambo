@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import { firstNameOnly } from "@/lib/utils";
 import { getVerificationStatus } from "@/lib/verification-gate";
 import { getOwnerCommissionRate } from "@/lib/commission";
 import { isMaintenanceMode } from "@/lib/maintenance";
+import { applyCommission } from "@/lib/pricing";
 import type { IdentityVerificationStatus } from "@/types/database";
 import {
   CANCELLATION_POLICY_DESCRIPTIONS,
@@ -33,9 +35,13 @@ const getCar = cache(async (id: string) => {
     .from("cars")
     .select("*, car_images(storage_path, position), partners(trade_name, city, description, logo_path)")
     .eq("id", id)
-    .eq("status", "approved")
+    // No status filter: RLS (cars_select_own_or_admin_or_approved) already
+    // limits everyone else to approved cars, and this is how an owner gets to
+    // preview their own listing before it is approved — or while the whole
+    // catalogue is hidden. The page itself refuses a non-approved car to
+    // anyone but its owner and an admin.
     .order("position", { referencedTable: "car_images", ascending: true })
-    .single();
+    .maybeSingle();
 
   const images = (car?.car_images ?? []) as {
     storage_path: string;
@@ -73,8 +79,9 @@ export async function generateMetadata({
   }
   // The maintenance gate below only swaps the page BODY. Without this, the
   // title, description, price and og:image still describe the real listing
-  // in every response, in every link preview and to every crawler.
-  if (await isMaintenanceMode()) {
+  // in every response, in every link preview and to every crawler. A
+  // not-yet-approved car is only ever its owner's or an admin's preview.
+  if (car.status !== "approved" || (await isMaintenanceMode())) {
     return { title: "GoMambo", robots: { index: false, follow: false } };
   }
 
@@ -112,6 +119,7 @@ export default async function CarDetailPage({
   } = await supabase.auth.getUser();
 
   let isAdmin = false;
+  let isRealAdmin = false;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
@@ -120,24 +128,38 @@ export default async function CarDetailPage({
       .single();
     // maintenance_bypass lets a test account browse and book while
     // the listings stay hidden from everyone else.
-    isAdmin = profile?.role === "admin" || profile?.maintenance_bypass === true;
+    isRealAdmin = profile?.role === "admin";
+    isAdmin = isRealAdmin || profile?.maintenance_bypass === true;
+  }
+  const isOwner = !!user && user.id === car.owner_id;
+
+  if (car.status !== "approved" && !isOwner && !isRealAdmin) {
+    notFound();
   }
 
-  if (!isAdmin) {
-    const { data: siteSettings } = await supabase
-      .from("site_settings")
-      .select("maintenance_mode")
-      .eq("id", 1)
-      .single();
-    if (siteSettings?.maintenance_mode) {
-      return (
-        <div className="space-y-6">
-          <BackButton />
-          <MaintenanceNotice />
-        </div>
-      );
-    }
+  const maintenance = await isMaintenanceMode();
+  // The owner passes too: someone told "your car is approved" while the
+  // catalogue is closed should be able to see what renters will see.
+  if (maintenance && !isAdmin && !isOwner) {
+    return (
+      <div className="space-y-6">
+        <BackButton />
+        <MaintenanceNotice />
+      </div>
+    );
   }
+
+  const previewNote = !isOwner && !isRealAdmin
+    ? null
+    : car.status === "pending"
+      ? "Auto czeka na zatwierdzenie przez GoMambo — klienci jeszcze go nie widzą."
+      : car.status === "rejected"
+        ? "Ogłoszenie zostało odrzucone — popraw je w panelu i wyślij do ponownej weryfikacji."
+        : car.status === "paused"
+          ? "Ogłoszenie jest wstrzymane — klienci go nie widzą."
+          : maintenance
+            ? "Auto jest zatwierdzone. Katalog dla najemców otworzymy wkrótce — Twoje auto pojawi się w nim automatycznie, damy znać mailem."
+            : null;
 
   let isFavorited = false;
   let verificationStatus: IdentityVerificationStatus | null = null;
@@ -204,9 +226,21 @@ export default async function CarDetailPage({
     notFound();
   }
 
+  const commissionRate = await getOwnerCommissionRate(car.owner_id);
+  const ownerDayPrice = applyCommission(Number(car.price_per_day), commissionRate);
+
   return (
     <div className="space-y-6">
       <BackButton />
+
+      {previewNote && (
+        <div className="space-y-1 rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
+          <p className="font-medium">
+            {isOwner ? "Podgląd Twojego ogłoszenia — tak zobaczą je najemcy" : "Podgląd admina"}
+          </p>
+          <p className="text-muted-foreground">{previewNote}</p>
+        </div>
+      )}
 
       <div className="relative">
         <FavoriteButton carId={car.id} initialFavorited={isFavorited} isLoggedIn={!!user} />
@@ -311,17 +345,35 @@ export default async function CarDetailPage({
               karcie przy płatności, zwalniana po zakończeniu wynajmu.
             </p>
           )}
-          <AvailabilityAndInquiry
-            carId={car.id}
-            availableDates={availableDates}
-            isLoggedIn={!!user}
-            verificationStatus={verificationStatus}
-            verificationRejectionReason={verificationRejectionReason}
-            pricePerDay={Number(car.price_per_day)}
-            pricePerMonth={car.price_per_month ? Number(car.price_per_month) : null}
-            commissionRate={await getOwnerCommissionRate(car.owner_id)}
-            party={{ partnerName: partner?.trade_name ?? null, ownerName }}
-          />
+          {isOwner ? (
+            // An owner cannot rent their own car (the conversation policy
+            // refuses it), so they get what the booking box means instead.
+            <div className="space-y-2 rounded-lg border p-3 text-sm">
+              <p>
+                Tutaj najemcy wybierają termin i wysyłają zapytanie. W ogłoszeniu widzą Twoją cenę{" "}
+                {ownerDayPrice.rental.toFixed(2)} zł/dzień
+                {ownerDayPrice.commission > 0
+                  ? `; przy rezerwacji doliczamy im opłatę serwisową GoMambo (${ownerDayPrice.commission.toFixed(2)} zł za dzień), więc zapłacą ${ownerDayPrice.gross.toFixed(2)} zł za dzień`
+                  : ""}
+                . Ty dostajesz całą swoją cenę.
+              </p>
+              <Link href={`/dashboard/cars/${car.id}/availability`} className="text-primary hover:underline">
+                Ustaw dni dostępności →
+              </Link>
+            </div>
+          ) : (
+            <AvailabilityAndInquiry
+              carId={car.id}
+              availableDates={availableDates}
+              isLoggedIn={!!user}
+              verificationStatus={verificationStatus}
+              verificationRejectionReason={verificationRejectionReason}
+              pricePerDay={Number(car.price_per_day)}
+              pricePerMonth={car.price_per_month ? Number(car.price_per_month) : null}
+              commissionRate={commissionRate}
+              party={{ partnerName: partner?.trade_name ?? null, ownerName }}
+            />
+          )}
         </CardContent>
       </Card>
 

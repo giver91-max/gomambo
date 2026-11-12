@@ -63,7 +63,19 @@ export function VerificationRequiredNotice({
         </li>
       </ul>
 
-      <Button render={<Link href="/dashboard/profile" />}>Zweryfikuj się →</Button>
+      <Button render={<Link href="/dashboard/profile#weryfikacja" />}>Zweryfikuj się →</Button>
+
+      {/* A rental company verifies the COMPANY, not someone's licence — sent
+          down this path, its staff listed the fleet as a private person. */}
+      {purpose === "add_car" && (
+        <p className="text-muted-foreground">
+          Prowadzisz wypożyczalnię albo masz flotę?{" "}
+          <Link href="/dashboard/firma" className="text-primary hover:underline">
+            Załóż konto firmy
+          </Link>{" "}
+          — weryfikujemy dane firmy (NIP, CEIDG lub KRS), bez prawa jazdy i selfie.
+        </p>
+      )}
     </div>
   );
 }

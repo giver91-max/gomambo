@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { notifyUser } from "@/lib/notify-user";
+import { escapeHtml } from "@/lib/html";
+import { isMaintenanceMode } from "@/lib/maintenance";
 
 export async function approveCar(carId: string) {
   const supabase = await createClient();
@@ -25,16 +27,33 @@ export async function approveCar(carId: string) {
     );
   }
 
+  // While the catalogue is closed, "visible to renters" would be false — and
+  // it was the source of "is this working?" from owners who sent the link to
+  // friends and got "coming soon". The car does go live by itself on launch.
+  const catalogueOpen = !(await isMaintenanceMode());
+  const carLabel = `${car.brand} ${car.model} (${car.year})`;
   await notifyUser({
     userId: car.owner_id,
     type: "car_approved",
     subject: `Twoje auto zostało zatwierdzone: ${car.brand} ${car.model}`,
-    body: `Twoje ogłoszenie ${car.brand} ${car.model} (${car.year}) zostało zatwierdzone i jest teraz widoczne dla najemców.`,
-    emailHtml: `
+    body: catalogueOpen
+      ? `Twoje ogłoszenie ${carLabel} zostało zatwierdzone i jest teraz widoczne dla najemców.`
+      : `Twoje ogłoszenie ${carLabel} zostało zatwierdzone. Katalog dla najemców otworzymy wkrótce — auto pojawi się w nim automatycznie. Ustaw już teraz dni dostępności.`,
+    emailHtml: catalogueOpen
+      ? `
       <p>Dobra wiadomość — Twoje ogłoszenie zostało zatwierdzone i jest teraz widoczne na GoMambo.</p>
       <ul>
-        <li><strong>Auto:</strong> ${car.brand} ${car.model} (${car.year})</li>
+        <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
       </ul>
+      <p><a href="https://www.gomambo.pl/dashboard">Przejdź do panelu →</a></p>
+    `
+      : `
+      <p>Dobra wiadomość — Twoje ogłoszenie zostało zatwierdzone.</p>
+      <ul>
+        <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
+      </ul>
+      <p>Zbieramy teraz auta przed startem, więc katalog dla najemców jest jeszcze zamknięty. Twoje auto pojawi się w nim automatycznie w dniu startu — damy Ci znać mailem.</p>
+      <p>Już teraz ustaw w panelu dni, w które auto jest dostępne — wtedy pierwsze rezerwacje mogą przyjść od razu.</p>
       <p><a href="https://www.gomambo.pl/dashboard">Przejdź do panelu →</a></p>
     `,
   });
@@ -64,10 +83,10 @@ export async function rejectCar(carId: string, reason: string) {
     emailHtml: `
       <p>Twoje ogłoszenie na GoMambo nie zostało zatwierdzone.</p>
       <ul>
-        <li><strong>Auto:</strong> ${car.brand} ${car.model} (${car.year})</li>
-        <li><strong>Powód:</strong> ${rejectionReason}</li>
+        <li><strong>Auto:</strong> ${escapeHtml(`${car.brand} ${car.model} (${car.year})`)}</li>
+        <li><strong>Powód:</strong> ${escapeHtml(rejectionReason)}</li>
       </ul>
-      <p>Popraw ogłoszenie i wyślij je do ponownej weryfikacji.</p>
+      <p>Popraw ogłoszenie w panelu i kliknij „Wyślij do ponownej weryfikacji”.</p>
       <p><a href="https://www.gomambo.pl/dashboard">Przejdź do panelu →</a></p>
     `,
   });

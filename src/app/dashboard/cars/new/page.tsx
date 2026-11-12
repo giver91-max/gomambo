@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getVerificationStatus } from "@/lib/verification-gate";
 import { getPartnerContext, partnerCanList } from "@/lib/partner";
 import { loadCarAsInitialValues } from "@/lib/car-form";
+import { getOwnerCommissionRate } from "@/lib/commission";
 
 export default async function NewCarPage({
   searchParams,
@@ -47,7 +48,7 @@ export default async function NewCarPage({
               polisę OC i zdjęcia tego konkretnego auta.
             </p>
           )}
-          <NewCarForm initialValues={initialValues} />
+          <NewCarForm initialValues={initialValues} commissionRate={await getOwnerCommissionRate(user.id)} />
         </>
       ) : partner ? (
         // A Partner blocked here is waiting on GoMambo, not on their own
@@ -61,7 +62,7 @@ export default async function NewCarPage({
           </p>
           <p className="text-muted-foreground">
             {partner.status === "pending"
-              ? "Sprawdzamy dane firmy i dokumenty. Damy znać mailem, gdy będziesz mógł dodać pierwsze auto — zwykle tego samego dnia."
+              ? "Sprawdzamy dane firmy i dokumenty. Damy znać mailem, gdy będziesz mógł dodać pierwsze auto."
               : "Napisz do nas, a wyjaśnimy, co jest potrzebne do wznowienia współpracy."}
           </p>
           <Link href="/dashboard/firma" className="text-primary hover:underline">

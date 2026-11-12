@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { getRecaptchaToken } from "@/lib/recaptcha-client";
+import { applyCommission } from "@/lib/pricing";
 import { PlateCoverEditor } from "@/components/plate-cover-editor";
 import { DEFAULT_STICKER, flattenImageWithSticker, type StickerRect } from "@/lib/plate-cover";
 import {
@@ -67,10 +68,21 @@ export type NewCarInitialValues = {
 export function NewCarForm({
   initialValues,
   forOwnerId,
+  commissionRate,
 }: {
   initialValues?: NewCarInitialValues;
   forOwnerId?: string;
+  /** The owner's fee rate, to show what the renter will actually see. */
+  commissionRate?: number;
 }) {
+  const [priceInput, setPriceInput] = useState(
+    initialValues?.price_per_day ? String(initialValues.price_per_day) : ""
+  );
+  const ownerPrice = Number(priceInput);
+  const priceBreakdown =
+    commissionRate !== undefined && ownerPrice > 0
+      ? applyCommission(ownerPrice, commissionRate)
+      : null;
   const [previews, setPreviews] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [stickers, setStickers] = useState<(StickerRect | null)[]>([]);
@@ -266,7 +278,18 @@ export function NewCarForm({
             required
             placeholder="150"
             defaultValue={initialValues?.price_per_day}
+            onChange={(e) => setPriceInput(e.target.value)}
           />
+          {priceBreakdown !== null && (
+            // What the code does today: the listing shows this price, and the
+            // fee is a separate line added when the renter picks dates.
+            <p className="text-xs text-muted-foreground">
+              {priceBreakdown.commission > 0
+                ? `Przy rezerwacji doliczamy najemcy opłatę serwisową GoMambo (${priceBreakdown.commission.toFixed(2)} zł/dzień), więc zapłaci ${priceBreakdown.gross.toFixed(2)} zł/dzień. `
+                : ""}
+              Ty dostajesz całe {priceBreakdown.rental.toFixed(2)} zł.
+            </p>
+          )}
         </div>
       </div>
 

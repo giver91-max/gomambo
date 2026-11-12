@@ -51,8 +51,8 @@ export default async function PartnerPage() {
       <div>
         <h1 className="text-2xl font-bold">Moja wypożyczalnia</h1>
         <p className="text-sm text-muted-foreground">
-          Jedno konto firmy, jedna umowa, dowolna liczba aut. Dane firmy podajesz raz — przy
-          każdym kolejnym aucie nie trzeba już niczego podpisywać.
+          Jedno konto firmy, dowolna liczba aut. Dane firmy podajesz i weryfikujemy raz — każde
+          kolejne auto dodajesz już bez tego kroku.
         </p>
       </div>
 
@@ -75,8 +75,9 @@ export default async function PartnerPage() {
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             {partner.status === "pending" && (
               <p>
-                Sprawdzamy dane firmy i dokumenty. Do tego czasu możesz przygotować flotę, ale
-                auta nie będą jeszcze widoczne dla klientów.
+                Zweryfikujemy firmę, gdy dodasz odpis z CEIDG lub KRS (poniżej) — damy znać mailem.
+                Auta dodasz zaraz po weryfikacji; możesz też przesłać nam listę aut, a dodamy je za
+                Ciebie.
               </p>
             )}
             {partner.status === "active" && (

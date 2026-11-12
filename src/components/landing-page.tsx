@@ -151,7 +151,7 @@ export function LandingPage() {
         </h1>
 
         <div className={styles.counterBlock}>
-          <span className={styles.counterLabel}>Twoje auto może zarabiać nawet</span>
+          <span className={styles.counterLabel}>Na przykład: 250 zł/dzień × 20 dni wynajmu</span>
           <span className={styles.counterValue} id="counter" ref={counterRef}>
             0
           </span>
@@ -254,7 +254,7 @@ export function LandingPage() {
             <div className={styles.stepNum}>Krok 04</div>
             <div className={styles.stepIcon}>💰</div>
             <h3>Jedź / Zarabiaj</h3>
-            <p>Najemca jedzie, właściciel zarabia. Wypłata w 5 dni roboczych po zwrocie.</p>
+            <p>Najemca jedzie, właściciel zarabia — dostaje całą swoją cenę, a opłatę serwisową dopłaca najemca.</p>
           </div>
         </div>
       </section>
@@ -308,15 +308,15 @@ export function LandingPage() {
         </div>
         <div className={styles.trustItem}>
           <span className={styles.trustNum}>100%</span>
-          <div className={styles.trustDesc}>Zweryfikowana tożsamość</div>
+          <div className={styles.trustDesc}>Najemców i właścicieli z weryfikacją</div>
         </div>
         <div className={styles.trustItem}>
-          <span className={styles.trustNum}>5 dni</span>
-          <div className={styles.trustDesc}>Wypłata dla właściciela</div>
+          <span className={styles.trustNum}>0%</span>
+          <div className={styles.trustDesc}>Prowizji od właściciela</div>
         </div>
         <div className={styles.trustItem}>
-          <span className={styles.trustNum}>24/7</span>
-          <div className={styles.trustDesc}>Wsparcie techniczne</div>
+          <span className={styles.trustNum}>Czat</span>
+          <div className={styles.trustDesc}>Z zespołem GoMambo w panelu</div>
         </div>
       </section>
 

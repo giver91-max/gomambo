@@ -6,9 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
-import { getVerificationStatus } from "@/lib/verification-gate";
-import { getPartnerContext, partnerCanList } from "@/lib/partner";
-import { parseCarListingForm } from "@/lib/car-form";
+import { ownerListingGate, parseCarListingForm } from "@/lib/car-form";
 
 export type CarFormState = { error: string | null };
 export type CarDraftResult = { error: string | null; carId?: string };
@@ -31,26 +29,9 @@ export async function createCarDraft(
     redirect("/login");
   }
 
-  // Two different gates, because two different things are being checked. An
-  // individual listing their own car is vouched for by their identity and
-  // driving licence. A rental company has no driving licence — what matters
-  // is that the COMPANY is real and verified, which is what makes it
-  // possible for a Partner to list at all (it was not, before 0042).
-  const partner = await getPartnerContext(supabase, user.id);
-  if (partner) {
-    if (!partnerCanList(partner.status)) {
-      return {
-        error:
-          partner.status === "pending"
-            ? "Weryfikujemy jeszcze Twoją wypożyczalnię — damy znać, gdy będziesz mógł dodawać auta."
-            : "Twoja wypożyczalnia nie może w tej chwili dodawać aut. Napisz do nas.",
-      };
-    }
-  } else {
-    const { status: verificationStatus } = await getVerificationStatus(supabase, user.id);
-    if (verificationStatus !== "approved") {
-      return { error: "Musisz najpierw zweryfikować tożsamość i prawo jazdy, zanim dodasz auto." };
-    }
+  const { partner, error: gateError } = await ownerListingGate(supabase, user.id);
+  if (gateError) {
+    return { error: gateError };
   }
 
   const parsed = parseCarListingForm(formData);

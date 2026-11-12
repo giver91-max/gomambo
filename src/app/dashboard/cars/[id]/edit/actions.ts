@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendNotificationEmail } from "@/lib/email";
+import { escapeHtml } from "@/lib/html";
+import { ownerListingGate } from "@/lib/car-form";
 import type { Car } from "@/types/database";
 
 export type EditCarState = { error: string | null; success?: boolean };
@@ -51,6 +54,10 @@ async function requireOwnedCar(carId: string) {
 // can, and only because auth.uid() is null for service-role calls. Admins
 // editing a car are themselves the reviewer, so their edits don't need
 // re-review and the status is left untouched.
+//
+// "Approved" includes 'paused': the owner can resume a paused car on their
+// own (toggleCarPause), so editing it while paused and resuming used to put
+// unreviewed content straight back into the catalogue.
 async function revertToPendingIfApproved(carId: string, wasApproved: boolean, isAdmin: boolean) {
   if (!wasApproved || isAdmin) return;
   const admin = createAdminClient();
@@ -124,7 +131,7 @@ export async function updateCarDetails(
   }
 
   const admin = createAdminClient();
-  const wasApproved = car.status === "approved";
+  const wasApproved = car.status === "approved" || car.status === "paused";
   const { error } = await admin
     .from("cars")
     .update({
@@ -197,7 +204,7 @@ export async function setCarInsuranceDocument(
     await supabase.storage.from("car-insurance").remove([existing.insurance_document_path]);
   }
 
-  await revertToPendingIfApproved(carId, car.status === "approved", isAdmin);
+  await revertToPendingIfApproved(carId, car.status === "approved" || car.status === "paused", isAdmin);
 
   revalidatePath(`/dashboard/cars/${carId}/edit`);
   revalidatePath("/dashboard");
@@ -223,7 +230,7 @@ export async function addCarPhoto(
     return { error: error.message };
   }
 
-  await revertToPendingIfApproved(carId, car.status === "approved", isAdmin);
+  await revertToPendingIfApproved(carId, car.status === "approved" || car.status === "paused", isAdmin);
 
   revalidatePath(`/dashboard/cars/${carId}/edit`);
   revalidatePath(`/auta/${carId}`);
@@ -249,7 +256,7 @@ export async function removeCarPhoto(
     return { error: error.message };
   }
 
-  await revertToPendingIfApproved(carId, car.status === "approved", isAdmin);
+  await revertToPendingIfApproved(carId, car.status === "approved" || car.status === "paused", isAdmin);
 
   revalidatePath(`/dashboard/cars/${carId}/edit`);
   revalidatePath(`/auta/${carId}`);
@@ -388,5 +395,71 @@ export async function toggleCarPause(carId: string): Promise<{ error: string | n
 
   revalidatePath("/dashboard");
   revalidatePath(`/auta/${carId}`);
+  return { error: null };
+}
+
+// A rejected car used to be a dead end: the owner fixed what the e-mail asked
+// for, the listing stayed "Odrzucone", and nobody at GoMambo knew anything
+// had changed — the only way out was deleting it and starting over. This
+// puts it back in the queue and tells the admin, the same way a new car does.
+export async function resubmitRejectedCar(carId: string): Promise<{ error: string | null }> {
+  const { supabase, user, car } = await requireOwnedCar(carId);
+  if (!car || car.owner_id !== user.id) {
+    return { error: "Nie znaleziono auta." };
+  }
+  if (car.status !== "rejected") {
+    return { error: "To auto nie jest odrzucone — nie trzeba go wysyłać ponownie." };
+  }
+
+  const gate = await ownerListingGate(supabase, user.id);
+  if (gate.error) return { error: gate.error };
+
+  const [{ count: photoCount }, { data: carPrivate }, { data: details }] = await Promise.all([
+    supabase.from("car_images").select("id", { count: "exact", head: true }).eq("car_id", carId),
+    supabase.from("car_private").select("insurance_document_path").eq("car_id", carId).maybeSingle(),
+    supabase.from("cars").select("brand, model, year, city").eq("id", carId).single(),
+  ]);
+  if (!photoCount) return { error: "Dodaj przynajmniej jedno zdjęcie auta." };
+  if (!carPrivate?.insurance_document_path) return { error: "Dodaj polisę OC." };
+
+  // Service role: owners cannot move their own car's status (see
+  // enforce_car_update_rules), and that is what keeps moderation meaningful.
+  const admin = createAdminClient();
+  // Read back: only the call that actually moves the car out of 'rejected'
+  // may tell the admin. Parallel clicks — or an admin approving it at the
+  // same moment — would otherwise each send a notification and an e-mail.
+  const { data: moved, error } = await admin
+    .from("cars")
+    .update({ status: "pending", rejection_reason: null })
+    .eq("id", carId)
+    .eq("status", "rejected")
+    .select("id");
+  if (error) return { error: error.message };
+  if (!moved?.length) return { error: "To auto nie jest już odrzucone — odśwież stronę." };
+
+  const carLabel = details ? `${details.brand} ${details.model} (${details.year})` : "auto";
+  const ownerName = String(user.user_metadata?.full_name ?? user.email ?? "nieznany");
+  await admin.from("admin_notifications").insert({
+    type: "new_car_pending",
+    body: `Poprawione auto do ponownej weryfikacji: ${carLabel} — ${ownerName}`,
+    link: "/admin/cars",
+  });
+  await sendNotificationEmail({
+    to: "auto@gomambo.pl",
+    subject: `Poprawione auto do weryfikacji: ${details?.brand ?? ""} ${details?.model ?? ""}`.trim(),
+    html: `
+      <p>Właściciel poprawił odrzucone auto i wysłał je do ponownej weryfikacji.</p>
+      <ul>
+        <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
+        <li><strong>Miasto:</strong> ${escapeHtml(details?.city ?? "")}</li>
+        <li><strong>Właściciel:</strong> ${escapeHtml(ownerName)} (${escapeHtml(user.email ?? "")})</li>
+      </ul>
+      <p><a href="https://www.gomambo.pl/admin/cars">Przejdź do panelu admina</a></p>
+    `,
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/dashboard/cars/${carId}/edit`);
+  revalidatePath("/admin/cars");
   return { error: null };
 }

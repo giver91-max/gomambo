@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
+import { isMaintenanceMode } from "@/lib/maintenance";
 import { SiteFooter } from "@/components/site-footer";
 import { BackButton } from "@/components/back-button";
 import { buttonVariants } from "@/components/ui/button";
@@ -44,7 +45,7 @@ const HELPS = [
   },
   {
     title: "Bezpieczeństwo",
-    body: "Najemcy mogą przejść weryfikację tożsamości, a Ty widzisz ich opinie od innych właścicieli.",
+    body: "Każdy najemca przechodzi weryfikację tożsamości i prawa jazdy, zanim wyśle zapytanie o Twoje auto.",
   },
   {
     title: "Wsparcie GoMambo",
@@ -84,6 +85,36 @@ const FLEET_FEATURES = [
   },
 ];
 
+// Answers to what owners actually ask before they add a car. Nothing here may
+// promise more than the product does today: damage rules and payout timing
+// are announced before renting opens (Rafał, 2026-11-07), not invented here.
+const OWNER_FAQ = (maintenance: boolean) => [
+  ...(maintenance
+    ? [
+        {
+          q: "Kiedy ruszy wynajem?",
+          a: "Zbieramy teraz auta od właścicieli i wypożyczalni. Katalog dla najemców otworzymy, gdy będzie w czym wybierać — Twoje zatwierdzone auto pojawi się w nim automatycznie, a my damy Ci znać mailem.",
+        },
+      ]
+    : []),
+  {
+    q: "Ile to kosztuje?",
+    a: "Nic. Rejestracja i ogłoszenie są darmowe. Do Twojej ceny doliczamy najemcy opłatę serwisową GoMambo — Ty dostajesz całą swoją stawkę.",
+  },
+  {
+    q: "Kiedy i jak dostanę pieniądze?",
+    a: "Płatności uruchomimy razem z wynajmem: najemca zapłaci online kartą lub BLIK-iem, a Twoja część trafi na Twoje konto przez Stripe. Konto do wypłat skonfigurujesz w kilka minut, gdy damy znać — wtedy podamy też terminy wypłat.",
+  },
+  {
+    q: "Co, jeśli najemca uszkodzi auto?",
+    a: "Zasady dotyczące szkód i ochrony auta ogłosimy przed startem wynajmu. Już teraz warto zapytać swojego ubezpieczyciela, czy Twoje AC obejmuje odpłatny wynajem — wiele polis tego nie obejmuje. GoMambo nie jest ubezpieczycielem.",
+  },
+  {
+    q: "Co muszę przygotować?",
+    a: "Prawo jazdy (zdjęcie obu stron i selfie — do weryfikacji tożsamości), numer rejestracyjny, polisę OC (zdjęcie lub PDF) i kilka dobrych zdjęć auta. Wypożyczalnia zamiast prawa jazdy podaje dane firmy i odpis z CEIDG lub KRS.",
+  },
+];
+
 const FLEET_MAILTO = `mailto:kontakt@gomambo.pl?subject=${encodeURIComponent(
   "Zgłoszenie floty — GoMambo"
 )}&body=${encodeURIComponent(
@@ -113,6 +144,14 @@ export default async function BecomeOwnerPage() {
   const addCarHref = user
     ? "/dashboard/cars/new"
     : { pathname: "/register", query: { next: "/dashboard/cars/new" } };
+  // A company starts from its company account, not from a driving licence:
+  // sent down the private path, its staff verified themselves and listed the
+  // fleet as a private person — instant book, no company shown, payouts to
+  // an individual.
+  const companyHref = user
+    ? "/dashboard/firma"
+    : { pathname: "/register", query: { next: "/dashboard/firma" } };
+  const faq = OWNER_FAQ(await isMaintenanceMode());
 
   return (
     <div className="min-h-screen">
@@ -236,19 +275,38 @@ export default async function BecomeOwnerPage() {
           <div className="space-y-4 rounded-xl bg-muted p-6">
             <h3 className="text-lg font-bold">Jak dodajemy flotę</h3>
             <p className="text-sm text-muted-foreground">
-              Możesz wprowadzić auta samodzielnie w panelu albo przesłać nam listę (marka,
-              model, rok, cena za dzień, zdjęcia) — dodamy je za Ciebie i odezwiemy się, gdy
-              ogłoszenia będą gotowe do zatwierdzenia.
+              Najpierw załóż konto firmy — dane z NIP i odpis z CEIDG lub KRS, bez prawa jazdy
+              i selfie. Po weryfikacji firmy dodasz auta sam w panelu albo prześlesz nam listę
+              (marka, model, rok, cena za dzień, zdjęcia), a my dodamy je za Ciebie.
             </p>
             <div className="flex flex-wrap gap-3">
-              <a href={FLEET_MAILTO} className={buttonVariants({ size: "lg" })}>
-                Zgłoś flotę →
-              </a>
-              <Link href={addCarHref} className={buttonVariants({ size: "lg", variant: "outline" })}>
-                Dodaj auta sam w panelu
+              <Link href={companyHref} className={buttonVariants({ size: "lg" })}>
+                Załóż konto firmy →
               </Link>
+              <a href={FLEET_MAILTO} className={buttonVariants({ size: "lg", variant: "outline" })}>
+                Wyślij nam listę aut
+              </a>
             </div>
           </div>
+        </section>
+
+        <section className="space-y-6">
+          <h2 className="text-2xl font-bold">Najczęstsze pytania</h2>
+          <div className="space-y-3">
+            {faq.map((item) => (
+              <details key={item.q} className="rounded-xl border p-4">
+                <summary className="cursor-pointer font-semibold">{item.q}</summary>
+                <p className="pt-2 text-sm text-muted-foreground">{item.a}</p>
+              </details>
+            ))}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Masz inne pytanie? Napisz na{" "}
+            <a href="mailto:kontakt@gomambo.pl" className="underline underline-offset-4">
+              kontakt@gomambo.pl
+            </a>
+            .
+          </p>
         </section>
 
         <section className="space-y-4 rounded-xl bg-muted p-8 text-center">

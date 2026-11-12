@@ -136,7 +136,7 @@ export default async function ProfilePage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="wyplaty" className="scroll-mt-24">
         <CardHeader>
           <CardTitle>Konto do wypłat</CardTitle>
         </CardHeader>
@@ -164,7 +164,9 @@ export default async function ProfilePage() {
         </CardContent>
       </Card>
 
-      <Card>
+      {/* Anchored: the dashboard's "steps" card links straight here instead of
+          to the top of a long page where this sits eighth. */}
+      <Card id="weryfikacja" className="scroll-mt-24">
         <CardHeader>
           <CardTitle>Weryfikacja tożsamości</CardTitle>
         </CardHeader>
