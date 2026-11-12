@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getVerificationStatus } from "@/lib/verification-gate";
 import { getPartnerContext, partnerCanList } from "@/lib/partner";
-import { parseCarListingForm } from "@/lib/car-form";
+import { parseCarDocumentsForm, parseCarListingForm } from "@/lib/car-form";
 import type { CarDraftResult, CarFormState } from "@/app/dashboard/cars/actions";
 
 /**
@@ -89,6 +89,10 @@ export async function adminCreateCarDraft(
 
   const parsed = parseCarListingForm(formData);
   if (!parsed.ok) return { error: parsed.error };
+  // The statement is the owner's; the admin ticks it having had it from them
+  // (the form says so), the same as entering their plate.
+  const docs = parseCarDocumentsForm(formData, { rentalRightAlreadyConfirmed: false });
+  if (!docs.ok) return { error: docs.error };
 
   // Service role: cars_insert_own only lets a session insert its OWN car.
   // Still a draft — it becomes approved in adminAttachCarImages, once it has
@@ -109,7 +113,12 @@ export async function adminCreateCarDraft(
 
   const { error: privateError } = await admin
     .from("car_private")
-    .upsert({ car_id: car.id, registration_number: parsed.registrationNumber });
+    .upsert({
+      car_id: car.id,
+      registration_number: parsed.registrationNumber,
+      ...docs.documents,
+      rental_right_confirmed_at: new Date().toISOString(),
+    });
   if (privateError) {
     await admin.from("cars").delete().eq("id", car.id);
     return { error: `Nie udało się zapisać numeru rejestracyjnego (${privateError.message}).` };

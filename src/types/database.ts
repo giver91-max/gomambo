@@ -71,6 +71,8 @@ export type Profile = {
   notify_email: boolean;
   notify_sms: boolean;
   terms_accepted_at: string | null;
+  /** Which Regulamin was accepted (0051); see src/lib/terms.ts. */
+  terms_version: string | null;
   stripe_connect_account_id: string | null;
   stripe_connect_onboarded: boolean;
   // Lets this account browse/book while the site is in maintenance mode.
@@ -146,6 +148,14 @@ export type CarPrivate = {
   car_id: string;
   registration_number: string | null;
   insurance_document_path: string | null;
+  /** Last day the uploaded OC policy covers (0051). */
+  insurance_valid_until: string | null;
+  /** Last day of the current technical inspection (0051). */
+  inspection_valid_until: string | null;
+  /** When the lister declared they may rent the car out (owner or lessor's consent). */
+  rental_right_confirmed_at: string | null;
+  /** Day the daily job last reminded the owner about these dates. */
+  documents_reminded_on: string | null;
   updated_at: string;
 };
 
@@ -353,6 +363,8 @@ export type IdentityVerification = {
   face_match_result: FaceMatchResult;
   verification_method: VerificationMethod;
   biometric_consent_at: string | null;
+  /** Which consent wording was accepted (0051); see src/lib/terms.ts. */
+  biometric_consent_version: string | null;
   /** When the admins were last alerted about this verification (0046). */
   admin_alerted_at: string | null;
   auto_review: AutoReview | null;
@@ -417,7 +429,9 @@ export type NotificationType =
   | "damage_reported"
   | "booking_verification_requested"
   | "booking_verification_approved"
-  | "booking_verification_pending_owner";
+  | "booking_verification_pending_owner"
+  // An OC policy or inspection about to run out, or the listing paused because it did (0051).
+  | "car_documents";
 
 export type DamageReportStatus = "open" | "resolved";
 

@@ -13,6 +13,7 @@ import {
   uploadHandoffPhoto,
 } from "./actions";
 import type { FaceMatchResult, HandoffStatus } from "@/types/database";
+import { BIOMETRIC_CONSENT_TEXT } from "@/lib/terms";
 
 type Step =
   | "send_code"
@@ -240,8 +241,10 @@ export function HandoffPhoneFlow({
             className="mt-1 size-5 shrink-0 rounded border-input"
           />
           <span>
-            Wyrażam zgodę na przetworzenie mojego wizerunku (zdjęcia dokumentu i selfie) w celu
-            weryfikacji tożsamości na GoMambo.
+            {BIOMETRIC_CONSENT_TEXT}{" "}
+            <a href="/polityka-prywatnosci" target="_blank" className="underline">
+              Polityka prywatności
+            </a>
           </span>
         </label>
         {error && <p className="text-sm text-destructive">{error}</p>}

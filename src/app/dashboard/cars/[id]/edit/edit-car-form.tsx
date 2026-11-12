@@ -32,10 +32,19 @@ const selectClassName =
 export function EditCarForm({
   car,
   registrationNumber,
+  documents,
+  editingAsAdmin,
 }: {
   car: Car;
   // Lives in car_private, not on the listing row (migration 0037).
   registrationNumber: string | null;
+  // Also car_private (0051).
+  documents: {
+    insurance_valid_until: string | null;
+    inspection_valid_until: string | null;
+    rental_right_confirmed_at: string | null;
+  };
+  editingAsAdmin: boolean;
 }) {
   const updateWithId = updateCarDetails.bind(null, car.id);
   const [state, formAction] = useFormState(updateWithId, initialState);
@@ -295,6 +304,44 @@ export function EditCarForm({
           placeholder="WX 12345"
         />
       </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="insurance_valid_until">Polisa OC ważna do</Label>
+          <Input
+            id="insurance_valid_until"
+            name="insurance_valid_until"
+            type="date"
+            required={!editingAsAdmin}
+            defaultValue={documents.insurance_valid_until ?? ""}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="inspection_valid_until">Badanie techniczne ważne do</Label>
+          <Input
+            id="inspection_valid_until"
+            name="inspection_valid_until"
+            type="date"
+            required={!editingAsAdmin}
+            defaultValue={documents.inspection_valid_until ?? ""}
+          />
+        </div>
+      </div>
+      {!documents.insurance_valid_until && !editingAsAdmin && (
+        <p className="-mt-2 text-xs text-muted-foreground">
+          Uzupełnij daty z polisy i dowodu rejestracyjnego — przypomnimy przed ich końcem.
+        </p>
+      )}
+
+      {!editingAsAdmin && !documents.rental_right_confirmed_at && (
+        <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+          <input type="checkbox" name="rental_right" required className="mt-0.5 size-4 shrink-0" />
+          <span>
+            Potwierdzam, że mogę wynajmować to auto — jestem jego właścicielem albo mam zgodę
+            właściciela lub leasingodawcy na odpłatny wynajem.
+          </span>
+        </label>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="description">Opis (opcjonalnie)</Label>

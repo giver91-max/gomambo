@@ -18,6 +18,7 @@ import {
   hashEmailCode,
 } from "@/lib/verification-handoff";
 import type { FaceMatchResult } from "@/types/database";
+import { BIOMETRIC_CONSENT_VERSION } from "@/lib/terms";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -301,6 +302,7 @@ export async function finalizeHandoff(
     face_match_result: matchOutcome.result,
     verification_method: "phone_handoff" as const,
     biometric_consent_at: new Date().toISOString(),
+    biometric_consent_version: BIOMETRIC_CONSENT_VERSION,
     status: autoApproved ? ("approved" as const) : ("pending" as const),
     rejection_reason: null,
     auto_review: buildAutoReview(assessment, previouslyRejected),

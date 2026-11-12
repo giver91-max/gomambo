@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
 import { safeRedirectPath } from "@/lib/safe-redirect";
+import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 
 export type AuthActionState = { error: string | null; success?: boolean };
 
@@ -51,6 +52,9 @@ export async function signUp(
       data: {
         full_name: fullName,
         terms_accepted_at: new Date().toISOString(),
+        // Copied onto the profile by handle_new_user (0051), so it is on
+        // record which Regulamin this account agreed to.
+        terms_version: CURRENT_TERMS_VERSION,
         ...(referredBy ? { referred_by: referredBy } : {}),
       },
       emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,

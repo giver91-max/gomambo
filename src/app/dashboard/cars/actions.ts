@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { verifyRecaptcha } from "@/lib/recaptcha";
-import { ownerListingGate, parseCarListingForm } from "@/lib/car-form";
+import { ownerListingGate, parseCarDocumentsForm, parseCarListingForm } from "@/lib/car-form";
 
 export type CarFormState = { error: string | null };
 export type CarDraftResult = { error: string | null; carId?: string };
@@ -39,6 +39,10 @@ export async function createCarDraft(
     return { error: parsed.error };
   }
   const { fields, registrationNumber } = parsed;
+  const docs = parseCarDocumentsForm(formData, { rentalRightAlreadyConfirmed: false });
+  if (!docs.ok) {
+    return { error: docs.error };
+  }
   const recaptchaToken = String(formData.get("recaptchaToken") ?? "") || null;
   if (!(await verifyRecaptcha(recaptchaToken, "add_car"))) {
     return { error: "Weryfikacja antyspamowa nie powiodła się. Spróbuj ponownie." };
@@ -66,7 +70,12 @@ export async function createCarDraft(
   if (registrationNumber) {
     const { error: privateError } = await supabase
       .from("car_private")
-      .upsert({ car_id: car.id, registration_number: registrationNumber });
+      .upsert({
+        car_id: car.id,
+        registration_number: registrationNumber,
+        ...docs.documents,
+        rental_right_confirmed_at: new Date().toISOString(),
+      });
     if (privateError) {
       // Not fatal for the listing itself, but an admin reviewing this car
       // needs the plate, so make the failure visible rather than silent.

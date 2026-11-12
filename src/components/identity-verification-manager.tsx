@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { SelfieCapture } from "@/components/selfie-capture";
 import { VerificationQrPanel } from "@/components/verification-qr-panel";
 import type { IdentityVerificationStatus } from "@/types/database";
+import { BIOMETRIC_CONSENT_TEXT } from "@/lib/terms";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
@@ -240,8 +241,10 @@ export function IdentityVerificationManager({
             disabled={isPending}
           />
           <span>
-            Zgadzam się, aby GoMambo porównał moje selfie ze zdjęciem w prawie jazdy w celu
-            potwierdzenia tożsamości.
+            {BIOMETRIC_CONSENT_TEXT}{" "}
+            <a href="/polityka-prywatnosci" target="_blank" className="underline">
+              Polityka prywatności
+            </a>
           </span>
         </label>
 

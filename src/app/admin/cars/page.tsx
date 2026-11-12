@@ -29,7 +29,7 @@ export default async function AdminCarsPage({
   const { data: cars } = await supabase
     .from("cars")
     .select(
-      "*, car_images(storage_path), owner:profiles(full_name), car_private(registration_number, insurance_document_path), partners(trade_name, status)"
+      "*, car_images(storage_path), owner:profiles(full_name), car_private(registration_number, insurance_document_path, insurance_valid_until, inspection_valid_until, rental_right_confirmed_at), partners(trade_name, status)"
     )
     .eq("status", status)
     .order("created_at", { ascending: true });
@@ -76,6 +76,9 @@ export default async function AdminCarsPage({
               const carPrivate = (car.car_private ?? null) as unknown as {
                 registration_number: string | null;
                 insurance_document_path: string | null;
+                insurance_valid_until: string | null;
+                inspection_valid_until: string | null;
+                rental_right_confirmed_at: string | null;
               } | null;
 
               let insuranceUrl: string | null = null;
@@ -105,6 +108,9 @@ export default async function AdminCarsPage({
                   car={{
                     ...car,
                     registration_number: carPrivate?.registration_number ?? null,
+                    insurance_valid_until: carPrivate?.insurance_valid_until ?? null,
+                    inspection_valid_until: carPrivate?.inspection_valid_until ?? null,
+                    rental_right_confirmed_at: carPrivate?.rental_right_confirmed_at ?? null,
                   }}
                   ownerName={owner?.full_name ?? ""}
                   imageUrls={imageUrls}

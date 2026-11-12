@@ -4,6 +4,14 @@ import type { Car, Database } from "@/types/database";
 import type { NewCarInitialValues } from "@/app/dashboard/cars/new/new-car-form";
 import { getVerificationStatus } from "@/lib/verification-gate";
 import { getPartnerContext, partnerCanList, type PartnerContext } from "@/lib/partner";
+import { toISODate } from "@/lib/calendar";
+import {
+  CANCELLATION_POLICY_LABELS,
+  FUEL_POLICY_LABELS,
+  FUEL_TYPE_LABELS,
+  TRANSMISSION_LABELS,
+  VEHICLE_TYPE_LABELS,
+} from "@/lib/car-options";
 
 /**
  * The listing fields of the "add a car" form, read and validated in one
@@ -75,6 +83,18 @@ export function parseCarListingForm(
   }
   if (!vehicleType || !fuelType || !transmission) {
     return { ok: false, error: "Wybierz typ pojazdu, rodzaj paliwa i skrzynię biegów." };
+  }
+  // Checked here rather than left to the CHECK constraints: an edit writes
+  // car_private before cars, and a crafted value that only the database
+  // refused would have left half a save behind.
+  if (
+    !(vehicleType in VEHICLE_TYPE_LABELS) ||
+    !(fuelType in FUEL_TYPE_LABELS) ||
+    !(transmission in TRANSMISSION_LABELS) ||
+    !(fuelPolicy in FUEL_POLICY_LABELS) ||
+    !(cancellationPolicy in CANCELLATION_POLICY_LABELS)
+  ) {
+    return { ok: false, error: "Nieprawidłowa wartość w formularzu. Odśwież stronę i spróbuj ponownie." };
   }
   if (!Number.isInteger(seats) || seats < 1 || seats > 9) {
     return { ok: false, error: "Podaj prawidłową liczbę miejsc (1–9)." };
@@ -195,4 +215,81 @@ export async function ownerListingGate(
     };
   }
   return { partner: null, error: null };
+}
+
+export type CarDocumentFields = {
+  insurance_valid_until: string;
+  inspection_valid_until: string;
+};
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseFutureDate(raw: FormDataEntryValue | null): string | null | "past" {
+  const value = String(raw ?? "").trim();
+  if (!ISO_DATE_RE.test(value)) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  // "2026-02-31" parses to March; a real calendar date round-trips.
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return null;
+  return value < toISODate(new Date()) ? "past" : value;
+}
+
+/**
+ * The OC policy's and the inspection's end dates, and the owner's statement
+ * that they may rent the car out — what lets the daily job warn the owner
+ * and pause a listing that is no longer legal to drive (0051). Required for
+ * every new car and on every edit, so the cars listed before this existed
+ * get their dates the first time their owner touches them.
+ */
+export function parseCarDocumentsForm(
+  formData: FormData,
+  { rentalRightAlreadyConfirmed }: { rentalRightAlreadyConfirmed: boolean }
+): { ok: true; documents: CarDocumentFields; rentalRightConfirmedNow: boolean } | { ok: false; error: string } {
+  const insurance = parseFutureDate(formData.get("insurance_valid_until"));
+  if (insurance === null) return { ok: false, error: "Podaj, do kiedy jest ważna polisa OC." };
+  if (insurance === "past") {
+    return { ok: false, error: "Polisa OC już wygasła — dodaj aktualną polisę i jej datę ważności." };
+  }
+  const inspection = parseFutureDate(formData.get("inspection_valid_until"));
+  if (inspection === null) {
+    return { ok: false, error: "Podaj termin następnego badania technicznego (z dowodu rejestracyjnego)." };
+  }
+  if (inspection === "past") {
+    return { ok: false, error: "Badanie techniczne już wygasło — auto bez ważnego przeglądu nie może być wynajmowane." };
+  }
+  const rentalRight = formData.get("rental_right") === "on";
+  if (!rentalRight && !rentalRightAlreadyConfirmed) {
+    return {
+      ok: false,
+      error: "Potwierdź, że możesz wynajmować to auto (jesteś właścicielem albo masz zgodę właściciela lub leasingodawcy).",
+    };
+  }
+  return {
+    ok: true,
+    documents: { insurance_valid_until: insurance, inspection_valid_until: inspection },
+    rentalRightConfirmedNow: rentalRight && !rentalRightAlreadyConfirmed,
+  };
+}
+
+/** Must match the marker enforce_car_update_rules writes (0051). */
+export const DOCUMENTS_EXPIRED_REASON =
+  "Wstrzymane: wygasła polisa OC lub badanie techniczne — dodaj aktualny dokument w edycji auta.";
+
+/**
+ * Whether a car's known OC or inspection date has passed. A missing date is
+ * not "expired" (cars listed before 0051) — the same rule as the trigger.
+ */
+export async function carDocumentsExpired(
+  supabase: SupabaseClient<Database>,
+  carId: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("car_private")
+    .select("insurance_valid_until, inspection_valid_until")
+    .eq("car_id", carId)
+    .maybeSingle();
+  const today = toISODate(new Date());
+  return (
+    (!!data?.insurance_valid_until && data.insurance_valid_until < today) ||
+    (!!data?.inspection_valid_until && data.inspection_valid_until < today)
+  );
 }

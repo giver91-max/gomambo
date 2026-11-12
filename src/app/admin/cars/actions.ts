@@ -5,9 +5,54 @@ import { createClient } from "@/lib/supabase/server";
 import { notifyUser } from "@/lib/notify-user";
 import { escapeHtml } from "@/lib/html";
 import { isMaintenanceMode } from "@/lib/maintenance";
+import { carDocumentsExpired, DOCUMENTS_EXPIRED_REASON } from "@/lib/car-form";
 
-export async function approveCar(carId: string) {
+// Returns the problem instead of throwing it: in production Next replaces a
+// thrown server-action message with a generic one, and the admin would never
+// learn WHY the car did not go live.
+export async function approveCar(carId: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
+
+  // A car whose OC or inspection has run out cannot be published (0051) — the
+  // typical case is a paused car whose owner uploaded a new policy but kept
+  // the old date. Tell the owner what is missing rather than letting the
+  // approval bounce silently.
+  if (await carDocumentsExpired(supabase, carId)) {
+    const { data: expiredCar } = await supabase
+      .from("cars")
+      .select("owner_id, brand, model")
+      .eq("id", carId)
+      .single();
+    // Claimed like the daily reminders, so clicking "Zatwierdź" again does
+    // not mail the owner again the same day.
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: claimed } = await supabase
+      .from("car_private")
+      .update({ documents_reminded_on: today })
+      .eq("car_id", carId)
+      .or(`documents_reminded_on.is.null,documents_reminded_on.neq.${today}`)
+      .select("car_id");
+    if (expiredCar && claimed?.length) {
+      const label = `${expiredCar.brand} ${expiredCar.model}`;
+      await notifyUser({
+        userId: expiredCar.owner_id,
+        type: "car_documents",
+        subject: `Podaj aktualną datę ważności dokumentów: ${label}`,
+        body: `Nie możemy zatwierdzić auta ${label}: zapisana data ważności polisy OC albo badania technicznego już minęła. Wpisz aktualną datę w edycji auta.`,
+        emailHtml: `
+          <p>Nie możemy zatwierdzić auta <strong>${escapeHtml(label)}</strong>: zapisana data ważności polisy OC albo badania technicznego już minęła.</p>
+          <p>Wpisz w edycji auta aktualną datę (i dodaj nowy dokument, jeśli jeszcze go nie ma) — wtedy sprawdzimy auto jeszcze raz.</p>
+          <p><a href="https://www.gomambo.pl/dashboard/cars/${carId}/edit">Przejdź do edycji auta →</a></p>
+        `,
+        link: `/dashboard/cars/${carId}/edit`,
+      });
+    }
+    return {
+      error:
+        "Data ważności OC lub przeglądu tego auta już minęła — poprosiliśmy właściciela o aktualną. Zatwierdzisz auto, gdy ją poda.",
+    };
+  }
+
   const { data: car, error } = await supabase
     .from("cars")
     .update({ status: "approved", rejection_reason: null })
@@ -16,15 +61,22 @@ export async function approveCar(carId: string) {
     // silently force this row to 'paused' when the car belongs to a company
     // that is not active. That is not an error, so without this the owner
     // would be emailed "your car is live" about a car nobody can see.
-    .select("owner_id, brand, model, year, status")
+    .select("owner_id, brand, model, year, status, rejection_reason")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
+  if (car.status !== "approved" && car.rejection_reason === DOCUMENTS_EXPIRED_REASON) {
+    return {
+      error:
+        "Polisa OC lub badanie techniczne tego auta wygasło — auto zostało wstrzymane. Zatwierdzisz je, gdy właściciel doda aktualny dokument.",
+    };
+  }
   if (car.status !== "approved") {
-    throw new Error(
-      "Auto należy do wypożyczalni, która nie jest aktywna — zweryfikuj najpierw firmę w zakładce Wypożyczalnie. Ogłoszenie wróci do katalogu automatycznie."
-    );
+    return {
+      error:
+        "Auto należy do wypożyczalni, która nie jest aktywna — zweryfikuj najpierw firmę w zakładce Wypożyczalnie. Ogłoszenie wróci do katalogu automatycznie.",
+    };
   }
 
   // While the catalogue is closed, "visible to renters" would be false — and
@@ -61,6 +113,7 @@ export async function approveCar(carId: string) {
   revalidatePath("/admin/cars");
   revalidatePath("/admin");
   revalidatePath("/dashboard");
+  return { error: null };
 }
 
 export async function rejectCar(carId: string, reason: string) {

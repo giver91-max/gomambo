@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { checkDocumentLegibility, detectFace } from "@/lib/face-match";
 import { assessIdentity, buildAutoReview } from "@/lib/identity-gates";
 import { alertAdminsAboutVerification } from "@/lib/identity-alerts";
+import { BIOMETRIC_CONSENT_VERSION } from "@/lib/terms";
 
 type Slot = "front" | "back" | "selfie";
 
@@ -154,6 +155,7 @@ export async function submitIdentityVerification(
     face_match_result: assessment.match.result,
     verification_method: "manual" as const,
     biometric_consent_at: new Date().toISOString(),
+    biometric_consent_version: BIOMETRIC_CONSENT_VERSION,
     status: autoApproved ? ("approved" as const) : ("pending" as const),
     rejection_reason: null,
     auto_review: buildAutoReview(assessment, previouslyRejected),

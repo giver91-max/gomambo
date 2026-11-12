@@ -5,6 +5,7 @@ import { sendPickupInstructionsIfDue } from "@/lib/pickup-instructions";
 import { notifyUser } from "@/lib/notify-user";
 import { escapeHtml } from "@/lib/html";
 import { SITE_URL } from "@/lib/site";
+import { DOCUMENTS_EXPIRED_REASON } from "@/lib/car-form";
 
 // How long a Partner has to confirm before the request lapses. Nothing has
 // been charged yet, so this costs the customer nothing but their time.
@@ -72,6 +73,7 @@ export async function GET(request: Request) {
 
   const verificationResult = await runBookingVerifications(admin, today);
   const expiredRequests = await expireStaleRequests(admin, today);
+  const carDocuments = await runCarDocumentChecks(admin, today);
 
   return NextResponse.json({
     ok: true,
@@ -79,6 +81,7 @@ export async function GET(request: Request) {
     pickupInstructionsWithheld: withheld,
     expiredRequests,
     ...verificationResult,
+    carDocuments,
   });
 }
 
@@ -282,4 +285,132 @@ async function expireStaleRequests(
   }
 
   return expired;
+}
+
+// Days before an OC policy or inspection ends on which the owner is reminded.
+// Matched exactly against today's date; the pause is the safety net for a day
+// the job did not run.
+const DOCUMENT_REMINDER_DAYS = [30, 7];
+
+const plDate = (iso: string) => iso.split("-").reverse().join(".");
+
+type CarDocumentRow = {
+  car_id: string;
+  insurance_valid_until: string | null;
+  inspection_valid_until: string | null;
+  cars: { owner_id: string; brand: string; model: string; status: string } | null;
+};
+
+/**
+ * Keeps the catalogue to cars that may legally be driven (0051). Owners are
+ * reminded 30 and 7 days before their OC policy or technical inspection
+ * runs out; on the day after, the listing is paused — renting out a car
+ * without OC is a UFG penalty for the driver and leaves a renter uninsured.
+ * enforce_car_update_rules keeps it paused until a current document is in.
+ */
+async function runCarDocumentChecks(
+  admin: NonNullable<ReturnType<typeof tryCreateAdminClient>>,
+  today: string
+): Promise<{ paused: number; reminded: number }> {
+  let paused = 0;
+  let reminded = 0;
+
+  const { data: expired, error: expiredError } = await admin
+    .from("car_private")
+    .select("car_id, insurance_valid_until, inspection_valid_until, cars!inner(owner_id, brand, model, status)")
+    .or(`insurance_valid_until.lt.${today},inspection_valid_until.lt.${today}`)
+    .eq("cars.status", "approved");
+  if (expiredError) console.error("[cron] expired car documents query failed", expiredError);
+
+  for (const row of (expired ?? []) as unknown as CarDocumentRow[]) {
+    if (!row.cars) continue;
+    const { data: moved } = await admin
+      .from("cars")
+      .update({ status: "paused", rejection_reason: DOCUMENTS_EXPIRED_REASON })
+      .eq("id", row.car_id)
+      .eq("status", "approved")
+      .select("id");
+    if (!moved?.length) continue;
+    paused += 1;
+
+    const what = [
+      row.insurance_valid_until && row.insurance_valid_until < today
+        ? `polisa OC (ważna do ${plDate(row.insurance_valid_until)})`
+        : null,
+      row.inspection_valid_until && row.inspection_valid_until < today
+        ? `badanie techniczne (ważne do ${plDate(row.inspection_valid_until)})`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" i ");
+    const carLabel = `${row.cars.brand} ${row.cars.model}`;
+    await notifyUser({
+      userId: row.cars.owner_id,
+      type: "car_documents",
+      subject: `Wstrzymaliśmy ogłoszenie: ${carLabel}`,
+      body: `Wygasła ${what} auta ${carLabel}, więc ogłoszenie jest wstrzymane. Dodaj aktualny dokument i jego datę w edycji auta — sprawdzimy go i przywrócimy ogłoszenie.`,
+      emailHtml: `
+        <p>Wygasła ${escapeHtml(what)} auta <strong>${escapeHtml(carLabel)}</strong>, więc wstrzymaliśmy ogłoszenie — bez ważnego OC i przeglądu auta nie wolno wynajmować.</p>
+        <p>Dodaj aktualny dokument i jego datę w edycji auta. Sprawdzimy go i przywrócimy ogłoszenie.</p>
+        <p><a href="${SITE_URL}/dashboard/cars/${row.car_id}/edit">Przejdź do edycji auta →</a></p>
+      `,
+      link: `/dashboard/cars/${row.car_id}/edit`,
+    });
+  }
+
+  // Reminders: every document ending in exactly 30 or 7 days, one message per
+  // car. The day is claimed on car_private.documents_reminded_on first, the
+  // same claim-then-send as the rest of this job, so a second run on the same
+  // day sends nothing.
+  const due = new Map<string, { row: CarDocumentRow; items: string[] }>();
+  for (const days of DOCUMENT_REMINDER_DAYS) {
+    const target = toISODate(addDays(new Date(), days));
+    const { data: rows, error: dueError } = await admin
+      .from("car_private")
+      .select("car_id, insurance_valid_until, inspection_valid_until, cars!inner(owner_id, brand, model, status)")
+      .or(`insurance_valid_until.eq.${target},inspection_valid_until.eq.${target}`)
+      .in("cars.status", ["approved", "paused", "pending"]);
+    if (dueError) console.error("[cron] car document reminders query failed", dueError);
+
+    for (const row of (rows ?? []) as unknown as CarDocumentRow[]) {
+      if (!row.cars) continue;
+      const entry = due.get(row.car_id) ?? { row, items: [] };
+      if (row.insurance_valid_until === target) {
+        entry.items.push(`polisa OC kończy się ${plDate(target)} (za ${days} dni)`);
+      }
+      if (row.inspection_valid_until === target) {
+        entry.items.push(`badanie techniczne kończy się ${plDate(target)} (za ${days} dni)`);
+      }
+      due.set(row.car_id, entry);
+    }
+  }
+
+  for (const [carId, { row, items }] of Array.from(due.entries())) {
+    const { data: claimed } = await admin
+      .from("car_private")
+      .update({ documents_reminded_on: today })
+      .eq("car_id", carId)
+      .or(`documents_reminded_on.is.null,documents_reminded_on.neq.${today}`)
+      .select("car_id");
+    if (!claimed?.length || !row.cars) continue;
+
+    const carLabel = `${row.cars.brand} ${row.cars.model}`;
+    const summary = items.join("; ");
+    await notifyUser({
+      userId: row.cars.owner_id,
+      type: "car_documents",
+      subject: `Kończą się dokumenty auta: ${carLabel}`,
+      body: `${carLabel}: ${summary}. Dodaj nowy dokument i datę w edycji auta przed tym dniem, inaczej ogłoszenie zostanie wstrzymane.`,
+      emailHtml: `
+        <p>Auto <strong>${escapeHtml(carLabel)}</strong>:</p>
+        <ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        <p>Dodaj nowy dokument i jego datę w edycji auta przed tym dniem — inaczej wstrzymamy ogłoszenie, bo bez ważnego OC i przeglądu auta nie wolno wynajmować. Po zmianie ogłoszenie na chwilę wróci do naszej weryfikacji.</p>
+        <p><a href="${SITE_URL}/dashboard/cars/${carId}/edit">Przejdź do edycji auta →</a></p>
+      `,
+      link: `/dashboard/cars/${carId}/edit`,
+    });
+    reminded += 1;
+  }
+
+  return { paused, reminded };
 }

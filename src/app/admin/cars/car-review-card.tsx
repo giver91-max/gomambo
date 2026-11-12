@@ -24,6 +24,9 @@ type Props = {
     status: CarStatus;
     rejection_reason: string | null;
     registration_number: string | null;
+    insurance_valid_until: string | null;
+    inspection_valid_until: string | null;
+    rental_right_confirmed_at: string | null;
   };
   ownerName: string;
   // Set when the car belongs to a rental company rather than an individual.
@@ -33,6 +36,43 @@ type Props = {
   insuranceUrl: string | null;
   insuranceIsPdf: boolean;
 };
+
+// Plain YYYY-MM-DD comparison — the dates are calendar days, not instants.
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function DocumentDates({ car }: { car: Props["car"] }) {
+  const today = todayIso();
+  const row = (label: string, value: string | null) => (
+    <p>
+      <span className="text-muted-foreground">{label}: </span>
+      {value ? (
+        <span className={value < today ? "font-medium text-destructive" : "font-medium"}>
+          {value.split("-").reverse().join(".")}
+          {value < today ? " (WYGASŁO)" : ""}
+        </span>
+      ) : (
+        <span className="text-muted-foreground">brak daty</span>
+      )}
+    </p>
+  );
+  return (
+    <div className="mt-1 space-y-0.5">
+      {row("OC ważne do", car.insurance_valid_until)}
+      {row("Przegląd ważny do", car.inspection_valid_until)}
+      <p>
+        <span className="text-muted-foreground">Prawo do wynajmu: </span>
+        {car.rental_right_confirmed_at ? (
+          <span className="font-medium">potwierdzone przez właściciela</span>
+        ) : (
+          <span className="text-muted-foreground">brak oświadczenia</span>
+        )}
+      </p>
+    </div>
+  );
+}
 
 export function CarReviewCard({
   car,
@@ -52,7 +92,8 @@ export function CarReviewCard({
     setError(null);
     startTransition(async () => {
       try {
-        await approveCar(car.id);
+        const result = await approveCar(car.id);
+        if (result.error) setError(result.error);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Błąd");
@@ -148,6 +189,7 @@ export function CarReviewCard({
               </>
             )}
           </p>
+          <DocumentDates car={car} />
           <div className="mt-2">
             {insuranceUrl ? (
               insuranceIsPdf ? (

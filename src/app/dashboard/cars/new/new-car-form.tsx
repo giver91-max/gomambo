@@ -515,6 +515,21 @@ export function NewCarForm({
         />
       </div>
 
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="insurance_valid_until">Polisa OC ważna do</Label>
+          <Input id="insurance_valid_until" name="insurance_valid_until" type="date" required />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="inspection_valid_until">Badanie techniczne ważne do</Label>
+          <Input id="inspection_valid_until" name="inspection_valid_until" type="date" required />
+        </div>
+      </div>
+      <p className="-mt-2 text-xs text-muted-foreground">
+        Przypomnimy przed końcem każdej daty. Gdy któraś minie, wstrzymamy ogłoszenie, aż dodasz
+        nowy dokument — bez ważnego OC i przeglądu auta nie wolno wynajmować.
+      </p>
+
       <div className="space-y-2">
         <Label htmlFor="insurance">Polisa OC (zdjęcie lub PDF, do 8 MB)</Label>
         <Input
@@ -585,6 +600,15 @@ export function NewCarForm({
           </div>
         )}
       </div>
+
+      <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
+        <input type="checkbox" name="rental_right" required className="mt-0.5 size-4 shrink-0" />
+        <span>
+          {forOwnerId
+            ? "Właściciel potwierdził nam, że może wynajmować to auto — jest jego właścicielem albo ma zgodę właściciela lub leasingodawcy na odpłatny wynajem."
+            : "Potwierdzam, że mogę wynajmować to auto — jestem jego właścicielem albo mam zgodę właściciela lub leasingodawcy na odpłatny wynajem."}
+        </span>
+      </label>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

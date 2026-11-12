@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CURRENT_TERMS_LABEL } from "@/lib/terms";
 import type { Metadata } from "next";
 import { SiteFooter } from "@/components/site-footer";
 import { BackButton } from "@/components/back-button";
@@ -22,7 +23,7 @@ export default function RegulaminPage() {
 
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">Regulamin serwisu GoMambo</h1>
-          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 16 lipca 2026</p>
+          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: {CURRENT_TERMS_LABEL}</p>
         </div>
 
         <section className="space-y-2">
@@ -88,11 +89,13 @@ export default function RegulaminPage() {
             oraz zdjęcia selfie.
           </p>
           <p>
-            Przesłane zdjęcia mogą zostać poddane automatycznej wstępnej weryfikacji, w
-            tym automatycznemu porównaniu wizerunku z selfie ze zdjęciem na dokumencie.
-            Niezależnie od wyniku weryfikacji automatycznej — w tym w przypadku, gdy jest
-            ona niedostępna lub niejednoznaczna — zgłoszenie podlega ostatecznej
-            weryfikacji przez administratora Serwisu. Przesłanie zdjęć w tym procesie
+            Przesłane zdjęcia są poddawane automatycznej weryfikacji, w tym
+            automatycznemu porównaniu wizerunku z selfie ze zdjęciem na dokumencie. Gdy
+            wynik jest jednoznacznie pozytywny, konto może zostać zweryfikowane
+            automatycznie, bez udziału administratora; w pozostałych przypadkach — także
+            gdy weryfikacja automatyczna jest niedostępna lub niejednoznaczna —
+            zgłoszenie rozpatruje administrator Serwisu. Administrator może w każdej
+            chwili sprawdzić zgłoszenie zweryfikowane automatycznie i cofnąć weryfikację. Przesłanie zdjęć w tym procesie
             wymaga uprzedniego wyrażenia odrębnej, dobrowolnej zgody na przetwarzanie
             danych biometrycznych, zgodnie z{" "}
             <Link href="/polityka-prywatnosci" className="underline">

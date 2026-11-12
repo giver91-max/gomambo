@@ -25,7 +25,7 @@ export default async function EditCarPage({
     supabase
       .from("cars")
       .select(
-        "*, car_images(id, storage_path, position), car_private(registration_number, insurance_document_path)"
+        "*, car_images(id, storage_path, position), car_private(registration_number, insurance_document_path, insurance_valid_until, inspection_valid_until, rental_right_confirmed_at)"
       )
       .eq("id", params.id)
       .single(),
@@ -58,6 +58,9 @@ export default async function EditCarPage({
   const carPrivate = (car.car_private ?? null) as unknown as {
     registration_number: string | null;
     insurance_document_path: string | null;
+    insurance_valid_until: string | null;
+    inspection_valid_until: string | null;
+    rental_right_confirmed_at: string | null;
   } | null;
 
   if (carPrivate?.insurance_document_path) {
@@ -129,7 +132,16 @@ export default async function EditCarPage({
 
       <div className="space-y-3">
         <h2 className="font-semibold">Dane auta</h2>
-        <EditCarForm car={car} registrationNumber={carPrivate?.registration_number ?? null} />
+        <EditCarForm
+          car={car}
+          registrationNumber={carPrivate?.registration_number ?? null}
+          documents={{
+            insurance_valid_until: carPrivate?.insurance_valid_until ?? null,
+            inspection_valid_until: carPrivate?.inspection_valid_until ?? null,
+            rental_right_confirmed_at: carPrivate?.rental_right_confirmed_at ?? null,
+          }}
+          editingAsAdmin={viewingAsAdmin}
+        />
       </div>
 
       <div className="border-t pt-4">

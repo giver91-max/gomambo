@@ -11,6 +11,7 @@ import { SITE_URL } from "@/lib/site";
 import { sendPickupInstructionsIfDue } from "@/lib/pickup-instructions";
 import { raiseToGoMambo } from "@/lib/booking-verification";
 import type { FaceMatchResult } from "@/types/database";
+import { BIOMETRIC_CONSENT_VERSION } from "@/lib/terms";
 
 const MAX_SELFIE_BYTES = 8 * 1024 * 1024;
 
@@ -99,7 +100,7 @@ export async function submitBookingVerificationSelfie(
   // own ID and match against it.
   const { data: identity } = await admin
     .from("identity_verifications")
-    .select("id, document_path, biometric_consent_at")
+    .select("id, document_path, biometric_consent_at, biometric_consent_version")
     .eq("user_id", user.id)
     .eq("status", "approved")
     .maybeSingle();
@@ -172,12 +173,23 @@ export async function submitBookingVerificationSelfie(
     await admin.storage.from("id-documents").remove([verification.selfie_path]);
   }
 
-  // Consent for the biometric comparison, recorded the first time it is given.
-  if (!identity.biometric_consent_at) {
-    await admin
+  // This selfie is compared with the licence too, and the checkbox carries
+  // the full biometric consent (BIOMETRIC_CONSENT_TEXT). Record it whenever
+  // the wording on file is older than the one just accepted.
+  if (identity.biometric_consent_version !== BIOMETRIC_CONSENT_VERSION) {
+    const { error: consentError } = await admin
       .from("identity_verifications")
-      .update({ biometric_consent_at: new Date().toISOString() })
+      .update({
+        biometric_consent_at: new Date().toISOString(),
+        biometric_consent_version: BIOMETRIC_CONSENT_VERSION,
+      })
       .eq("id", identity.id);
+    if (consentError) {
+      console.error("[booking-verification] consent not recorded", {
+        verificationId: identity.id,
+        message: consentError.message,
+      });
+    }
   }
 
   {

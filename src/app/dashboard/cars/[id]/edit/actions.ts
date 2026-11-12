@@ -6,8 +6,13 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { escapeHtml } from "@/lib/html";
-import { ownerListingGate } from "@/lib/car-form";
-import type { Car } from "@/types/database";
+import {
+  carDocumentsExpired,
+  DOCUMENTS_EXPIRED_REASON,
+  ownerListingGate,
+  parseCarDocumentsForm,
+  parseCarListingForm,
+} from "@/lib/car-form";
 
 export type EditCarState = { error: string | null; success?: boolean };
 
@@ -75,98 +80,101 @@ export async function updateCarDetails(
     return { error: "Nie masz dostępu do tego ogłoszenia." };
   }
 
-  const brand = String(formData.get("brand") ?? "").trim();
-  const model = String(formData.get("model") ?? "").trim();
-  const year = Number(formData.get("year"));
-  const pricePerDay = Number(formData.get("price_per_day"));
-  const city = String(formData.get("city") ?? "").trim();
-  const registrationNumber = String(formData.get("registration_number") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  const vehicleType = String(formData.get("vehicle_type") ?? "").trim();
-  const fuelType = String(formData.get("fuel_type") ?? "").trim();
-  const transmission = String(formData.get("transmission") ?? "").trim();
-  const seats = Number(formData.get("seats"));
-  const mileageLimitRaw = String(formData.get("mileage_limit_km") ?? "").trim();
-  const mileageLimit = mileageLimitRaw ? Number(mileageLimitRaw) : null;
-  const mileageOverageFeeRaw = String(formData.get("mileage_overage_fee_per_km") ?? "").trim();
-  const mileageOverageFee = mileageOverageFeeRaw ? Number(mileageOverageFeeRaw) : null;
-  const fuelPolicy = String(formData.get("fuel_policy") ?? "full_to_full").trim();
-  const securityDepositRaw = String(formData.get("security_deposit_amount") ?? "").trim();
-  const securityDeposit = securityDepositRaw ? Number(securityDepositRaw) : null;
-  const pricePerMonthRaw = String(formData.get("price_per_month") ?? "").trim();
-  const pricePerMonth = pricePerMonthRaw ? Number(pricePerMonthRaw) : null;
-  const deliveryAvailable = formData.get("delivery_available") === "true";
-  const deliveryInfo = String(formData.get("delivery_info") ?? "").trim();
-  const cancellationPolicy = String(formData.get("cancellation_policy") ?? "moderate").trim();
-
-  if (!brand || !model || !city) {
-    return { error: "Wypełnij markę, model i miasto." };
+  const parsed = parseCarListingForm(formData);
+  if (!parsed.ok) {
+    return { error: parsed.error };
   }
-  if (!registrationNumber) {
-    return { error: "Podaj numer rejestracyjny." };
-  }
-  if (!Number.isInteger(year) || year < 1990 || year > new Date().getFullYear() + 1) {
-    return { error: "Podaj prawidłowy rok produkcji." };
-  }
-  if (!(pricePerDay > 0)) {
-    return { error: "Cena za dzień musi być większa od zera." };
-  }
-  if (!vehicleType || !fuelType || !transmission) {
-    return { error: "Wybierz typ pojazdu, rodzaj paliwa i skrzynię biegów." };
-  }
-  if (!Number.isInteger(seats) || seats < 1 || seats > 9) {
-    return { error: "Podaj prawidłową liczbę miejsc (1–9)." };
-  }
-  if (mileageLimit !== null && !(mileageLimit > 0)) {
-    return { error: "Limit kilometrów musi być większy od zera." };
-  }
-  if (mileageOverageFee !== null && mileageOverageFee < 0) {
-    return { error: "Opłata za km ponad limit nie może być ujemna." };
-  }
-  if (securityDeposit !== null && securityDeposit < 0) {
-    return { error: "Kaucja nie może być ujemna." };
-  }
-  if (pricePerMonth !== null && !(pricePerMonth > 0)) {
-    return { error: "Cena za miesiąc musi być większa od zera." };
-  }
+  const { fields, registrationNumber } = parsed;
+  // An admin editing their OWN car is its owner here: they give the dates and
+  // the rental-right statement like anyone else.
+  const actingAsAdmin = isAdmin && car.owner_id !== user.id;
 
   const admin = createAdminClient();
-  const wasApproved = car.status === "approved" || car.status === "paused";
-  const { error } = await admin
-    .from("cars")
-    .update({
-      brand,
-      model,
-      year,
-      price_per_day: pricePerDay,
-      city,
-      description: description || null,
-      vehicle_type: vehicleType as Car["vehicle_type"],
-      fuel_type: fuelType as Car["fuel_type"],
-      transmission: transmission as Car["transmission"],
-      seats,
-      mileage_limit_km: mileageLimit,
-      mileage_overage_fee_per_km: mileageOverageFee,
-      fuel_policy: fuelPolicy as Car["fuel_policy"],
-      security_deposit_amount: securityDeposit,
-      price_per_month: pricePerMonth,
-      delivery_available: deliveryAvailable,
-      delivery_info: deliveryAvailable && deliveryInfo ? deliveryInfo : null,
-      cancellation_policy: cancellationPolicy as Car["cancellation_policy"],
-      ...(wasApproved && !isAdmin ? { status: "pending", rejection_reason: null } : {}),
-    })
-    .eq("id", carId);
 
-  if (error) {
-    return { error: error.message };
+  // Owners give the OC / inspection dates on every save, so cars listed
+  // before 0051 get them the first time they are edited. An admin fixing a
+  // typo in someone's listing may not know them, so for the admin they are
+  // checked only when filled in — and the rental-right statement is never
+  // the admin's to make here.
+  const { data: currentPrivate } = await admin
+    .from("car_private")
+    .select("rental_right_confirmed_at, insurance_valid_until, inspection_valid_until, registration_number")
+    .eq("car_id", carId)
+    .maybeSingle();
+  const postedInsurance = String(formData.get("insurance_valid_until") ?? "").trim();
+  const postedInspection = String(formData.get("inspection_valid_until") ?? "").trim();
+  // For the admin: only dates they actually changed. The form is prefilled,
+  // so "given" would otherwise be true for every car with dates — and an
+  // expired one would block the admin from saving anything at all.
+  const adminChangedDocs =
+    (!!postedInsurance && postedInsurance !== (currentPrivate?.insurance_valid_until ?? "")) ||
+    (!!postedInspection && postedInspection !== (currentPrivate?.inspection_valid_until ?? ""));
+  let documentUpdate: Record<string, string> = {};
+  if (!actingAsAdmin || adminChangedDocs) {
+    const docs = parseCarDocumentsForm(formData, {
+      rentalRightAlreadyConfirmed: actingAsAdmin || !!currentPrivate?.rental_right_confirmed_at,
+    });
+    if (!docs.ok) return { error: docs.error };
+    documentUpdate = {
+      ...docs.documents,
+      ...(docs.rentalRightConfirmedNow ? { rental_right_confirmed_at: new Date().toISOString() } : {}),
+    };
   }
 
-  // Plate is kept out of the public listing row (see 0037).
-  const { error: privateError } = await admin
-    .from("car_private")
-    .upsert({ car_id: carId, registration_number: registrationNumber || null });
-  if (privateError) {
-    return { error: privateError.message };
+  const wasApproved = car.status === "approved" || car.status === "paused";
+  const writePrivate = () =>
+    admin
+      .from("car_private")
+      // The plate is kept out of the public listing row (see 0037).
+      .upsert({ car_id: carId, registration_number: registrationNumber || null, ...documentUpdate });
+  const writeCar = () =>
+    admin
+      .from("cars")
+      .update({
+        ...fields,
+        ...(wasApproved && !isAdmin ? { status: "pending", rejection_reason: null } : {}),
+      })
+      .eq("id", carId)
+      .select("status, rejection_reason")
+      .single();
+
+  // The order matters, and differs. An owner's edit sends the car back to
+  // review in the cars update, so that goes FIRST: new dates must never land
+  // while the car is still live — a save that then failed would have left a
+  // published car with dates nobody checked. An admin's edit (their own car
+  // included) keeps the status, so the expired-documents invariant (0051)
+  // fires on it and must already see the dates entered in this save:
+  // car_private goes first, and is put back if the car update fails.
+  if (!isAdmin) {
+    const { error } = await writeCar();
+    if (error) return { error: error.message };
+    const { error: privateError } = await writePrivate();
+    if (privateError) return { error: privateError.message };
+  } else {
+    const { error: privateError } = await writePrivate();
+    if (privateError) return { error: privateError.message };
+    const { data: saved, error } = await writeCar();
+    if (error) {
+      if (currentPrivate) {
+        await admin
+          .from("car_private")
+          .update({
+            registration_number: currentPrivate.registration_number,
+            insurance_valid_until: currentPrivate.insurance_valid_until,
+            inspection_valid_until: currentPrivate.inspection_valid_until,
+            rental_right_confirmed_at: currentPrivate.rental_right_confirmed_at,
+          })
+          .eq("car_id", carId);
+      }
+      return { error: error.message };
+    }
+    if (wasApproved && saved?.status === "paused" && saved.rejection_reason === DOCUMENTS_EXPIRED_REASON) {
+      revalidatePath(`/dashboard/cars/${carId}/edit`);
+      return {
+        error:
+          "Zapisano, ale auto zostało wstrzymane: data ważności OC lub przeglądu już minęła. Wpisz aktualną datę, żeby je przywrócić.",
+      };
+    }
   }
 
   revalidatePath("/dashboard");
@@ -353,9 +361,21 @@ export async function bulkSetCarStatus(
       });
       continue;
     }
-    const { error } = await supabase.from("cars").update({ status: nextStatus }).eq("id", carId);
+    if (nextStatus === "approved" && (await carDocumentsExpired(supabase, carId))) {
+      failed.push({ carId, error: "Nie można wznowić: polisa OC lub badanie techniczne wygasło. Dodaj aktualny dokument i datę w edycji auta — ogłoszenie wróci wtedy do weryfikacji." });
+      continue;
+    }
+    const { data: updated, error } = await supabase
+      .from("cars")
+      .update({ status: nextStatus })
+      .eq("id", carId)
+      .select("status")
+      .maybeSingle();
     if (error) {
       failed.push({ carId, error: error.message });
+    } else if (updated?.status !== nextStatus) {
+      // A database invariant (inactive company, expired documents) kept it paused.
+      failed.push({ carId, error: "Nie udało się wznowić ogłoszenia — sprawdź dokumenty auta." });
     } else {
       succeeded.push(carId);
     }
@@ -388,9 +408,22 @@ export async function toggleCarPause(carId: string): Promise<{ error: string | n
         "Twoja wypożyczalnia nie jest w tej chwili aktywna w GoMambo — auta wrócą do katalogu po weryfikacji.",
     };
   }
-  const { error } = await supabase.from("cars").update({ status: nextStatus }).eq("id", carId);
+  if (nextStatus === "approved" && (await carDocumentsExpired(supabase, carId))) {
+    return { error: "Nie można wznowić: polisa OC lub badanie techniczne wygasło. Dodaj aktualny dokument i datę w edycji auta — ogłoszenie wróci wtedy do weryfikacji." };
+  }
+  const { data: updated, error } = await supabase
+    .from("cars")
+    .update({ status: nextStatus })
+    .eq("id", carId)
+    .select("status")
+    .maybeSingle();
   if (error) {
     return { error: error.message };
+  }
+  // Read back: the invariants in enforce_car_update_rules can keep the car
+  // paused without an error, and "resumed" must not be reported then.
+  if (updated?.status !== nextStatus) {
+    return { error: "Nie udało się wznowić ogłoszenia — sprawdź dokumenty auta." };
   }
 
   revalidatePath("/dashboard");

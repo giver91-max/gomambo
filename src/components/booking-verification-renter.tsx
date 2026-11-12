@@ -5,6 +5,7 @@ import { SelfieCapture } from "@/components/selfie-capture";
 import { submitBookingVerificationSelfie } from "@/app/dashboard/rentals/verification-actions";
 import { Button } from "@/components/ui/button";
 import type { BookingVerificationStatus } from "@/lib/booking-verification";
+import { BIOMETRIC_CONSENT_TEXT } from "@/lib/terms";
 
 /**
  * The renter's side of the pre-rental check. Deliberately blunt about why it
@@ -91,10 +92,13 @@ export function BookingVerificationRenter({
           onChange={(e) => setConsent(e.target.checked)}
           className="mt-0.5"
         />
-        <span>
-          Zgadzam się, aby osoba wydająca mi auto zobaczyła to selfie oraz zdjęcia mojego prawa
-          jazdy — po to, by potwierdzić, że to ja odbieram auto i że prawo jazdy jest ważne.
-          Dostęp kończy się w chwili potwierdzenia.
+        <span className="space-y-1">
+          <span className="block">
+            Zgadzam się, aby osoba wydająca mi auto zobaczyła to selfie oraz zdjęcia mojego prawa
+            jazdy — po to, by potwierdzić, że to ja odbieram auto i że prawo jazdy jest ważne.
+            Dostęp kończy się w chwili potwierdzenia.
+          </span>
+          <span className="block">{BIOMETRIC_CONSENT_TEXT}</span>
         </span>
       </label>
       {capturing ? (
