@@ -6,18 +6,19 @@ import {
   declareBankTransfer,
 } from "@/app/dashboard/rentals/payment-actions";
 import { Button } from "@/components/ui/button";
+import { DEPOSIT_REQUEST_LEAD_DAYS, formatZl } from "@/lib/deposit";
 
 export function PayBookingButton({
   bookingId,
   depositAmount,
+  depositFee,
 }: {
   bookingId: string;
-  // A wire transfer leaves no card on file, so there is nothing to place the
-  // security-deposit hold on — the renter would drive off with zero
-  // collateral. Rafał's call: don't offer the transfer for such cars at all.
-  depositAmount: number | null;
+  // Only to tell the renter what comes later: the deposit is never part of
+  // this payment, so both ways of paying the rental stay open.
+  depositAmount: number;
+  depositFee: number;
 }) {
-  const requiresCard = !!depositAmount && depositAmount > 0;
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -40,23 +41,25 @@ export function PayBookingButton({
         >
           {isPending ? "Chwileczkę…" : "Zapłać kartą lub BLIK-iem"}
         </Button>
-        {!requiresCard && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => pay(() => declareBankTransfer(bookingId))}
-            disabled={isPending}
-          >
-            Zapłacę przelewem
-          </Button>
-        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => pay(() => declareBankTransfer(bookingId))}
+          disabled={isPending}
+        >
+          Zapłacę przelewem
+        </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        {requiresCard
-          ? `To auto ma kaucję ${Math.round(depositAmount!)} zł, którą blokujemy na karcie — dlatego ten wynajem opłacasz kartą lub BLIK-iem. Kaucja nie jest pobierana, tylko blokowana, i wraca po zakończeniu wynajmu.`
-          : "Przy przelewie rezerwacja zostanie potwierdzona dopiero, gdy zaksięgujemy wpłatę."}
+        Przy przelewie rezerwacja zostanie potwierdzona dopiero, gdy zaksięgujemy wpłatę.
       </p>
+      {depositAmount > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Kaucję {formatZl(depositAmount)} (+{formatZl(depositFee)} opłaty za jej obsługę) wpłacisz
+          osobno, kartą lub BLIK-iem, {DEPOSIT_REQUEST_LEAD_DAYS} dni przed odbiorem.
+        </p>
+      )}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );

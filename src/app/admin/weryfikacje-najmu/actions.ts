@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/notify-user";
 import { SITE_URL } from "@/lib/site";
 import { sendPickupInstructionsIfDue } from "@/lib/pickup-instructions";
+import { depositHoldsPickup } from "@/lib/deposit-service";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -91,12 +92,23 @@ export async function resolveBookingVerification(
   });
 
   if (booking) {
+    // An unpaid deposit holds the pickup details back too
+    // (sendPickupInstructionsIfDue), so the promise names it.
+    const depositPending = await depositHoldsPickup(admin, bookingId);
     await notifyUser({
       userId: booking.renter_id,
       type: "booking_verification_approved",
       subject: `Potwierdzone — odbierasz ${carLabel}`,
-      body: "Sprawdziliśmy wszystko i potwierdzamy Twoją rezerwację. Dane do odbioru wyślemy dzień przed terminem.",
-      emailHtml: `
+      body: depositPending
+        ? "Sprawdziliśmy wszystko i potwierdzamy Twoją tożsamość. Została jeszcze kaucja — dane do odbioru wyślemy przed terminem, gdy będzie wpłacona."
+        : "Sprawdziliśmy wszystko i potwierdzamy Twoją rezerwację. Dane do odbioru wyślemy dzień przed terminem.",
+      emailHtml: depositPending
+        ? `
+        <p>Sprawdziliśmy wszystko — Twoja tożsamość jest potwierdzona.</p>
+        <p>Została jeszcze kaucja: numer rejestracyjny, miejsce odbioru i kontakt do właściciela wyślemy przed terminem, gdy będzie wpłacona.</p>
+        <p><a href="${SITE_URL}/dashboard/rentals">Wpłać kaucję →</a></p>
+      `
+        : `
         <p>Sprawdziliśmy wszystko — Twoja rezerwacja jest potwierdzona.</p>
         <p>Numer rejestracyjny, miejsce odbioru i kontakt do właściciela wyślemy dzień przed terminem.</p>
         <p><a href="${SITE_URL}/dashboard/rentals">Zobacz rezerwację →</a></p>

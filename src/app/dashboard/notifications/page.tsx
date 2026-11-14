@@ -15,11 +15,16 @@ const systemTypeLabel: Record<AdminNotification["type"], string> = {
   new_referral: "Rejestracja z polecenia",
   commission_fallback: "Prowizja: naliczono stawkę domyślną",
   refund_failed: "Zwrot w Stripe nie powiódł się",
-  deposit_release_failed: "Nie zwolniono kaucji",
+  deposit_release_failed: "Nie zwolniono kaucji (dawny system)",
   bank_transfer_declared: "Zadeklarowany przelew",
   damage_reported: "Zgłoszenie do wynajmu",
   booking_verification_escalated: "Weryfikacja przed wynajmem",
   new_partner_pending: "Nowa wypożyczalnia do weryfikacji",
+  deposit_refund_failed: "Zwrot kaucji nie powiódł się",
+  deposit_transfer_failed: "Przelew zatrzymanej kaucji nie powiódł się",
+  deposit_overdue: "Kaucja: przekroczony termin",
+  deposit_objection: "Sprzeciw wobec zatrzymania kaucji",
+  payment_disputed: "Reklamacja płatności w banku",
 };
 
 const personalTypeLabel: Record<Notification["type"], string> = {
@@ -32,7 +37,7 @@ const personalTypeLabel: Record<Notification["type"], string> = {
   identity_verification_approved: "Tożsamość zweryfikowana",
   identity_verification_rejected: "Weryfikacja tożsamości odrzucona",
   booking_paid: "Płatność za wynajem otrzymana",
-  deposit_captured: "Kaucja zatrzymana",
+  deposit_captured: "Kaucja zatrzymana lub rozliczona",
   booking_confirmed: "Nowa rezerwacja potwierdzona",
   extra_charge_requested: "Prośba o dodatkową opłatę",
   booking_extended: "Wynajem przedłużony",
@@ -41,6 +46,12 @@ const personalTypeLabel: Record<Notification["type"], string> = {
   booking_verification_requested: "Potwierdź tożsamość przed odbiorem",
   booking_verification_pending_owner: "Najemca czeka na Twoje potwierdzenie",
   booking_verification_approved: "Tożsamość potwierdzona",
+  deposit_requested: "Wpłać kaucję",
+  deposit_paid: "Kaucja wpłacona",
+  deposit_review: "Rozliczenie kaucji",
+  deposit_refunded: "Zwrot kaucji",
+  deposit_overdue: "Kaucja niewpłacona",
+  deposit_objection: "Sprzeciw wobec zatrzymania kaucji",
 };
 
 type FeedItem = {

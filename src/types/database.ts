@@ -183,7 +183,6 @@ export type Favorite = {
 
 export type BookingStatus = "requested" | "accepted" | "declined" | "cancelled" | "completed";
 export type PaymentStatus = "unpaid" | "paid" | "refunded" | "partially_refunded" | "failed";
-export type DepositStatus = "not_required" | "held" | "captured" | "released" | "failed";
 
 // Stripe Checkout, or a bank transfer an admin confirms by hand.
 export type PaymentMethod = "stripe" | "bank_transfer";
@@ -205,12 +204,96 @@ export type Booking = {
   stripe_checkout_session_id: string | null;
   payment_status: PaymentStatus;
   payment_method: PaymentMethod;
+  // The deposit and the renter's fee for handling it, both pinned when the
+  // booking is made (0052) so a later change to the listing can't move them.
+  // The money itself lives in booking_deposits. The old manual-capture
+  // columns (deposit_status, stripe_deposit_payment_intent_id) are still in
+  // the table until a cleanup migration drops them, but nothing reads them.
   deposit_amount: number | null;
-  stripe_deposit_payment_intent_id: string | null;
-  deposit_status: DepositStatus;
+  deposit_fee_amount: number | null;
   created_at: string;
   updated_at: string;
   pickup_instructions_sent_at: string | null;
+};
+
+// The security deposit since 0052: a real payment on GoMambo's Stripe
+// balance, one row per booking, written only by the service role. See
+// src/lib/deposit.ts for the rules and deposit-service.ts for the moves.
+export type DepositState =
+  | "requested"
+  | "processing"
+  | "paid"
+  | "in_review"
+  | "retention_pending"
+  | "retention_objected"
+  | "transferring"
+  | "transfer_failed"
+  | "settled"
+  | "voided"
+  | "disputed";
+
+export type DepositDecision =
+  | "vehicle_ok"
+  | "auto"
+  | "retained"
+  | "cancelled"
+  | "late_payment"
+  | "admin";
+
+export type DepositRefundStatus = "pending" | "succeeded" | "failed";
+
+export type BookingDeposit = {
+  booking_id: string;
+  amount: number;
+  fee_amount: number;
+  status: DepositState;
+  requested_at: string;
+  due_at: string | null;
+  reminded_at: string | null;
+  overdue_notified_at: string | null;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_charge_id: string | null;
+  payment_method_type: string | null;
+  paid_amount: number | null;
+  paid_at: string | null;
+  review_started_at: string | null;
+  review_deadline: string | null;
+  decision: DepositDecision | null;
+  decided_at: string | null;
+  decided_by: string | null;
+  // Whether the fee comes back with the deposit, recorded by a cancellation
+  // before it flips the booking's status; null when the booking was never
+  // cancelled through the app.
+  cancel_fee_refund: boolean | null;
+  retained_amount: number | null;
+  retention_reason: string | null;
+  retained_at: string | null;
+  objection_deadline: string | null;
+  objected_at: string | null;
+  objection_comment: string | null;
+  transfer_amount: number | null;
+  stripe_transfer_id: string | null;
+  transfer_attempts: number;
+  transfer_claimed_at: string | null;
+  transferred_at: string | null;
+  transfer_failure_reason: string | null;
+  stripe_transfer_reversal_id: string | null;
+  transfer_reversed_at: string | null;
+  refund_amount: number;
+  refund_status: DepositRefundStatus | null;
+  stripe_refund_id: string | null;
+  refund_attempts: number;
+  refund_requested_at: string | null;
+  refunded_at: string | null;
+  refund_failure_reason: string | null;
+  // Lease of the server call sending a refund right now (pushDepositRefund).
+  refund_lock_until: string | null;
+  stripe_dispute_id: string | null;
+  disputed_at: string | null;
+  hold_alerted_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type BookingExtraChargeStatus = "requested" | "paid" | "cancelled";
@@ -314,11 +397,17 @@ export type AdminNotification = {
     | "new_referral"
     | "commission_fallback"
     | "refund_failed"
+    // Only on rows written before 0052 — the manual-capture deposit is gone.
     | "deposit_release_failed"
     | "bank_transfer_declared"
     | "damage_reported"
     | "booking_verification_escalated"
-    | "new_partner_pending";
+    | "new_partner_pending"
+    | "deposit_refund_failed"
+    | "deposit_transfer_failed"
+    | "deposit_overdue"
+    | "deposit_objection"
+    | "payment_disputed";
   body: string;
   link: string | null;
   created_at: string;
@@ -431,7 +520,14 @@ export type NotificationType =
   | "booking_verification_approved"
   | "booking_verification_pending_owner"
   // An OC policy or inspection about to run out, or the listing paused because it did (0051).
-  | "car_documents";
+  | "car_documents"
+  // The security deposit (0052). Keeping part of it still uses deposit_captured.
+  | "deposit_requested"
+  | "deposit_paid"
+  | "deposit_review"
+  | "deposit_refunded"
+  | "deposit_overdue"
+  | "deposit_objection";
 
 export type DamageReportStatus = "open" | "resolved";
 
@@ -716,6 +812,20 @@ export type Database = {
             columns: ["car_id"];
             isOneToOne: false;
             referencedRelation: "cars";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      booking_deposits: {
+        Row: BookingDeposit;
+        Insert: Partial<BookingDeposit> & { booking_id: string; amount: number };
+        Update: Partial<BookingDeposit>;
+        Relationships: [
+          {
+            foreignKeyName: "booking_deposits_booking_id_fkey";
+            columns: ["booking_id"];
+            isOneToOne: true;
+            referencedRelation: "bookings";
             referencedColumns: ["id"];
           },
         ];

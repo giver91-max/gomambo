@@ -10,6 +10,7 @@ import { hasOverlappingBooking } from "@/lib/booking-availability";
 import { notifyUser } from "@/lib/notify-user";
 import { escapeHtml } from "@/lib/html";
 import { SITE_URL } from "@/lib/site";
+import { depositFee, roundPln } from "@/lib/deposit";
 
 export type InquiryState = { error: string | null; success?: boolean };
 
@@ -60,7 +61,7 @@ export async function sendInquiry(
   const { data: car } = await supabase
     .from("cars")
     .select(
-      "brand, model, year, city, owner_id, price_per_day, price_per_month, instant_book, partner_id"
+      "brand, model, year, city, owner_id, price_per_day, price_per_month, instant_book, partner_id, security_deposit_amount"
     )
     .eq("id", carId)
     .eq("status", "approved")
@@ -100,6 +101,17 @@ export async function sendInquiry(
     rentalTotal,
     await getOwnerCommissionRate(car.owner_id)
   );
+  // The deposit and the fee for handling it are locked the same way and for
+  // the same reason: the renter was shown both on the car page before
+  // booking, and an owner adding or raising a deposit afterwards must not
+  // change what this renter is asked for. "No deposit" is stored as 0, not
+  // null — null means a booking from before 0052, which falls back to the
+  // car's current deposit (bookingDepositAmounts).
+  const depositAmount =
+    car.security_deposit_amount !== null && Number(car.security_deposit_amount) > 0
+      ? roundPln(Number(car.security_deposit_amount))
+      : 0;
+  const depositFeeAmount = depositFee(depositAmount);
 
   // The message thread FIRST, and the booking only once it exists.
   //
@@ -133,6 +145,8 @@ export async function sendInquiry(
     status: car.instant_book ? "accepted" : "requested",
     total_price: gross,
     platform_fee_amount: commission,
+    deposit_amount: depositAmount,
+    deposit_fee_amount: depositFeeAmount,
   });
   if (bookingError) {
     return { error: bookingError.message };

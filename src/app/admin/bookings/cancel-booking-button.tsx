@@ -18,11 +18,12 @@ import {
 
 export function CancelBookingButton({ bookingId }: { bookingId: string }) {
   const [open, setOpen] = useState(false);
+  const [refundDepositFee, setRefundDepositFee] = useState(true);
   const [isPending, startTransition] = useTransition();
 
   function handleConfirm() {
     startTransition(async () => {
-      const result = await adminCancelBooking(bookingId);
+      const result = await adminCancelBooking(bookingId, refundDepositFee);
       setOpen(false);
       if (result?.error) {
         // A toast, not local state: the action revalidates /admin/bookings,
@@ -43,10 +44,22 @@ export function CancelBookingButton({ bookingId }: { bookingId: string }) {
         <AlertDialogHeader>
           <AlertDialogTitle>Anulować tę rezerwację?</AlertDialogTitle>
           <AlertDialogDescription>
-            Zwolni zablokowaną kaucję (jeśli jest) i zwróci opłatę za wynajem, o ile rezerwacja
-            jest jeszcze w oknie darmowego anulowania. Obie strony zostaną powiadomione.
+            Zwróci wpłaconą kaucję (jeśli jest) i opłatę za wynajem, o ile rezerwacja jest
+            jeszcze w oknie darmowego anulowania. Obie strony zostaną powiadomione.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4"
+            checked={refundDepositFee}
+            onChange={(e) => setRefundDepositFee(e.target.checked)}
+          />
+          <span>
+            Zwróć też opłatę za obsługę kaucji — odznacz, jeśli anulowanie wynika z winy
+            najemcy.
+          </span>
+        </label>
         <AlertDialogFooter>
           <AlertDialogCancel>Wróć</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={handleConfirm} disabled={isPending}>

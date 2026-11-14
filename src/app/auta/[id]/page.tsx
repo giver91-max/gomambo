@@ -18,6 +18,7 @@ import { getVerificationStatus } from "@/lib/verification-gate";
 import { getOwnerCommissionRate } from "@/lib/commission";
 import { isMaintenanceMode } from "@/lib/maintenance";
 import { applyCommission } from "@/lib/pricing";
+import { DEPOSIT_REQUEST_LEAD_DAYS, DEPOSIT_REVIEW_DAYS, depositFee, formatZl } from "@/lib/deposit";
 import type { IdentityVerificationStatus } from "@/types/database";
 import {
   CANCELLATION_POLICY_DESCRIPTIONS,
@@ -339,10 +340,19 @@ export default async function CarDetailPage({
               {FUEL_POLICY_DESCRIPTIONS[car.fuel_policy]}
             </p>
           )}
-          {car.security_deposit_amount && (
+          {/* Shown before booking on purpose: the fee is pinned on the
+              booking when it is made, so the renter must see it here. */}
+          {car.security_deposit_amount !== null && Number(car.security_deposit_amount) > 0 && (
             <p className="text-sm text-muted-foreground">
-              Kaucja: {Number(car.security_deposit_amount).toFixed(2)} zł — blokowana na
-              karcie przy płatności, zwalniana po zakończeniu wynajmu.
+              Kaucja: {formatZl(Number(car.security_deposit_amount))} (zwrotna) +{" "}
+              {formatZl(depositFee(Number(car.security_deposit_amount)))} opłaty za obsługę kaucji.
+              Płacisz ją kartą lub BLIK-iem {DEPOSIT_REQUEST_LEAD_DAYS} dni przed odbiorem.{" "}
+              {formatZl(Number(car.security_deposit_amount))} wraca do Ciebie w całości po zwrocie
+              auta: zwrot zlecamy od razu, gdy właściciel potwierdzi, że auto jest w porządku, a
+              najpóźniej {DEPOSIT_REVIEW_DAYS + 1} dni po zakończeniu wynajmu, jeśli nie zgłosi
+              szkody (BLIK zwykle do 2 godzin, karta do 10 dni roboczych). Opłata za obsługę kaucji
+              jest bezzwrotna — oddajemy ją tylko wtedy, gdy rezerwację odwoła właściciel albo
+              GoMambo.
             </p>
           )}
           {isOwner ? (
@@ -371,6 +381,9 @@ export default async function CarDetailPage({
               pricePerDay={Number(car.price_per_day)}
               pricePerMonth={car.price_per_month ? Number(car.price_per_month) : null}
               commissionRate={commissionRate}
+              depositAmount={
+                car.security_deposit_amount !== null ? Number(car.security_deposit_amount) : null
+              }
               party={{ partnerName: partner?.trade_name ?? null, ownerName }}
             />
           )}

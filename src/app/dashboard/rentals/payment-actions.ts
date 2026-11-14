@@ -6,102 +6,26 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { applyCommission, calculateBookingPrice } from "@/lib/pricing";
 import { hasOverlappingBooking } from "@/lib/booking-availability";
-import { addDays, toISODate } from "@/lib/calendar";
+import { addDays, todayInPoland, toISODate } from "@/lib/calendar";
 import {
-  createDepositCheckoutSession,
+  createDepositPaymentSession,
   createExtraChargeCheckoutSession,
   createRentalCheckoutSession,
   expireCheckoutSession,
-  getCheckoutSessionPayment,
   refundCheckoutSession,
 } from "@/lib/stripe";
+import { settlePreviousSession } from "@/lib/checkout-session-state";
 import { getOwnerCommissionRate } from "@/lib/commission";
 import { reportMoneyFailure } from "@/lib/money-alerts";
 import { notifyUser } from "@/lib/notify-user";
 import { SITE_URL } from "@/lib/site";
-import type { BookingStatus } from "@/types/database";
-
-type PreviousSessionState =
-  | { kind: "clear" }
-  | {
-      kind: "paid";
-      sessionId: string;
-      amountTotalPln: number | null;
-      applicationFeePln: number | null;
-    }
-  | { kind: "blocked"; error: string };
-
-function sessionWasPaid(data: {
-  paymentStatus: string | null;
-  paymentIntentStatus: string | null;
-}): boolean {
-  return data.paymentStatus === "paid" || data.paymentIntentStatus === "succeeded";
-}
-
-/**
- * A Checkout Session stays payable for ~24h, so before replacing one we have
- * to know what became of it. Fails CLOSED on purpose: when Stripe can't tell
- * us, we refuse to create a second session rather than leave two of them
- * payable — that is precisely how a renter ends up charged twice.
- */
-async function settlePreviousSession(sessionId: string | null): Promise<PreviousSessionState> {
-  if (!sessionId) return { kind: "clear" };
-
-  const previous = await getCheckoutSessionPayment(sessionId);
-  if (!previous.ok) {
-    // Stripe no longer knows this session (e.g. a test/live key swap): it can
-    // never be paid, so there is nothing left to guard against.
-    if (previous.code === "resource_missing") return { kind: "clear" };
-    return {
-      kind: "blocked",
-      error: "Nie udało się zweryfikować poprzedniej płatności. Spróbuj ponownie za chwilę.",
-    };
-  }
-
-  if (sessionWasPaid(previous.data)) {
-    return {
-      kind: "paid",
-      sessionId,
-      amountTotalPln: previous.data.amountTotalPln,
-      applicationFeePln: previous.data.applicationFeePln,
-    };
-  }
-
-  if (previous.data.status === "open") {
-    const expired = await expireCheckoutSession(sessionId);
-    if (expired.ok) return { kind: "clear" };
-    // Stripe only refuses to expire a session that stopped being open — most
-    // likely it was paid in the moment between these two calls.
-    const recheck = await getCheckoutSessionPayment(sessionId);
-    if (recheck.ok && sessionWasPaid(recheck.data)) {
-      return {
-        kind: "paid",
-        sessionId,
-        amountTotalPln: recheck.data.amountTotalPln,
-        applicationFeePln: recheck.data.applicationFeePln,
-      };
-    }
-    return {
-      kind: "blocked",
-      error: "Nie udało się zamknąć poprzedniej płatności. Spróbuj ponownie za chwilę.",
-    };
-  }
-
-  if (previous.data.status === "complete") {
-    // Complete but unpaid = an async method (BLIK) either still settling or
-    // already failed. Only the first is worth making the renter wait for;
-    // after a failure the session is dead and a new one is the way forward.
-    if (
-      previous.data.paymentIntentStatus === "processing" ||
-      previous.data.paymentIntentStatus === "requires_action"
-    ) {
-      return { kind: "blocked", error: "Płatność jest przetwarzana. Odśwież stronę za chwilę." };
-    }
-  }
-
-  return { kind: "clear" };
-}
-
+import { requestVerificationIfDue } from "@/lib/booking-verification";
+import {
+  handleDepositPayment,
+  requestDepositIfDue,
+  resolveProcessingDeposit,
+} from "@/lib/deposit-service";
+import type { BookingDeposit, BookingStatus } from "@/types/database";
 
 /**
  * What this booking costs, in the order of trust: the amounts locked on the
@@ -155,7 +79,7 @@ export async function createBookingCheckoutSession(
     .select(
       `id, owner_id, renter_id, status, payment_status, start_date, end_date,
        stripe_checkout_session_id, total_price, platform_fee_amount,
-       cars(brand, model, price_per_day, price_per_month, security_deposit_amount,
+       cars(brand, model, price_per_day, price_per_month,
             owner:profiles!cars_owner_id_fkey(stripe_connect_account_id, stripe_connect_onboarded))`
     )
     .eq("id", bookingId)
@@ -176,14 +100,12 @@ export async function createBookingCheckoutSession(
     model: string;
     price_per_day: number;
     price_per_month: number | null;
-    security_deposit_amount: number | null;
     owner: { stripe_connect_account_id: string | null; stripe_connect_onboarded: boolean } | null;
   } | null;
 
   if (!car?.owner?.stripe_connect_account_id || !car.owner.stripe_connect_onboarded) {
     // "Spróbuj później" was a false promise: nothing about waiting fixes
-    // this, and for a car with a deposit the transfer route is closed too,
-    // so the renter had no way forward at all and no idea why.
+    // this, so the renter had no way forward at all and no idea why.
     return {
       error:
         "Wynajmujący nie dokończył konfiguracji wypłat, więc nie możemy przyjąć płatności za to auto. Daliśmy mu znać — napisz do nas, jeśli zależy Ci na tym terminie.",
@@ -218,6 +140,10 @@ export async function createBookingCheckoutSession(
     // Only notify if this call is the one that flipped the row — a webhook
     // landing concurrently must not produce a second owner notification.
     if (healed) {
+      // Same as the webhook: a trip starting soon needs its selfie and its
+      // deposit asked for now, not at the next daily run.
+      await requestVerificationIfDue(admin, bookingId);
+      await requestDepositIfDue(admin, bookingId);
       await notifyUser({
         userId: booking.owner_id,
         type: "booking_paid",
@@ -243,27 +169,9 @@ export async function createBookingCheckoutSession(
   const ownerAccountId = car.owner.stripe_connect_account_id;
   const renterEmail = user.email ?? "";
 
-  const finalSuccessUrl = `${SITE_URL}/dashboard/rentals?payment=success`;
-  const cancelUrl = `${SITE_URL}/dashboard/rentals?payment=cancelled`;
-
-  let depositUrl: string | null = null;
-  const depositAmount = car.security_deposit_amount !== null ? Number(car.security_deposit_amount) : null;
-
-  if (depositAmount && depositAmount > 0) {
-    const depositResult = await createDepositCheckoutSession({
-      bookingId,
-      ownerStripeAccountId: ownerAccountId,
-      depositAmountPln: depositAmount,
-      renterEmail,
-      successUrl: finalSuccessUrl,
-      cancelUrl,
-    });
-    if (!depositResult.ok) {
-      return { error: depositResult.error };
-    }
-    depositUrl = depositResult.data.url;
-  }
-
+  // The deposit is not part of this payment any more: it is paid on its own,
+  // two days before pickup (payDeposit below), so the rental itself can be
+  // paid by BLIK or by transfer like any other.
   const rentalResult = await createRentalCheckoutSession({
     bookingId,
     ownerStripeAccountId: ownerAccountId,
@@ -271,15 +179,15 @@ export async function createBookingCheckoutSession(
     platformFeePln: platformFee,
     description: `Wynajem: ${car.brand} ${car.model}`,
     renterEmail,
-    successUrl: depositUrl ?? finalSuccessUrl,
-    cancelUrl,
+    successUrl: `${SITE_URL}/dashboard/rentals?payment=success`,
+    cancelUrl: `${SITE_URL}/dashboard/rentals?payment=cancelled`,
   });
   if (!rentalResult.ok) {
     return { error: rentalResult.error };
   }
 
-  // Uses the admin client only for these writes: total_price/deposit
-  // fields aren't user-editable anywhere, so there's no RLS reason to
+  // Uses the admin client only for these writes: total_price and the
+  // session id aren't user-editable anywhere, so there's no RLS reason to
   // route them through the session client, and it keeps this action
   // consistent with the rest of the money-writing code paths.
   const { error: bookingUpdateError } = await admin
@@ -292,7 +200,6 @@ export async function createBookingCheckoutSession(
       // their mind — take the booking back off the admin's transfer list
       // so nobody confirms a transfer that is never coming.
       payment_method: "stripe",
-      ...(depositAmount && depositAmount > 0 ? { deposit_amount: depositAmount } : {}),
     })
     .eq("id", bookingId);
   // Without this row the webhook can't match the payment to the booking and
@@ -313,7 +220,9 @@ export async function createBookingCheckoutSession(
  * actually arrived (src/app/admin/przelewy). The amounts are locked in now
  * so the renter and the admin are looking at the same number.
  *
- * No deposit hold is possible on this path: a card hold needs a card.
+ * Covers the rental only. A car's deposit is always paid separately through
+ * Stripe (payDeposit), two days before pickup, whichever way the rental was
+ * paid.
  */
 export async function declareBankTransfer(bookingId: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
@@ -327,7 +236,7 @@ export async function declareBankTransfer(bookingId: string): Promise<{ error: s
     .select(
       `id, owner_id, renter_id, status, payment_status, start_date, end_date,
        stripe_checkout_session_id, total_price, platform_fee_amount,
-       cars(brand, model, price_per_day, price_per_month, security_deposit_amount)`
+       cars(brand, model, price_per_day, price_per_month)`
     )
     .eq("id", bookingId)
     .single();
@@ -347,17 +256,8 @@ export async function declareBankTransfer(bookingId: string): Promise<{ error: s
     model: string;
     price_per_day: number;
     price_per_month: number | null;
-    security_deposit_amount: number | null;
   } | null;
   if (!car) return { error: "Nie znaleziono auta." };
-  // Enforced here and not only by hiding the button: a wire leaves no card
-  // to hold the deposit on, so the renter would take the car with nothing
-  // securing it.
-  if (car.security_deposit_amount !== null && Number(car.security_deposit_amount) > 0) {
-    return {
-      error: `To auto ma kaucję ${Math.round(Number(car.security_deposit_amount))} zł blokowaną na karcie — ten wynajem opłać kartą lub BLIK-iem.`,
-    };
-  }
 
   const { commission, gross } = await resolveBookingAmounts(booking, car, bookingId);
 
@@ -388,6 +288,8 @@ export async function declareBankTransfer(bookingId: string): Promise<{ error: s
       .select("id")
       .single();
     if (healed) {
+      await requestVerificationIfDue(admin, bookingId);
+      await requestDepositIfDue(admin, bookingId);
       await notifyUser({
         userId: booking.owner_id,
         type: "booking_paid",
@@ -441,6 +343,126 @@ export async function declareBankTransfer(bookingId: string): Promise<{ error: s
 
   revalidatePath("/dashboard/rentals");
   return { error: null };
+}
+
+/**
+ * The renter pays the security deposit (plus the fee for handling it) —
+ * card or BLIK, through a Checkout Session of its own. Only once it has
+ * been asked for (requestDepositIfDue, two days before pickup).
+ *
+ * Same discipline as the rental payment: the previous session is settled
+ * first and the new one is only recorded if nobody replaced it in the
+ * meantime, so a double click can never leave two payable deposit pages.
+ */
+export async function payDeposit(bookingId: string): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("id, renter_id, status, end_date, cars(brand, model, year)")
+    .eq("id", bookingId)
+    .single();
+  if (!booking || booking.renter_id !== user.id) {
+    return { error: "Nie masz dostępu do tej rezerwacji." };
+  }
+  if (booking.status !== "accepted") {
+    return { error: "Ta rezerwacja nie jest już aktywna." };
+  }
+  // A deposit for a trip that is over secures nothing, and its fee would be
+  // paid for nothing; the daily job closes it.
+  if (booking.end_date < todayInPoland()) {
+    return { error: "Wynajem już się zakończył — kaucji nie trzeba już wpłacać." };
+  }
+
+  const admin = createAdminClient();
+  const loadDeposit = async () => {
+    const { data } = await admin
+      .from("booking_deposits")
+      .select("*")
+      .eq("booking_id", bookingId)
+      .maybeSingle();
+    return data as BookingDeposit | null;
+  };
+  let deposit = await loadDeposit();
+  if (!deposit) {
+    return { error: "O kaucję poprosimy 2 dni przed odbiorem — wtedy ją tu wpłacisz." };
+  }
+  if (deposit.status === "processing") {
+    // Normally a BLIK still settling. But Stripe does not promise the order
+    // of its events, and a payment that already failed can be parked here by
+    // a late "completed" — ask Stripe instead of turning the renter away
+    // until the daily job notices.
+    const state = await resolveProcessingDeposit(admin, deposit);
+    if (state === "paid") {
+      revalidatePath("/dashboard/rentals");
+      return { error: "Ta kaucja jest już wpłacona — właśnie ją zaksięgowaliśmy. Odśwież stronę." };
+    }
+    if (state !== "failed") {
+      return { error: "Płatność kaucji jest przetwarzana. Odśwież stronę za chwilę." };
+    }
+    deposit = await loadDeposit();
+    if (!deposit) {
+      return { error: "Stan kaucji właśnie się zmienił — odśwież stronę." };
+    }
+  }
+  if (deposit.status !== "requested") {
+    return { error: "Kaucja jest już wpłacona albo rozliczona — odśwież stronę." };
+  }
+
+  const previous = await settlePreviousSession(deposit.stripe_checkout_session_id);
+  if (previous.kind === "blocked") {
+    return { error: previous.error };
+  }
+  if (previous.kind === "paid") {
+    // Paid, but the webhook never arrived: record it now instead of asking
+    // the renter to pay a second time.
+    if (previous.paymentIntentId) {
+      await handleDepositPayment(admin, {
+        bookingId,
+        sessionId: previous.sessionId,
+        paymentIntentId: previous.paymentIntentId,
+        amountTotalPln: previous.amountTotalPln,
+      });
+    }
+    revalidatePath("/dashboard/rentals");
+    return { error: "Ta kaucja jest już wpłacona — właśnie ją zaksięgowaliśmy. Odśwież stronę." };
+  }
+
+  const car = booking.cars as unknown as { brand: string; model: string; year: number } | null;
+  const session = await createDepositPaymentSession({
+    bookingId,
+    depositPln: Number(deposit.amount),
+    feePln: Number(deposit.fee_amount),
+    carLabel: car ? `${car.brand} ${car.model} (${car.year})` : "auto",
+    renterEmail: user.email ?? "",
+    successUrl: `${SITE_URL}/dashboard/rentals?deposit=success`,
+    cancelUrl: `${SITE_URL}/dashboard/rentals?deposit=cancelled`,
+  });
+  if (!session.ok) {
+    return { error: session.error };
+  }
+
+  // Compare-and-set on the session the renter replaced: if another click
+  // (or a payment) got here first, this new session must not stay payable.
+  let record = admin
+    .from("booking_deposits")
+    .update({ stripe_checkout_session_id: session.data.sessionId })
+    .eq("booking_id", bookingId)
+    .eq("status", "requested");
+  record = deposit.stripe_checkout_session_id
+    ? record.eq("stripe_checkout_session_id", deposit.stripe_checkout_session_id)
+    : record.is("stripe_checkout_session_id", null);
+  const { data: recorded } = await record.select("booking_id").maybeSingle();
+  if (!recorded) {
+    await expireCheckoutSession(session.data.sessionId);
+    return { error: "Stan kaucji właśnie się zmienił — odśwież stronę i spróbuj ponownie." };
+  }
+
+  redirect(session.data.url);
 }
 
 export async function declareExtraChargeBankTransfer(
@@ -585,6 +607,23 @@ export async function requestBookingExtension(
   }
   if (newEndDate <= booking.end_date) {
     return { error: "Nowa data zakończenia musi być późniejsza niż obecna." };
+  }
+  // Up to the last day of the trip, never after: once it has ended the
+  // owner is checking the car and the deposit is being settled, and moving
+  // end_date then would reopen a rental that is already being closed.
+  if (todayInPoland() > booking.end_date) {
+    return { error: "Wynajem już się zakończył — nie można go przedłużyć. Napisz do nas, jeśli potrzebujesz auta dłużej." };
+  }
+  const { data: extensionDeposit } = await createAdminClient()
+    .from("booking_deposits")
+    .select("status")
+    .eq("booking_id", bookingId)
+    .maybeSingle();
+  if (
+    extensionDeposit &&
+    !["requested", "processing", "paid"].includes(extensionDeposit.status)
+  ) {
+    return { error: "Wynajem jest już rozliczany — nie można go przedłużyć." };
   }
 
   const deltaStart = toISODate(addDays(new Date(`${booking.end_date}T00:00:00`), 1));

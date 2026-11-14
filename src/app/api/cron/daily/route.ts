@@ -15,6 +15,30 @@ import {
   requestBookingVerification,
   VERIFICATION_LEAD_DAYS,
 } from "@/lib/booking-verification";
+import {
+  reconcileDeposits,
+  runDepositAutoRefunds,
+  runDepositOverdue,
+  runDepositReminders,
+  runDepositRequests,
+  runDepositReviewStart,
+  runRetentionTransfers,
+} from "@/lib/deposit-service";
+
+/**
+ * One deposit step, isolated: a Stripe or database error in one of them must
+ * not stop the pickup mails, the verifications or the other money steps.
+ * Each step processes a bounded batch (see deposit-service.ts) and whatever
+ * is left is picked up by the next run.
+ */
+async function depositStep<T>(name: string, step: () => Promise<T>): Promise<T | "error"> {
+  try {
+    return await step();
+  } catch (error) {
+    console.error(`[cron] deposit step ${name} failed`, error);
+    return "error";
+  }
+}
 
 // Vercel calls this on the schedule in vercel.json and signs the call with
 // CRON_SECRET. Fail closed: with no secret configured, anyone who guesses
@@ -40,6 +64,10 @@ export async function GET(request: Request) {
 
   const today = toISODate(new Date());
   const tomorrow = toISODate(addDays(new Date(), 1));
+
+  // First, so a trip that became due today has its deposit asked for in the
+  // same run as its selfie (the two are requested together).
+  const depositsRequested = await depositStep("requests", () => runDepositRequests(admin));
 
   // The mail body, the withholding rule and the one-send claim all live in
   // sendPickupInstructionsIfDue, because an approval landing after this job
@@ -72,6 +100,21 @@ export async function GET(request: Request) {
   }
 
   const verificationResult = await runBookingVerifications(admin, today);
+
+  // The deposit's day: reminders before pickup, the alarm on pickup day,
+  // the owner's review window after return, the automatic refund when it
+  // closes, the kept amounts whose objection window closed, and the safety
+  // net for anything a webhook or a click left halfway.
+  const deposits = {
+    requested: depositsRequested,
+    reminded: await depositStep("reminders", () => runDepositReminders(admin)),
+    overdue: await depositStep("overdue", () => runDepositOverdue(admin)),
+    reviewsStarted: await depositStep("review-start", () => runDepositReviewStart(admin)),
+    autoRefunded: await depositStep("auto-refunds", () => runDepositAutoRefunds(admin)),
+    retentionsTransferred: await depositStep("retention-transfers", () => runRetentionTransfers(admin)),
+    reconciled: await depositStep("reconcile", () => reconcileDeposits(admin)),
+  };
+
   const expiredRequests = await expireStaleRequests(admin, today);
   const carDocuments = await runCarDocumentChecks(admin, today);
 
@@ -81,6 +124,7 @@ export async function GET(request: Request) {
     pickupInstructionsWithheld: withheld,
     expiredRequests,
     ...verificationResult,
+    deposits,
     carDocuments,
   });
 }

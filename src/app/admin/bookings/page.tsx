@@ -2,8 +2,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/back-button";
+import Link from "next/link";
 import { CancelBookingButton } from "./cancel-booking-button";
-import type { BookingStatus, DepositStatus, PaymentStatus } from "@/types/database";
+import { DEPOSIT_STATE_LABELS, formatZl } from "@/lib/deposit";
+import type { BookingStatus, DepositState, PaymentStatus } from "@/types/database";
 
 const statusLabel: Record<BookingStatus, string> = {
   requested: "Oczekuje",
@@ -29,14 +31,6 @@ const paymentLabel: Record<PaymentStatus, string> = {
   failed: "Płatność nieudana",
 };
 
-const depositLabel: Record<DepositStatus, string> = {
-  not_required: "Bez kaucji",
-  held: "Zablokowana",
-  captured: "Zatrzymana",
-  released: "Zwolniona",
-  failed: "Nieudana",
-};
-
 // Admin can't read arbitrary bookings through the session client —
 // bookings_select_participant RLS is owner/renter-only, with no is_admin()
 // bypass — so this reads through the service-role client, same as every
@@ -47,7 +41,8 @@ export default async function AdminBookingsPage() {
   const { data: rawBookings } = await admin
     .from("bookings")
     .select(
-      `id, start_date, end_date, status, payment_status, deposit_status, total_price, deposit_amount, created_at,
+      `id, start_date, end_date, status, payment_status, total_price, deposit_amount, created_at,
+       booking_deposits(status),
        cars(id, brand, model),
        owner:profiles!bookings_owner_id_fkey(full_name),
        renter:profiles!bookings_renter_id_fkey(full_name)`
@@ -61,7 +56,9 @@ export default async function AdminBookingsPage() {
     end_date: string;
     status: BookingStatus;
     payment_status: PaymentStatus;
-    deposit_status: DepositStatus;
+    // One-to-one (booking_id is the key), so PostgREST returns an object;
+    // read defensively in case it ever comes back as a one-element list.
+    booking_deposits: { status: DepositState } | { status: DepositState }[] | null;
     total_price: number | null;
     deposit_amount: number | null;
     created_at: string;
@@ -99,8 +96,20 @@ export default async function AdminBookingsPage() {
                 <p>
                   Płatność: {paymentLabel[booking.payment_status]}
                   {booking.total_price ? ` (${Number(booking.total_price).toFixed(2)} zł)` : ""}
-                  {" · "}Kaucja: {depositLabel[booking.deposit_status]}
-                  {booking.deposit_amount ? ` (${Number(booking.deposit_amount).toFixed(2)} zł)` : ""}
+                  {" · "}Kaucja:{" "}
+                  {booking.deposit_amount && Number(booking.deposit_amount) > 0 ? (
+                    <Link href="/admin/kaucje" className="text-primary hover:underline">
+                      {formatZl(Number(booking.deposit_amount))} —{" "}
+                      {(() => {
+                        const row = Array.isArray(booking.booking_deposits)
+                          ? booking.booking_deposits[0]
+                          : booking.booking_deposits;
+                        return row ? DEPOSIT_STATE_LABELS[row.status] : "jeszcze nie pobrana";
+                      })()}
+                    </Link>
+                  ) : (
+                    "brak"
+                  )}
                 </p>
                 {(booking.status === "requested" || booking.status === "accepted") && (
                   <CancelBookingButton bookingId={booking.id} />

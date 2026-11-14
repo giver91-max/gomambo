@@ -9,7 +9,16 @@ export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 // and returns a typed failure instead of throwing, so pages/actions that
 // call into Stripe before the keys are configured degrade to "payments
 // unavailable" instead of crashing.
-const stripe = SECRET_KEY ? new Stripe(SECRET_KEY) : null;
+//
+// Every call is bounded: 20 s per attempt and one retry (the SDK reuses the
+// idempotency key on it), so one call takes at most about 41 s instead of the
+// SDK's default of 3 × 80 s. The deposit refund lease (REFUND_LEASE_MS in
+// src/lib/deposit-service.ts) is sized against this budget.
+const STRIPE_TIMEOUT_MS = 20_000;
+const STRIPE_MAX_NETWORK_RETRIES = 1;
+const stripe = SECRET_KEY
+  ? new Stripe(SECRET_KEY, { timeout: STRIPE_TIMEOUT_MS, maxNetworkRetries: STRIPE_MAX_NETWORK_RETRIES })
+  : null;
 
 export function isStripeConfigured(): boolean {
   return stripe !== null;
@@ -283,7 +292,7 @@ export async function expireCheckoutSession(
  */
 export type SessionOwnership = {
   bookingId: string;
-  kind: "trip_extension" | null;
+  kind: "trip_extension" | "security_deposit" | null;
   extensionId?: string;
 };
 
@@ -317,6 +326,16 @@ export async function refundCheckoutSession(
       return {
         ok: false,
         error: `sesja ${sessionId} nie należy do tej rezerwacji (dane w Stripe się nie zgadzają) — zwrot wstrzymany, sprawdź to ręcznie`,
+      };
+    }
+    // A deposit sits on the platform balance, not on the owner's account, so
+    // the reverse_transfer below would be wrong for it — and a refund that
+    // should be partial would be full. Deposits go back only through
+    // refundDepositPayment.
+    if (session.metadata?.kind === DEPOSIT_KIND) {
+      return {
+        ok: false,
+        error: `sesja ${sessionId} to kaucja — zwrot kaucji idzie osobną ścieżką, sprawdź to ręcznie`,
       };
     }
     if (!session.payment_intent) return { ok: false, error: "Brak płatności do zwrotu." };
@@ -357,93 +376,314 @@ export async function refundCheckoutSession(
   }
 }
 
-// --- Security deposit (card-only manual-capture hold) --------------------
+// --- Security deposit (charged on the platform, settled after return) ----
 //
-// BLIK — the dominant PL payment method — is single-use and doesn't
-// support delayed capture, so the deposit can't share a Checkout Session
-// with the rental fee above (which allows BLIK): it's a second, separate
-// Checkout Session restricted to card, with the underlying PaymentIntent
-// set to manual capture. Using Checkout here too (instead of a raw
-// PaymentIntent) keeps both charges on the same "redirect to a
-// Stripe-hosted page" flow — no custom Stripe Elements form to build.
-// Known v1 gap: a manual-capture hold on a destination charge only lasts
-// Stripe's standard ~7 days (request_extended_authorization errors out
-// entirely on this account type instead of degrading gracefully, so it's
-// deliberately not used here) — a deposit hold on a longer rental can
-// expire before the trip ends. Not solved here, just not pretended away.
+// The custody model lives here and in src/lib/deposit-service.ts, nowhere
+// else. Today the deposit is an ordinary, automatically captured payment on
+// GoMambo's own balance: no transfer_data, no application fee. That is what
+// lets it be paid with BLIK (which cannot be authorised now and captured
+// later) and what lets it be returned without pulling money back from an
+// owner who may already have been paid out. The kept part of a deposit goes
+// to the owner afterwards as a separate transfer tied to this charge.
+//
+// Switching to a destination charge on the owner's account later means
+// changing createDepositPaymentSession, refundDepositPayment and
+// transferRetainedDeposit below — callers only ever say "take", "give back"
+// and "pass on", never where the money sits.
 
-// Checkout doesn't hand back the underlying PaymentIntent id synchronously
-// at session-creation time for a manual-capture session — it only exists
-// once the customer actually reaches/completes checkout. So this returns
-// just the session id/url; the webhook (checkout.session.completed, kind
-// === "security_deposit") is what resolves and stores the real
-// PaymentIntent id once Stripe has one.
-export async function createDepositCheckoutSession(params: {
+export const DEPOSIT_KIND = "security_deposit";
+export const DEPOSIT_REFUND_KIND = "security_deposit_refund";
+export const DEPOSIT_RETENTION_KIND = "security_deposit_retention";
+
+// Ties the deposit charge and any transfer of its kept part together in the
+// Stripe dashboard, and is how a retry finds a transfer it already made.
+export function depositTransferGroup(bookingId: string): string {
+  return `booking_${bookingId}`;
+}
+
+// Two hours, not Stripe's default 24: a session that stays payable for a day
+// is a second payment waiting to happen. Every new click closes the previous
+// one anyway (settlePreviousSession), so a short life costs nothing.
+const DEPOSIT_SESSION_TTL_SECONDS = 2 * 60 * 60;
+
+const toGrosze = (pln: number) => Math.round(pln * 100);
+
+export async function createDepositPaymentSession(params: {
   bookingId: string;
-  ownerStripeAccountId: string;
-  depositAmountPln: number;
+  depositPln: number;
+  feePln: number;
+  carLabel: string;
   renterEmail: string;
   successUrl: string;
   cancelUrl: string;
 }): Promise<StripeResult<{ sessionId: string; url: string }>> {
   if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
   try {
+    const metadata = { bookingId: params.bookingId, kind: DEPOSIT_KIND };
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card"],
-      customer_email: params.renterEmail,
+      payment_method_types: ["card", "blik"],
+      customer_email: params.renterEmail || undefined,
       line_items: [
         {
           price_data: {
             currency: "pln",
-            unit_amount: Math.round(params.depositAmountPln * 100),
-            product_data: { name: "Kaucja zabezpieczająca" },
+            unit_amount: toGrosze(params.depositPln),
+            product_data: { name: `Kaucja zwrotna – ${params.carLabel}` },
           },
           quantity: 1,
         },
+        ...(params.feePln > 0
+          ? [
+              {
+                price_data: {
+                  currency: "pln",
+                  unit_amount: toGrosze(params.feePln),
+                  product_data: { name: "Opłata za obsługę kaucji (bezzwrotna)" },
+                },
+                quantity: 1,
+              },
+            ]
+          : []),
       ],
+      // On the PaymentIntent as well as the session: refund, dispute and
+      // payment_intent.* events carry the intent, not the session, and this
+      // is the only way they can be told apart from a rental payment.
       payment_intent_data: {
-        capture_method: "manual",
-        transfer_data: { destination: params.ownerStripeAccountId },
+        transfer_group: depositTransferGroup(params.bookingId),
+        metadata,
       },
-      metadata: { bookingId: params.bookingId, kind: "security_deposit" },
+      metadata,
+      expires_at: Math.floor(Date.now() / 1000) + DEPOSIT_SESSION_TTL_SECONDS,
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
     });
-    if (!session.url) {
-      return { ok: false, error: "Stripe nie zwrócił adresu płatności kaucji." };
-    }
+    if (!session.url) return { ok: false, error: "Stripe nie zwrócił adresu płatności kaucji." };
     return { ok: true, data: { sessionId: session.id, url: session.url } };
   } catch (error) {
-    return failure("createDepositCheckoutSession", error);
+    return failure("createDepositPaymentSession", error);
   }
 }
 
-export async function captureDeposit(
-  paymentIntentId: string,
-  amountToCapturePln?: number
-): Promise<StripeResult<{ status: string }>> {
+/**
+ * The charge behind a deposit payment and how it was paid. The charge id is
+ * what a transfer of the kept part has to name (source_transaction), and the
+ * method decides what the renter is told about how long a refund takes.
+ */
+export async function getDepositCharge(
+  paymentIntentId: string
+): Promise<StripeResult<{ chargeId: string | null; paymentMethodType: string | null }>> {
   if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
   try {
-    const intent = await stripe.paymentIntents.capture(
-      paymentIntentId,
-      amountToCapturePln !== undefined
-        ? { amount_to_capture: Math.round(amountToCapturePln * 100) }
-        : undefined
+    const intent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["latest_charge"],
+    });
+    const charge =
+      intent.latest_charge && typeof intent.latest_charge !== "string" ? intent.latest_charge : null;
+    return {
+      ok: true,
+      data: {
+        chargeId: charge?.id ?? (typeof intent.latest_charge === "string" ? intent.latest_charge : null),
+        paymentMethodType: charge?.payment_method_details?.type ?? intent.payment_method_types?.[0] ?? null,
+      },
+    };
+  } catch (error) {
+    return failure("getDepositCharge", error);
+  }
+}
+
+export type DepositRefundSummary = {
+  /** Refunds that went through. */
+  succeededPln: number;
+  /** Refunds still on their way (BLIK can take up to two hours). */
+  inFlightPln: number;
+  /** The newest refund that failed or was cancelled, if any. */
+  lastFailure: { refundId: string; reason: string | null } | null;
+  /** True while the charge has an open dispute: Stripe refuses refunds then. */
+  disputed: boolean;
+};
+
+/**
+ * Stripe's own record of what has gone back on this payment. Every refund
+ * decision compares against this instead of trusting a stored id, because
+ * a deposit can be returned in more than one part and the events for those
+ * parts arrive in any order.
+ */
+export async function getDepositRefunds(
+  paymentIntentId: string
+): Promise<StripeResult<DepositRefundSummary>> {
+  if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
+  try {
+    const intent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["latest_charge"],
+    });
+    const charge =
+      intent.latest_charge && typeof intent.latest_charge !== "string" ? intent.latest_charge : null;
+    const refunds = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 100 });
+
+    let succeeded = 0;
+    let inFlight = 0;
+    let lastFailure: DepositRefundSummary["lastFailure"] = null;
+    let lastFailureAt = -1;
+    for (const refund of refunds.data) {
+      if (refund.status === "succeeded") succeeded += refund.amount;
+      else if (refund.status === "pending" || refund.status === "requires_action") inFlight += refund.amount;
+      else if ((refund.status === "failed" || refund.status === "canceled") && refund.created > lastFailureAt) {
+        lastFailureAt = refund.created;
+        lastFailure = { refundId: refund.id, reason: refund.failure_reason ?? refund.status };
+      }
+    }
+    return {
+      ok: true,
+      data: {
+        succeededPln: succeeded / 100,
+        inFlightPln: inFlight / 100,
+        lastFailure,
+        disputed: Boolean(charge?.disputed),
+      },
+    };
+  } catch (error) {
+    return failure("getDepositRefunds", error);
+  }
+}
+
+/**
+ * Sends `amountPln` of a deposit payment back to the renter.
+ *
+ * Refuses unless Stripe's record of the payment says it is this booking's
+ * deposit — the same second lock as sessionBelongsTo: the intent id comes
+ * from a database row, and a row is only as trustworthy as whoever wrote it.
+ * The idempotency key makes a retried call a no-op instead of a second
+ * refund; callers derive it from a counter they claim in the database.
+ */
+export async function refundDepositPayment(params: {
+  paymentIntentId: string;
+  /** Omitted: everything still refundable on the payment. */
+  amountPln?: number;
+  bookingId: string;
+  idempotencyKey: string;
+}): Promise<StripeResult<{ refundId: string; status: string | null }>> {
+  if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
+  try {
+    const intent = await stripe.paymentIntents.retrieve(params.paymentIntentId);
+    if (intent.metadata?.bookingId !== params.bookingId || intent.metadata?.kind !== DEPOSIT_KIND) {
+      console.error("[stripe] deposit refund refused: intent metadata does not match", {
+        paymentIntentId: params.paymentIntentId,
+        bookingId: params.bookingId,
+        metadata: intent.metadata,
+      });
+      return {
+        ok: false,
+        error: `płatność ${params.paymentIntentId} nie jest kaucją tej rezerwacji (dane w Stripe się nie zgadzają) — zwrot wstrzymany, sprawdź to ręcznie`,
+      };
+    }
+    const refund = await stripe.refunds.create(
+      {
+        payment_intent: params.paymentIntentId,
+        ...(params.amountPln !== undefined ? { amount: toGrosze(params.amountPln) } : {}),
+        metadata: { bookingId: params.bookingId, kind: DEPOSIT_REFUND_KIND },
+      },
+      { idempotencyKey: params.idempotencyKey }
     );
-    return { ok: true, data: { status: intent.status } };
+    return { ok: true, data: { refundId: refund.id, status: refund.status ?? null } };
   } catch (error) {
-    return failure("captureDeposit", error);
+    return failure("refundDepositPayment", error);
   }
 }
 
-export async function releaseDeposit(paymentIntentId: string): Promise<StripeResult<{ status: string }>> {
+/**
+ * Passes the kept part of a deposit to the owner's Connect account.
+ *
+ * source_transaction ties the transfer to the deposit charge, so it waits
+ * for those funds to become available instead of failing on a thin balance,
+ * and can never exceed what the renter paid. Before creating anything it
+ * looks for a transfer this booking already has: idempotency keys expire
+ * after a day, a retry by the daily job may come later than that.
+ */
+export async function transferRetainedDeposit(params: {
+  bookingId: string;
+  chargeId: string;
+  destinationAccountId: string;
+  amountPln: number;
+  idempotencyKey: string;
+}): Promise<StripeResult<{ transferId: string; alreadyExisted: boolean }>> {
   if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
   try {
-    const intent = await stripe.paymentIntents.cancel(paymentIntentId);
-    return { ok: true, data: { status: intent.status } };
+    const group = depositTransferGroup(params.bookingId);
+    const existing = await stripe.transfers.list({ transfer_group: group, limit: 10 });
+    const previous = existing.data.find(
+      (transfer) =>
+        transfer.metadata?.bookingId === params.bookingId &&
+        transfer.metadata?.kind === DEPOSIT_RETENTION_KIND
+    );
+    if (previous) {
+      return { ok: true, data: { transferId: previous.id, alreadyExisted: true } };
+    }
+    const transfer = await stripe.transfers.create(
+      {
+        amount: toGrosze(params.amountPln),
+        currency: "pln",
+        destination: params.destinationAccountId,
+        source_transaction: params.chargeId,
+        transfer_group: group,
+        metadata: { bookingId: params.bookingId, kind: DEPOSIT_RETENTION_KIND },
+      },
+      { idempotencyKey: params.idempotencyKey }
+    );
+    return { ok: true, data: { transferId: transfer.id, alreadyExisted: false } };
   } catch (error) {
-    return failure("releaseDeposit", error);
+    return failure("transferRetainedDeposit", error);
+  }
+}
+
+/**
+ * The transfer of a kept amount this booking already has, if any. A call
+ * that timed out may still have created one; before money that "failed" to
+ * reach the owner is sent to the renter instead, this is what is checked.
+ */
+export async function findRetainedDepositTransfer(
+  bookingId: string
+): Promise<StripeResult<{ transferId: string; amountPln: number } | null>> {
+  if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
+  try {
+    const existing = await stripe.transfers.list({
+      transfer_group: depositTransferGroup(bookingId),
+      limit: 10,
+    });
+    const found = existing.data.find(
+      (transfer) =>
+        transfer.metadata?.bookingId === bookingId &&
+        transfer.metadata?.kind === DEPOSIT_RETENTION_KIND
+    );
+    return {
+      ok: true,
+      data: found ? { transferId: found.id, amountPln: found.amount / 100 } : null,
+    };
+  } catch (error) {
+    return failure("findRetainedDepositTransfer", error);
+  }
+}
+
+/**
+ * Takes a transferred amount back from the owner's Connect account. Only
+ * works while the owner still has it on their Stripe balance — once paid out
+ * to their bank, Stripe refuses and it becomes a matter for a human.
+ */
+export async function reverseDepositTransfer(params: {
+  transferId: string;
+  bookingId: string;
+  idempotencyKey: string;
+}): Promise<StripeResult<{ reversalId: string }>> {
+  if (!stripe) return { ok: false, error: "Płatności nie są jeszcze skonfigurowane." };
+  try {
+    const reversal = await stripe.transfers.createReversal(
+      params.transferId,
+      { metadata: { bookingId: params.bookingId, kind: DEPOSIT_RETENTION_KIND } },
+      { idempotencyKey: params.idempotencyKey }
+    );
+    return { ok: true, data: { reversalId: reversal.id } };
+  } catch (error) {
+    return failure("reverseDepositTransfer", error);
   }
 }
 

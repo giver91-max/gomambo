@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { escapeHtml } from "@/lib/html";
+import { DEPOSIT_HELD_STATES } from "@/lib/deposit";
 import {
   carDocumentsExpired,
   DOCUMENTS_EXPIRED_REASON,
@@ -280,6 +281,23 @@ async function deleteCarCore(carId: string): Promise<{ error: string | null }> {
   if (!user) redirect("/login");
   if (!car) {
     return { error: "Nie masz dostępu do tego ogłoszenia." };
+  }
+
+  // Deleting the car deletes its bookings, and the database refuses that
+  // while a deposit is still held or owed back (0052). Asked first, so a
+  // refused delete does not leave the listing without its photos. Service
+  // role: the deposits are the renters' as much as the owner's.
+  const { data: openDeposits } = await createAdminClient()
+    .from("booking_deposits")
+    .select("booking_id, bookings!inner(car_id)")
+    .eq("bookings.car_id", carId)
+    .or(`status.in.(processing,${DEPOSIT_HELD_STATES.join(",")}),refund_status.in.(pending,failed)`)
+    .limit(1);
+  if ((openDeposits ?? []).length > 0) {
+    return {
+      error:
+        "To auto ma rezerwację z kaucją, która nie jest jeszcze rozliczona. Usuniesz je po rozliczeniu kaucji.",
+    };
   }
 
   const { data: images } = await supabase

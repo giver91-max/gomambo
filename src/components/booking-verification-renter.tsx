@@ -16,9 +16,12 @@ import { BIOMETRIC_CONSENT_TEXT } from "@/lib/terms";
 export function BookingVerificationRenter({
   bookingId,
   status,
+  depositPending = false,
 }: {
   bookingId: string;
   status: BookingVerificationStatus;
+  /** A deposit is due and not paid yet — it, too, holds the pickup details back. */
+  depositPending?: boolean;
 }) {
   const [capturing, setCapturing] = useState(false);
   const [consent, setConsent] = useState(false);
@@ -28,7 +31,9 @@ export function BookingVerificationRenter({
   if (status === "approved") {
     return (
       <p className="rounded-md border border-primary/40 bg-primary/5 p-3 text-xs">
-        ✅ Tożsamość potwierdzona — dane do odbioru wyślemy dzień przed terminem.
+        {depositPending
+          ? "✅ Tożsamość potwierdzona. Dane do odbioru wyślemy przed terminem, gdy będzie wpłacona kaucja."
+          : "✅ Tożsamość potwierdzona — dane do odbioru wyślemy dzień przed terminem."}
       </p>
     );
   }

@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { DEPOSIT_REQUEST_LEAD_DAYS, depositFee, formatZl } from "@/lib/deposit";
 
 export type RentalParty = {
   /** The rental company operating the car, when there is one. */
@@ -9,6 +10,8 @@ export type RentalParty = {
 
 export type RentalRules = {
   depositAmount: number | null;
+  /** The fee pinned on a booking; computed from the amount when absent. */
+  depositFee?: number | null;
   mileageLimitKm: number | null;
   mileageOverageFeePerKm: number | null;
 };
@@ -39,6 +42,8 @@ export function RentalLiabilityNotice({
 }) {
   const isPartner = !!party.partnerName;
   const renter = party.partnerName ?? party.ownerName;
+  const deposit = rules.depositAmount && rules.depositAmount > 0 ? rules.depositAmount : 0;
+  const fee = deposit > 0 ? (rules.depositFee ?? depositFee(deposit)) : 0;
 
   return (
     <div className="space-y-3 rounded-lg border p-4 text-sm">
@@ -69,13 +74,11 @@ export function RentalLiabilityNotice({
           takim stanie, w jakim je odebrałeś, z uwzględnieniem normalnego zużycia.
         </p>
         <ul className="list-inside list-disc space-y-1 text-muted-foreground">
-          {rules.depositAmount && rules.depositAmount > 0 ? (
+          {deposit > 0 ? (
             <li>
-              <strong className="text-foreground">
-                Kaucja {Math.round(rules.depositAmount)} zł
-              </strong>{" "}
-              — blokowana na karcie, nie pobierana. Wraca po zakończeniu wynajmu, jeśli auto jest
-              w porządku.
+              <strong className="text-foreground">Kaucja {formatZl(deposit)}</strong> — pobierana{" "}
+              {DEPOSIT_REQUEST_LEAD_DAYS} dni przed odbiorem, zwracana po zwrocie auta, jeśli jest w
+              porządku. Do kaucji doliczamy bezzwrotną opłatę za jej obsługę: {formatZl(fee)}.
             </li>
           ) : (
             <li>To auto nie ma kaucji.</li>

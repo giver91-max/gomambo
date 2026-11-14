@@ -5,13 +5,23 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/notify-user";
-import { cancelBookingWithRefund } from "@/lib/cancellation";
+import { cancelBookingWithRefund, renterRefundSentence } from "@/lib/cancellation";
+import { renterDepositSentence } from "@/lib/deposit-service";
+import { escapeHtml } from "@/lib/html";
 import type { CancellationPolicy } from "@/types/database";
 
-// Same refund/deposit-release rules as the renter's own cancelBooking (see
+// Same refund and deposit rules as the renter's own cancelBooking (see
 // src/lib/cancellation.ts) — this just lets admin trigger it on any active
-// booking, e.g. to resolve a dispute reported outside the normal flow.
-export async function adminCancelBooking(bookingId: string): Promise<{ error: string | null }> {
+// booking, e.g. to resolve a dispute reported outside the normal flow, and
+// it is the only way to cancel once the start date has come (PAY-1).
+//
+// refundDepositFee: Rafał's rule is that the fee for handling the deposit
+// comes back when GoMambo calls the booking off, so it defaults to yes; the
+// admin unticks it when the cancellation is really the renter's doing.
+export async function adminCancelBooking(
+  bookingId: string,
+  refundDepositFee = true
+): Promise<{ error: string | null }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -28,7 +38,7 @@ export async function adminCancelBooking(bookingId: string): Promise<{ error: st
     .from("bookings")
     .select(
       `renter_id, owner_id, status, start_date, end_date,
-       payment_status, payment_method, stripe_checkout_session_id, deposit_status, stripe_deposit_payment_intent_id,
+       payment_status, payment_method, stripe_checkout_session_id,
        cars(brand, model, year, cancellation_policy)`
     )
     .eq("id", bookingId)
@@ -44,19 +54,24 @@ export async function adminCancelBooking(bookingId: string): Promise<{ error: st
   const policy: CancellationPolicy =
     (booking.cars as unknown as { cancellation_policy: CancellationPolicy } | null)
       ?.cancellation_policy ?? "moderate";
-  const cancellation = await cancelBookingWithRefund(admin, bookingId, {
-    start_date: booking.start_date,
-    payment_status: booking.payment_status,
-    payment_method: booking.payment_method,
-    stripe_checkout_session_id: booking.stripe_checkout_session_id,
-    deposit_status: booking.deposit_status,
-    stripe_deposit_payment_intent_id: booking.stripe_deposit_payment_intent_id,
-    cancellation_policy: policy,
-  });
+  const cancellation = await cancelBookingWithRefund(
+    admin,
+    bookingId,
+    {
+      start_date: booking.start_date,
+      payment_status: booking.payment_status,
+      payment_method: booking.payment_method,
+      stripe_checkout_session_id: booking.stripe_checkout_session_id,
+      cancellation_policy: policy,
+    },
+    { depositFeeRefund: refundDepositFee }
+  );
 
   const car = booking.cars as unknown as { brand: string; model: string; year: number } | null;
   const carLabel = car ? `${car.brand} ${car.model} (${car.year})` : "auto";
   const period = `${booking.start_date} – ${booking.end_date}`;
+  const renterMoneyLine =
+    renterRefundSentence(cancellation.refund) + renterDepositSentence(cancellation.deposit);
 
   await Promise.all([
     notifyUser({
@@ -78,9 +93,9 @@ export async function adminCancelBooking(bookingId: string): Promise<{ error: st
       userId: booking.renter_id,
       type: "booking_cancelled",
       subject: `Rezerwacja anulowana: ${carLabel}`,
-      body: `Administrator anulował Twoją rezerwację ${carLabel} (${period}).`,
+      body: `Administrator anulował Twoją rezerwację ${carLabel} (${period}).${renterMoneyLine}`,
       emailHtml: `
-        <p>Administrator GoMambo anulował tę rezerwację.</p>
+        <p>Administrator GoMambo anulował tę rezerwację.${escapeHtml(renterMoneyLine)}</p>
         <ul>
           <li><strong>Auto:</strong> ${carLabel}</li>
           <li><strong>Termin:</strong> ${period}</li>
@@ -106,8 +121,11 @@ export async function adminCancelBooking(bookingId: string): Promise<{ error: st
       "opłata podstawowa zwrócona, ale nie udało się sprawdzić przedłużeń wynajmu — zweryfikuj w Stripe"
     );
   }
-  if (cancellation.deposit === "failed") {
-    problems.push("nie udało się zwolnić kaucji — środki nadal blokują kartę najemcy");
+  if (cancellation.deposit.outcome === "refund_failed") {
+    problems.push("zwrot kaucji się nie powiódł — ponów go w panelu kaucji");
+  }
+  if (cancellation.deposit.outcome === "needs_admin") {
+    problems.push("kaucja jest zatrzymana albo objęta sporem — rozlicz ją w panelu kaucji");
   }
   if (problems.length > 0) {
     return {

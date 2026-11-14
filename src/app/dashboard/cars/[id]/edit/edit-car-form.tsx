@@ -24,6 +24,7 @@ import type {
   Transmission,
   VehicleType,
 } from "@/types/database";
+import { DEPOSIT_REQUEST_LEAD_DAYS, DEPOSIT_REVIEW_DAYS } from "@/lib/deposit";
 
 const initialState: EditCarState = { error: null };
 const selectClassName =
@@ -228,11 +229,14 @@ export function EditCarForm({
             defaultValue={car.security_deposit_amount ?? ""}
           />
           <p className="text-xs text-muted-foreground">
-            Blokowana na karcie najemcy przy płatności, zwalniana po zakończeniu wynajmu.{" "}
-            <strong className="text-foreground">
-              Kaucja oznacza, że to auto można opłacić wyłącznie kartą lub BLIK-iem
-            </strong>{" "}
-            — przelewem nie da się jej zablokować.
+            Najemca wpłaca kaucję {DEPOSIT_REQUEST_LEAD_DAYS} dni przed odbiorem (karta lub BLIK).
+            GoMambo przechowuje ją do rozliczenia. Zwracamy ją po Twoim potwierdzeniu albo
+            automatycznie {DEPOSIT_REVIEW_DAYS} dni po zwrocie, chyba że wcześniej zatrzymasz część
+            na szkodę. Opłatę za obsługę kaucji płaci najemca — nie pomniejsza ona kaucji.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Zmiana kaucji dotyczy nowych rezerwacji — potwierdzone zostają przy kwocie, którą
+            najemca widział przy rezerwacji.
           </p>
         </div>
         <div className="space-y-2">

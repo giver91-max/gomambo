@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/notify-user";
 import { SITE_URL } from "@/lib/site";
 import { requestVerificationIfDue } from "@/lib/booking-verification";
+import { requestDepositIfDue } from "@/lib/deposit-service";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -51,8 +52,10 @@ export async function confirmBookingTransfer(bookingId: string): Promise<{ error
     return { error: "Nie udało się potwierdzić — odśwież stronę i sprawdź, czy rezerwacja nie została anulowana albo wpłata już zaksięgowana." };
   }
 
-  // Same reason as the Stripe path: the booking only becomes real here.
+  // Same reason as the Stripe path: the booking only becomes real here. A
+  // rental paid by transfer still has its deposit paid through Stripe.
   await requestVerificationIfDue(admin, bookingId);
+  await requestDepositIfDue(admin, bookingId);
 
   const car = booking.cars as unknown as { brand: string; model: string } | null;
   const label = car ? `${car.brand} ${car.model}` : "auto";

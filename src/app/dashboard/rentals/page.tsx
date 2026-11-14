@@ -18,6 +18,13 @@ import { ExtendBookingForm } from "@/components/extend-booking-form";
 import type { BookingStatus, CancellationPolicy } from "@/types/database";
 import { CANCELLATION_POLICY_LABELS } from "@/lib/car-options";
 import { freeCancellationDeadline, isWithinFreeCancellationWindow } from "@/lib/cancellation";
+import {
+  DEPOSIT_PANEL_COLUMNS,
+  DepositRenterPanel,
+  type DepositPanelRow,
+} from "@/components/deposit-renter-panel";
+import { bookingDepositAmounts } from "@/lib/deposit";
+import { todayInPoland } from "@/lib/calendar";
 
 const statusLabel: Record<BookingStatus, string> = {
   requested: "Oczekuje na potwierdzenie",
@@ -46,7 +53,7 @@ export default async function RentalHistoryPage() {
     .select(
       `id, start_date, end_date, status, created_at,
        pickup_odometer_km, pickup_fuel_level, return_odometer_km, return_fuel_level,
-       payment_status, payment_method, deposit_status, total_price, deposit_amount,
+       payment_status, payment_method, total_price, deposit_amount, deposit_fee_amount,
        cars(id, brand, model, city, cancellation_policy, security_deposit_amount,
             mileage_limit_km, mileage_overage_fee_per_km,
             partners(trade_name), owner:profiles!cars_owner_id_fkey(full_name))`
@@ -132,6 +139,21 @@ export default async function RentalHistoryPage() {
     }
   }
 
+  // RLS on booking_deposits admits both participants, like damage_reports.
+  // Cancelled bookings included: that is where a returned deposit shows.
+  const depositByBooking = new Map<string, DepositPanelRow>();
+  const allBookingIds = (bookings ?? []).map((b) => b.id);
+  if (allBookingIds.length > 0) {
+    const { data: deposits } = await supabase
+      .from("booking_deposits")
+      .select(DEPOSIT_PANEL_COLUMNS)
+      .in("booking_id", allBookingIds);
+    for (const row of (deposits ?? []) as unknown as (DepositPanelRow & { booking_id: string })[]) {
+      depositByBooking.set(row.booking_id, row);
+    }
+  }
+  const today = todayInPoland();
+
   const tripPhotosByBooking = new Map<string, { pickup: TripPhotoItem[]; return: TripPhotoItem[] }>();
   if (activeBookingIds.length > 0) {
     const { data: photos } = await supabase
@@ -167,7 +189,19 @@ export default async function RentalHistoryPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {bookings.map((booking) => (
+          {bookings.map((booking) => {
+            // The amounts pinned on the booking; a booking from before they
+            // were pinned falls back to the car's current deposit. Fails
+            // CLOSED when the car row isn't readable (an owner editing the
+            // listing sends it back to 'pending' and RLS hides it): the
+            // pinned amount is still on the booking itself.
+            const depositTerms = bookingDepositAmounts(
+              booking.deposit_amount,
+              booking.deposit_fee_amount,
+              booking.cars?.security_deposit_amount ?? null
+            );
+            const deposit = depositByBooking.get(booking.id) ?? null;
+            return (
             <Card key={booking.id}>
               <CardHeader className="flex flex-row items-start justify-between space-y-0">
                 <CardTitle className="text-base">
@@ -197,10 +231,8 @@ export default async function RentalHistoryPage() {
                         ),
                       }}
                       rules={{
-                        depositAmount:
-                          booking.cars?.security_deposit_amount != null
-                            ? Number(booking.cars.security_deposit_amount)
-                            : null,
+                        depositAmount: depositTerms.amount,
+                        depositFee: depositTerms.fee,
                         mileageLimitKm: booking.cars?.mileage_limit_km ?? null,
                         mileageOverageFeePerKm:
                           booking.cars?.mileage_overage_fee_per_km != null
@@ -208,12 +240,7 @@ export default async function RentalHistoryPage() {
                             : null,
                       }}
                     />
-                    {booking.payment_method === "bank_transfer" &&
-                      !(
-                        booking.cars === null ||
-                        (booking.cars.security_deposit_amount !== null &&
-                          Number(booking.cars.security_deposit_amount) > 0)
-                      ) && (
+                    {booking.payment_method === "bank_transfer" && (
                       <div className="space-y-1 rounded-lg border border-primary/40 bg-primary/5 p-3">
                         <p className="font-medium text-foreground">Czekamy na Twój przelew</p>
                         <p>
@@ -232,28 +259,27 @@ export default async function RentalHistoryPage() {
                     )}
                     <PayBookingButton
                       bookingId={booking.id}
-                      // Fail CLOSED when the car row isn't readable: an owner
-                      // editing their listing sends it back to 'pending', and
-                      // RLS then hides it from the renter. Reading that as
-                      // "no deposit" would put the transfer button back on a
-                      // car that has one.
-                      depositAmount={
-                        booking.cars
-                          ? booking.cars.security_deposit_amount !== null
-                            ? Number(booking.cars.security_deposit_amount)
-                            : null
-                          : Infinity
-                      }
+                      depositAmount={depositTerms.amount}
+                      depositFee={depositTerms.fee}
                     />
                   </div>
                 )}
                 {booking.payment_status === "paid" && (
                   <p className="text-xs">
                     Opłacono{booking.total_price ? `: ${Number(booking.total_price).toFixed(2)} zł` : ""}
-                    {booking.deposit_status === "held" &&
-                      booking.deposit_amount &&
-                      ` · kaucja ${Number(booking.deposit_amount).toFixed(2)} zł zablokowana`}
                   </p>
+                )}
+                {(booking.status === "accepted" ||
+                  booking.status === "completed" ||
+                  (booking.status === "cancelled" && deposit !== null)) && (
+                  <DepositRenterPanel
+                    bookingId={booking.id}
+                    bookingStatus={booking.status}
+                    startDate={booking.start_date}
+                    endDate={booking.end_date}
+                    deposit={deposit}
+                    scheduled={depositTerms}
+                  />
                 )}
                 {/* A wire has no card charge to reverse, so payment_status
                     stays 'paid' until someone sends the money back by hand —
@@ -276,9 +302,14 @@ export default async function RentalHistoryPage() {
                     paymentMethod={charge.payment_method}
                   />
                 ))}
-                {booking.status === "accepted" && booking.payment_status === "paid" && (
-                  <ExtendBookingForm bookingId={booking.id} currentEndDate={booking.end_date} />
-                )}
+                {/* Up to the last day of the trip, and not once the deposit
+                    is being settled — the server refuses both as well. */}
+                {booking.status === "accepted" &&
+                  booking.payment_status === "paid" &&
+                  booking.end_date >= today &&
+                  (!deposit || ["requested", "processing", "paid"].includes(deposit.status)) && (
+                    <ExtendBookingForm bookingId={booking.id} currentEndDate={booking.end_date} />
+                  )}
                 {(booking.status === "requested" || booking.status === "accepted") &&
                   (() => {
                     const policy: CancellationPolicy =
@@ -296,11 +327,19 @@ export default async function RentalHistoryPage() {
                             ? `darmowe anulowanie do ${deadline.toLocaleDateString("pl-PL")}`
                             : "termin darmowego anulowania minął"}
                         </p>
-                        <form action={cancelBooking.bind(null, booking.id)}>
-                          <Button type="submit" variant="outline" size="sm">
-                            Anuluj rezerwację
-                          </Button>
-                        </form>
+                        {/* PAY-1: from the start date on only GoMambo cancels. */}
+                        {booking.start_date > today ? (
+                          <form action={cancelBooking.bind(null, booking.id)}>
+                            <Button type="submit" variant="outline" size="sm">
+                              Anuluj rezerwację
+                            </Button>
+                          </form>
+                        ) : (
+                          <p className="text-xs">
+                            Od dnia rozpoczęcia wynajmu rezerwację może anulować tylko GoMambo —
+                            napisz do nas przez czat.
+                          </p>
+                        )}
                       </div>
                     );
                   })()}
@@ -320,6 +359,7 @@ export default async function RentalHistoryPage() {
                   <BookingVerificationRenter
                     bookingId={booking.id}
                     status={verificationByBooking.get(booking.id)!.status}
+                    depositPending={depositTerms.amount > 0 && deposit?.status !== "paid"}
                   />
                 )}
                 {(booking.status === "accepted" || booking.status === "completed") && (
@@ -333,7 +373,8 @@ export default async function RentalHistoryPage() {
                 )}
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

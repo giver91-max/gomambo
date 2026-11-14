@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { DEPOSIT_HELD_STATES } from "@/lib/deposit";
 
 // Shared by admin-triggered deletion (admin/users/actions.ts) and
 // self-service deletion (dashboard/profile/delete-account-actions.ts).
@@ -43,6 +44,29 @@ export async function purgeUserDataAndDeleteAccount(
     .select("selfie_path, bookings!inner(renter_id)")
     .eq("bookings.renter_id", userId)
     .not("selfie_path", "is", null);
+
+  // A deposit GoMambo still holds (or still owes back) must be settled
+  // first. The database refuses the delete anyway (0052,
+  // prevent_open_deposit_delete) — checked here, before any file is removed,
+  // so a refused deletion does not leave the account without its photos.
+  const allBookingIds = [...(ownerBookings ?? []), ...(renterBookings ?? [])].map((b) => b.id);
+  if (allBookingIds.length > 0) {
+    const { data: openDeposits, error: depositError } = await admin
+      .from("booking_deposits")
+      .select("booking_id")
+      .in("booking_id", allBookingIds)
+      .or(`status.in.(processing,${DEPOSIT_HELD_STATES.join(",")}),refund_status.in.(pending,failed)`)
+      .limit(1);
+    if (depositError) {
+      return { error: "Nie udało się sprawdzić kaucji tego konta. Spróbuj ponownie za chwilę." };
+    }
+    if ((openDeposits ?? []).length > 0) {
+      return {
+        error:
+          "Na tym koncie jest kaucja, która nie została jeszcze rozliczona. Konto można usunąć po jej zwrocie lub rozliczeniu — napisz do nas, jeśli potrzebujesz pomocy.",
+      };
+    }
+  }
 
   const idDocumentPaths = [
     verification?.document_path,

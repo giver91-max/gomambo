@@ -15,11 +15,16 @@ const notificationTypeLabel: Record<AdminNotification["type"], string> = {
   new_referral: "Rejestracja z polecenia",
   commission_fallback: "Prowizja: naliczono stawkę domyślną",
   refund_failed: "Zwrot w Stripe nie powiódł się",
-  deposit_release_failed: "Nie zwolniono kaucji",
+  deposit_release_failed: "Nie zwolniono kaucji (dawny system)",
   bank_transfer_declared: "Zadeklarowany przelew",
   damage_reported: "Zgłoszenie do wynajmu",
   booking_verification_escalated: "Weryfikacja przed wynajmem",
   new_partner_pending: "Nowa wypożyczalnia do weryfikacji",
+  deposit_refund_failed: "Zwrot kaucji nie powiódł się",
+  deposit_transfer_failed: "Przelew zatrzymanej kaucji nie powiódł się",
+  deposit_overdue: "Kaucja: przekroczony termin",
+  deposit_objection: "Sprzeciw wobec zatrzymania kaucji",
+  payment_disputed: "Reklamacja płatności w banku",
 };
 
 // Read from the key's prefix on the server; the key itself is never sent.

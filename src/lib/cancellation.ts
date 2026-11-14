@@ -4,11 +4,15 @@ import {
   expireCheckoutSession,
   getCheckoutSessionPayment,
   refundCheckoutSession,
-  releaseDeposit,
 } from "@/lib/stripe";
 import { reportMoneyFailure } from "@/lib/money-alerts";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
-import type { CancellationPolicy, Database, DepositStatus, PaymentMethod, PaymentStatus } from "@/types/database";
+import {
+  recordDepositCancellation,
+  settleDepositOnCancellation,
+  type DepositSettlement,
+} from "@/lib/deposit-service";
+import type { CancellationPolicy, Database, PaymentMethod, PaymentStatus } from "@/types/database";
 
 export function freeCancellationDeadline(policy: CancellationPolicy, startDate: string): Date {
   const freeHours = CANCELLATION_POLICY_FREE_HOURS[policy];
@@ -41,11 +45,9 @@ export type CancellationRefundOutcome =
   | "manual_refund_required"
   | "not_applicable";
 
-export type DepositReleaseOutcome = "released" | "failed" | "not_applicable";
-
 export type CancellationResult = {
   refund: CancellationRefundOutcome;
-  deposit: DepositReleaseOutcome;
+  deposit: DepositSettlement;
   error?: string;
 };
 
@@ -71,14 +73,19 @@ export function renterRefundSentence(outcome: CancellationRefundOutcome): string
 }
 
 // Shared by the renter's own cancelBooking, the admin override
-// (adminCancelBooking), and the owner's ownerCancelBooking — same
-// money-handling rules either way: neutralise any half-finished extension
-// checkout, release any held deposit (nothing left to hold once the trip is
-// off), refund the rental fee only if still inside the free-cancellation
-// window — UNLESS forceFullRefund is set. That window exists to protect the
-// OWNER from a late renter-initiated cancellation; it has no meaning when
-// the OWNER is the one cancelling an already-confirmed booking, so that
-// path always passes forceFullRefund: true instead.
+// (adminCancelBooking), the owner's ownerCancelBooking and the owner's
+// cancellation for an unpaid deposit — same money-handling rules either way:
+// neutralise any half-finished extension checkout, settle the deposit
+// (nothing left to secure once the trip is off), refund the rental fee only
+// if still inside the free-cancellation window — UNLESS forceFullRefund is
+// set. That window exists to protect the OWNER from a late renter-initiated
+// cancellation; it has no meaning when the OWNER is the one cancelling an
+// already-confirmed booking, so that path always passes forceFullRefund:
+// true instead.
+//
+// depositFeeRefund: whether the renter's fee for handling the deposit comes
+// back too. Rafał's rule: yes when the owner or GoMambo calls the booking
+// off, no when the renter does (or the renter never paid the deposit).
 export async function cancelBookingWithRefund(
   supabase: SupabaseClient<Database>,
   bookingId: string,
@@ -87,12 +94,18 @@ export async function cancelBookingWithRefund(
     payment_status: PaymentStatus;
     payment_method?: PaymentMethod;
     stripe_checkout_session_id: string | null;
-    deposit_status: DepositStatus;
-    stripe_deposit_payment_intent_id: string | null;
     cancellation_policy: CancellationPolicy;
   },
-  options: { forceFullRefund?: boolean } = {}
+  options: { forceFullRefund?: boolean; depositFeeRefund: boolean }
 ): Promise<CancellationResult> {
+  // Who is calling the booking off decides whether the deposit's fee comes
+  // back — recorded on the deposit BEFORE the status flips, because both a
+  // deposit payment landing in the middle of this (handleDepositPayment
+  // reads the booking first, then this) and the daily job's safety net for
+  // a cancellation that dies halfway read it from there.
+  const admin = tryCreateAdminClient();
+  if (admin) await recordDepositCancellation(admin, bookingId, options.depositFeeRefund);
+
   await supabase.from("bookings").update({ status: "cancelled" }).eq("id", bookingId);
 
   // Before anything else, and regardless of whether the base fee is
@@ -120,23 +133,17 @@ export async function cancelBookingWithRefund(
     }
   }
 
-  let deposit: DepositReleaseOutcome = "not_applicable";
-  if (booking.deposit_status === "held" && booking.stripe_deposit_payment_intent_id) {
-    const releaseResult = await releaseDeposit(booking.stripe_deposit_payment_intent_id);
-    if (releaseResult.ok) {
-      await supabase.from("bookings").update({ deposit_status: "released" }).eq("id", bookingId);
-      deposit = "released";
-    } else {
-      // Nothing can retry this: the booking is already 'cancelled', and the
-      // only other release path requires status 'completed'. Left alone, the
-      // renter's money stays blocked on their card until Stripe's ~7-day
-      // authorisation expiry, with no trace anywhere.
-      deposit = "failed";
-      await reportMoneyFailure(
-        "deposit_release_failed",
-        `Nie udało się zwolnić kaucji przy anulowaniu rezerwacji ${bookingId} (${releaseResult.error}). Środki nadal są zablokowane na karcie najemcy — anuluj płatność ${booking.stripe_deposit_payment_intent_id} ręcznie w Stripe.`
-      );
-    }
+  // After the status change on purpose: a deposit payment that lands while
+  // this runs then finds a cancelled booking and is returned as a late
+  // payment, by the fee rule recorded above.
+  const deposit: DepositSettlement = admin
+    ? await settleDepositOnCancellation(admin, bookingId, { includeFee: options.depositFeeRefund })
+    : { outcome: "refund_failed", amountPln: 0, feePln: 0, feeKeptPln: 0 };
+  if (!admin) {
+    await reportMoneyFailure(
+      "deposit_refund_failed",
+      `Nie udało się rozliczyć kaucji przy anulowaniu rezerwacji ${bookingId} (brak klienta service-role). Sprawdź kaucję w panelu kaucji.`
+    );
   }
 
   if (booking.payment_status !== "paid") {

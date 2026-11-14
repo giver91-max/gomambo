@@ -13,6 +13,7 @@ export function AdminNav({
   openReports = 0,
   openVerifications = 0,
   pendingPartners = 0,
+  depositCases = 0,
 }: {
   pendingCars: number;
   unreadMessages: number;
@@ -21,6 +22,7 @@ export function AdminNav({
   openReports?: number;
   openVerifications?: number;
   pendingPartners?: number;
+  depositCases?: number;
 }) {
   const pathname = usePathname();
 
@@ -31,6 +33,7 @@ export function AdminNav({
     { href: "/admin/users", label: "Użytkownicy", exact: false, count: 0 },
     { href: "/admin/bookings", label: "Rezerwacje", exact: false, count: 0 },
     { href: "/admin/przelewy", label: "Przelewy", exact: false, count: pendingTransfers },
+    { href: "/admin/kaucje", label: "Kaucje", exact: false, count: depositCases },
     { href: "/admin/zgloszenia", label: "Zgłoszenia", exact: false, count: openReports },
     {
       href: "/admin/weryfikacje-najmu",

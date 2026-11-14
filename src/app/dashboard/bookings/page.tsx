@@ -7,13 +7,15 @@ import { BackButton } from "@/components/back-button";
 import { BookingActions } from "./booking-actions";
 import { ReviewForm } from "./review-form";
 import { TripPhotosManager, type TripPhotoItem } from "@/components/trip-photos-manager";
-import { CaptureDepositButton } from "@/components/capture-deposit-button";
+import { DepositOwnerPanel } from "@/components/deposit-owner-panel";
+import { DEPOSIT_PANEL_COLUMNS, type DepositPanelRow } from "@/components/deposit-renter-panel";
+import { bookingDepositAmounts } from "@/lib/deposit";
 import { RequestExtraChargeButton } from "@/components/request-extra-charge-button";
 import { ReportDamageButton } from "@/components/report-damage-button";
 import { DamageReportList, type DamageReportItem } from "@/components/damage-report-list";
 import { BookingVerificationOwner } from "@/components/booking-verification-owner";
 import type { BookingVerificationStatus } from "@/lib/booking-verification";
-import type { BookingStatus, DepositStatus, FuelLevel, PaymentStatus } from "@/types/database";
+import type { BookingStatus, FuelLevel, PaymentStatus } from "@/types/database";
 
 const statusLabel: Record<BookingStatus, string> = {
   requested: "Oczekuje",
@@ -42,8 +44,8 @@ export default async function OwnerBookingsPage() {
     .select(
       `id, start_date, end_date, status, created_at,
        pickup_odometer_km, pickup_fuel_level, return_odometer_km, return_fuel_level,
-       payment_status, deposit_status, total_price, platform_fee_amount, deposit_amount,
-       cars(id, brand, model), renter_id,
+       payment_status, total_price, platform_fee_amount, deposit_amount, deposit_fee_amount,
+       cars(id, brand, model, security_deposit_amount), renter_id,
        renter:profiles!bookings_renter_id_fkey(full_name)`
     )
     .eq("owner_id", user!.id)
@@ -60,11 +62,11 @@ export default async function OwnerBookingsPage() {
     return_odometer_km: number | null;
     return_fuel_level: FuelLevel | null;
     payment_status: PaymentStatus;
-    deposit_status: DepositStatus;
     total_price: number | null;
     platform_fee_amount: number | null;
     deposit_amount: number | null;
-    cars: { id: string; brand: string; model: string } | null;
+    deposit_fee_amount: number | null;
+    cars: { id: string; brand: string; model: string; security_deposit_amount: number | null } | null;
     renter_id: string;
     renter: { full_name: string } | null;
   }[];
@@ -188,6 +190,18 @@ export default async function OwnerBookingsPage() {
     }
   }
 
+  // RLS on booking_deposits admits both participants.
+  const depositByBooking = new Map<string, DepositPanelRow>();
+  if (activeBookingIds.length > 0) {
+    const { data: deposits } = await supabase
+      .from("booking_deposits")
+      .select(DEPOSIT_PANEL_COLUMNS)
+      .in("booking_id", activeBookingIds);
+    for (const row of (deposits ?? []) as unknown as (DepositPanelRow & { booking_id: string })[]) {
+      depositByBooking.set(row.booking_id, row);
+    }
+  }
+
   const tripPhotosByBooking = new Map<string, { pickup: TripPhotoItem[]; return: TripPhotoItem[] }>();
   if (activeBookingIds.length > 0) {
     const { data: photos } = await supabase
@@ -244,22 +258,25 @@ export default async function OwnerBookingsPage() {
                     {booking.total_price
                       ? `Do wypłaty: ${(Number(booking.total_price) - Number(booking.platform_fee_amount ?? 0)).toFixed(2)} zł`
                       : "Opłacono"}
-                    {booking.deposit_status === "held" &&
-                      booking.deposit_amount &&
-                      ` · kaucja ${Number(booking.deposit_amount).toFixed(2)} zł zablokowana`}
-                    {booking.deposit_status === "captured" && " · kaucja zatrzymana"}
                   </p>
                 )}
                 {(booking.status === "accepted" || booking.status === "completed") && (
+                  <DepositOwnerPanel
+                    bookingId={booking.id}
+                    bookingStatus={booking.status}
+                    startDate={booking.start_date}
+                    deposit={depositByBooking.get(booking.id) ?? null}
+                    scheduledAmount={
+                      bookingDepositAmounts(
+                        booking.deposit_amount,
+                        booking.deposit_fee_amount,
+                        booking.cars?.security_deposit_amount ?? null
+                      ).amount
+                    }
+                  />
+                )}
+                {(booking.status === "accepted" || booking.status === "completed") && (
                   <div className="flex flex-wrap gap-2">
-                    {booking.status === "accepted" &&
-                      booking.deposit_status === "held" &&
-                      booking.deposit_amount && (
-                        <CaptureDepositButton
-                          bookingId={booking.id}
-                          depositAmount={Number(booking.deposit_amount)}
-                        />
-                      )}
                     <RequestExtraChargeButton bookingId={booking.id} />
                     <ReportDamageButton bookingId={booking.id} />
                   </div>

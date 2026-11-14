@@ -10,6 +10,7 @@ import { escapeHtml } from "@/lib/html";
 import { SITE_URL } from "@/lib/site";
 import { sendPickupInstructionsIfDue } from "@/lib/pickup-instructions";
 import { raiseToGoMambo } from "@/lib/booking-verification";
+import { depositHoldsPickup } from "@/lib/deposit-service";
 import type { FaceMatchResult } from "@/types/database";
 import { BIOMETRIC_CONSENT_VERSION } from "@/lib/terms";
 
@@ -272,12 +273,23 @@ export async function decideBookingVerification(
       return { error: "Nie ma czego potwierdzać — odśwież stronę." };
     }
 
+    // "Wszystko gotowe" only when it is: an unpaid deposit holds the pickup
+    // details back just as the verification did (sendPickupInstructionsIfDue).
+    const depositPending = await depositHoldsPickup(admin, bookingId);
     await notifyUser({
       userId: booking.renter_id,
       type: "booking_verification_approved",
       subject: `Potwierdzone — odbierasz ${carLabel}`,
-      body: `Właściciel potwierdził Twoją tożsamość. Dane do odbioru dostaniesz przed terminem.`,
-      emailHtml: `
+      body: depositPending
+        ? "Właściciel potwierdził Twoją tożsamość. Została jeszcze kaucja — dane do odbioru wyślemy przed terminem, gdy będzie wpłacona."
+        : "Właściciel potwierdził Twoją tożsamość. Dane do odbioru dostaniesz przed terminem.",
+      emailHtml: depositPending
+        ? `
+        <p>Właściciel potwierdził Twoją tożsamość.</p>
+        <p>Została jeszcze kaucja: numer rejestracyjny, miejsce odbioru i kontakt do właściciela wyślemy przed terminem, gdy będzie wpłacona.</p>
+        <p><a href="${SITE_URL}/dashboard/rentals">Wpłać kaucję →</a></p>
+      `
+        : `
         <p>Właściciel potwierdził Twoją tożsamość — wszystko gotowe.</p>
         <p>Numer rejestracyjny, miejsce odbioru i kontakt do właściciela wysyłamy przed terminem.</p>
         <p><a href="${SITE_URL}/dashboard/rentals">Zobacz rezerwację →</a></p>

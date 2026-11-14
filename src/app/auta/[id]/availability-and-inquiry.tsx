@@ -15,6 +15,7 @@ export function AvailabilityAndInquiry({
   pricePerDay,
   pricePerMonth,
   commissionRate,
+  depositAmount,
   party,
 }: {
   carId: string;
@@ -25,6 +26,7 @@ export function AvailabilityAndInquiry({
   pricePerDay: number;
   pricePerMonth: number | null;
   commissionRate: number;
+  depositAmount: number | null;
   party: RentalParty;
 }) {
   const [range, setRange] = useState<SelectedRange>({ start: "", end: null });
@@ -41,6 +43,7 @@ export function AvailabilityAndInquiry({
         pricePerDay={pricePerDay}
         pricePerMonth={pricePerMonth}
         commissionRate={commissionRate}
+        depositAmount={depositAmount}
         party={party}
       />
     </div>

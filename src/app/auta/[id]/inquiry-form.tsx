@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { getRecaptchaToken } from "@/lib/recaptcha-client";
 import type { SelectedRange } from "./availability-view";
 import { applyCommission, calculateBookingPrice } from "@/lib/pricing";
+import { DEPOSIT_REQUEST_LEAD_DAYS, depositFee, formatZl } from "@/lib/deposit";
 import { VerificationRequiredNotice } from "@/components/verification-required-notice";
 import type { RentalParty } from "@/components/rental-liability-notice";
 import type { IdentityVerificationStatus } from "@/types/database";
@@ -24,6 +25,7 @@ export function InquiryForm({
   pricePerDay,
   pricePerMonth,
   commissionRate,
+  depositAmount,
   party,
 }: {
   carId: string;
@@ -34,6 +36,7 @@ export function InquiryForm({
   pricePerDay: number;
   pricePerMonth: number | null;
   commissionRate: number;
+  depositAmount: number | null;
   party: RentalParty;
 }) {
   const [state, setState] = useState<InquiryState>(initialState);
@@ -135,6 +138,24 @@ export function InquiryForm({
                     <span>Razem</span>
                     <span>{gross.toFixed(2)} zł</span>
                   </div>
+                  {/* Part of the booking summary because the fee is pinned
+                      on the booking the moment this form is sent. */}
+                  {depositAmount !== null && depositAmount > 0 && (
+                    <div className="space-y-0.5 border-t pt-1 text-muted-foreground">
+                      <div className="flex justify-between">
+                        <span>Kaucja zwrotna</span>
+                        <span>{formatZl(depositAmount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Opłata za obsługę kaucji (bezzwrotna)</span>
+                        <span>{formatZl(depositFee(depositAmount))}</span>
+                      </div>
+                      <p className="text-xs">
+                        Płatne osobno, kartą lub BLIK-iem, {DEPOSIT_REQUEST_LEAD_DAYS} dni przed
+                        odbiorem. Kaucja wraca po zwrocie auta.
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             })()}

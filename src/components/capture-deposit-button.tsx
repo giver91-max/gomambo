@@ -5,6 +5,7 @@ import { captureDepositForDamage } from "@/app/dashboard/bookings/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DEPOSIT_OBJECTION_DAYS, formatZl } from "@/lib/deposit";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,8 +34,12 @@ export function CaptureDepositButton({
   function handleConfirm() {
     setError(null);
     const parsed = Number(amount);
-    if (!(parsed > 0)) {
-      setError("Podaj kwotę większą od zera.");
+    if (!(parsed > 0) || parsed > depositAmount) {
+      setError(`Podaj kwotę od 0,01 do ${formatZl(depositAmount)}.`);
+      return;
+    }
+    if (!reason.trim()) {
+      setError("Opisz szkodę — najemca i GoMambo zobaczą ten powód.");
       return;
     }
     startTransition(async () => {
@@ -50,22 +55,23 @@ export function CaptureDepositButton({
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
-        Zatrzymaj kaucję (zgłoszono szkodę)
+        Zatrzymaj kaucję (szkoda)
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Zatrzymać kaucję?</AlertDialogTitle>
+          <AlertDialogTitle>Zatrzymać część kaucji?</AlertDialogTitle>
           <AlertDialogDescription>
-            Kwota zostanie pobrana z zablokowanej kaucji najemcy (max{" "}
-            {depositAmount.toFixed(2)} zł) i przekazana na Twoje konto. Najemca zostanie o
-            tym powiadomiony.
+            Kwota zostanie zatrzymana z wpłaconej kaucji (najwyżej {formatZl(depositAmount)}) i
+            przelana na Twoje konto wypłat. Reszta od razu wróci do najemcy. Najemca ma{" "}
+            {DEPOSIT_OBJECTION_DAYS} dni na sprzeciw — bez sprzeciwu przelejemy zatrzymaną kwotę,
+            po sprzeciwie decyzję podejmie GoMambo. Zdjęcia szkody dodaj w sekcji zdjęć zwrotu.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="capture-amount">Kwota (zł)</Label>
+            <Label htmlFor={`capture-amount-${bookingId}`}>Kwota do zatrzymania (zł)</Label>
             <Input
-              id="capture-amount"
+              id={`capture-amount-${bookingId}`}
               type="number"
               step="0.01"
               min={0}
@@ -75,12 +81,17 @@ export function CaptureDepositButton({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="capture-reason">Powód (widoczny dla najemcy)</Label>
-            <Input
-              id="capture-reason"
+            <Label htmlFor={`capture-reason-${bookingId}`}>
+              Powód (widoczny dla najemcy i GoMambo)
+            </Label>
+            <textarea
+              id={`capture-reason-${bookingId}`}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="np. rysa na zderzaku przy zwrocie"
+              rows={4}
+              maxLength={2000}
+              className="w-full rounded-md border bg-background p-2 text-sm"
+              placeholder="np. rysa na tylnym zderzaku, której nie było na zdjęciach z odbioru"
             />
           </div>
         </div>

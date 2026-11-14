@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { SiteHeader } from "@/components/site-header";
 import { AdminNav } from "@/components/admin-nav";
 import { getUnreadCounts } from "@/lib/notifications";
+import { DEPOSIT_ADMIN_STATES } from "@/lib/deposit";
 
 export default async function AdminLayout({
   children,
@@ -37,6 +38,7 @@ export default async function AdminLayout({
     { count: openReports },
     { count: openVerifications },
     { count: pendingPartners },
+    { count: depositCases },
   ] = await Promise.all([
     supabase.from("profiles").select("role, full_name").eq("id", user.id).single(),
     getUnreadCounts(supabase, user.id),
@@ -68,6 +70,11 @@ export default async function AdminLayout({
       .from("partners")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
+    // Same filter as the "Do decyzji" view of /admin/kaucje.
+    admin
+      .from("booking_deposits")
+      .select("booking_id", { count: "exact", head: true })
+      .or(`status.in.(${DEPOSIT_ADMIN_STATES.join(",")}),refund_status.eq.failed`),
   ]);
 
   if (profile?.role !== "admin") {
@@ -94,6 +101,7 @@ export default async function AdminLayout({
           openReports={openReports ?? 0}
           openVerifications={openVerifications ?? 0}
           pendingPartners={pendingPartners ?? 0}
+          depositCases={depositCases ?? 0}
         />
         {children}
       </main>
