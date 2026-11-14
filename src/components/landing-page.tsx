@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import styles from "./landing-page.module.css";
+import { OPERATOR_ADDRESS, OPERATOR_NAME } from "@/lib/site";
 
 /**
  * The landing page is served as STATIC HTML from Vercel's CDN, so it answers
@@ -318,14 +319,18 @@ export function LandingPage() {
           Go<span>Mambo</span>
         </Link>
         <p>
-          © 2026 GoMambo · Polska ·{" "}
+          © 2026 GoMambo · {OPERATOR_NAME}, {OPERATOR_ADDRESS} ·{" "}
           <Link href="/regulamin" style={{ color: "var(--gray)", textDecoration: "none" }}>
             Regulamin
           </Link>{" "}
           ·{" "}
           <Link href="/polityka-prywatnosci" style={{ color: "var(--gray)", textDecoration: "none" }}>
             Polityka prywatności
-          </Link>
+          </Link>{" "}
+          ·{" "}
+          <a href="mailto:kontakt@gomambo.pl" style={{ color: "var(--gray)", textDecoration: "none" }}>
+            Kontakt
+          </a>
         </p>
       </footer>
     </div>

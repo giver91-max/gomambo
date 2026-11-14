@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OPERATOR_ADDRESS, OPERATOR_NAME } from "@/lib/site";
 import type { Metadata } from "next";
 import { SiteFooter } from "@/components/site-footer";
 import { BackButton } from "@/components/back-button";
@@ -32,7 +33,7 @@ export default function PolitykaPrywatnosciPage() {
             <a href="https://www.gomambo.pl" className="underline">
               www.gomambo.pl
             </a>
-            ) jest Rafał Płonka, kontakt:{" "}
+            ) jest {OPERATOR_NAME}, {OPERATOR_ADDRESS}, kontakt:{" "}
             <a href="mailto:kontakt@gomambo.pl" className="underline">
               kontakt@gomambo.pl
             </a>
