@@ -17,7 +17,8 @@
   --gray: #888;
   --gray-light: #1a1a1a;
   --gray-mid: #2a2a2a;
-  --font: "Inter", system-ui, sans-serif;
+  /* --font-inter is the self-hosted Inter, set by app/page.tsx. */
+  --font: var(--font-inter, "Inter"), system-ui, sans-serif;
   /* Liquid-glass surface tokens: frosted tint, hairline edge, top-edge
      specular, soft drop shadow. Glass over pure black is invisible, so
      sections also get faint yellow glows for the blur to pick up. */

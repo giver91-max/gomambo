@@ -2,14 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Inter } from "next/font/google";
 import { useEffect, useRef, useState } from "react";
 import styles from "./landing-page.module.css";
-
-const inter = Inter({
-  subsets: ["latin", "latin-ext"],
-  weight: ["400", "500", "600", "700", "900"],
-});
 
 /**
  * The landing page is served as STATIC HTML from Vercel's CDN, so it answers
@@ -101,10 +95,9 @@ export function LandingPage() {
   }, []);
 
   return (
-    <div
-      className={styles.page}
-      style={{ "--font": inter.style.fontFamily } as React.CSSProperties}
-    >
+    // The font comes from the Inter `variable` class on the wrapper in
+    // app/page.tsx (see the note there on why it is not declared here).
+    <div className={styles.page}>
       <nav>
         <Link href="/" className={styles.logo}>
           Go<span>Mambo</span>
