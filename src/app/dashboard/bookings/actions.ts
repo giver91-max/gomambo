@@ -377,7 +377,7 @@ export async function submitReview(
 
   if (error) {
     if (error.code === "23505") {
-      return { error: "Już oceniłeś to wypożyczenie." };
+      return { error: "To wypożyczenie ma już Twoją ocenę." };
     }
     return { error: error.message };
   }

@@ -41,7 +41,7 @@ export default function ForgotPasswordPage() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <BackButton />
-          <CardTitle>Zapomniałeś hasła?</CardTitle>
+          <CardTitle>Nie pamiętasz hasła?</CardTitle>
           <CardDescription>
             Podaj adres e-mail powiązany z kontem — wyślemy link do ustawienia nowego
             hasła.

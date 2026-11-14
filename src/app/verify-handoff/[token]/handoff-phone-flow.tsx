@@ -347,8 +347,8 @@ export function HandoffPhoneFlow({
       <div className="flex flex-col items-center gap-4 text-center">
         <h1 className="text-2xl font-bold">Tożsamość potwierdzona ✓</h1>
         <p className="text-base text-muted-foreground">
-          Gotowe — Twoje konto jest zweryfikowane. Możesz wrócić do urządzenia, z którego
-          zeskanowałeś kod QR, i dodać samochód albo zarezerwować auto.
+          Gotowe — Twoje konto jest zweryfikowane. Możesz wrócić do urządzenia, na którym
+          był kod QR, i dodać samochód albo zarezerwować auto.
         </p>
       </div>
     );
@@ -364,7 +364,7 @@ export function HandoffPhoneFlow({
       )}
       <p className="text-base text-muted-foreground">
         Zanim potwierdzimy, sprawdzi je jeszcze człowiek z zespołu GoMambo — zwykle w ciągu 24
-        godzin. Powiadomimy Cię mailem. Możesz wrócić do urządzenia, z którego zeskanowałeś kod QR.
+        godzin. Powiadomimy Cię mailem. Możesz wrócić do urządzenia, na którym był kod QR.
       </p>
     </div>
   );

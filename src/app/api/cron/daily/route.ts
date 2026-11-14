@@ -295,14 +295,14 @@ async function expireStaleRequests(
       userId: booking.renter_id,
       type: "booking_declined",
       subject: `Rezerwacja wygasła: ${label}`,
-      body: `Wypożyczalnia nie potwierdziła rezerwacji ${label} (${booking.start_date} – ${booking.end_date}) na czas. Nic nie zapłaciłeś — wybierz inny termin albo inne auto.`,
+      body: `Wypożyczalnia nie potwierdziła rezerwacji ${label} (${booking.start_date} – ${booking.end_date}) na czas. Nie pobraliśmy żadnej płatności — wybierz inny termin albo inne auto.`,
       emailHtml: `
         <p>Twoja rezerwacja wygasła, bo wypożyczalnia nie potwierdziła jej na czas.</p>
         <ul>
           <li><strong>Auto:</strong> ${escapeHtml(label)}</li>
           <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
         </ul>
-        <p><strong>Nic nie zapłaciłeś</strong> — płatność następuje dopiero po potwierdzeniu.</p>
+        <p><strong>Nie pobraliśmy żadnej płatności</strong> — płatność następuje dopiero po potwierdzeniu.</p>
         <p><a href="${SITE_URL}/auta">Zobacz inne auta →</a></p>
       `,
       link: "/dashboard/rentals",

@@ -119,7 +119,7 @@ function LoginForm() {
                     href="/zapomniane-haslo"
                     className="text-xs text-muted-foreground hover:underline"
                   >
-                    Zapomniałeś hasła?
+                    Nie pamiętasz hasła?
                   </Link>
                 </div>
                 <PasswordInput

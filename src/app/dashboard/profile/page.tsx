@@ -155,9 +155,8 @@ export default async function ProfilePage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Poleć GoMambo znajomym. Poleciłeś już{" "}
-            <span className="font-semibold text-foreground">{referralCount ?? 0}</span>{" "}
-            {referralCount === 1 ? "osobę" : "osób"}. Nagrody za polecenia ustalamy na razie
+            Poleć GoMambo znajomym. Polecone osoby:{" "}
+            <span className="font-semibold text-foreground">{referralCount ?? 0}</span>. Nagrody za polecenia ustalamy na razie
             ręcznie — napisz do nas na czacie po pierwszym poleceniu.
           </p>
           <ReferralLink link={referralLink} />

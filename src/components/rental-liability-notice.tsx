@@ -71,7 +71,7 @@ export function RentalLiabilityNotice({
         <p className="font-medium text-foreground">Za co odpowiadasz Ty</p>
         <p className="text-muted-foreground">
           Za auto w czasie trwania wynajmu — czyli za używanie go zgodnie z umową i oddanie w
-          takim stanie, w jakim je odebrałeś, z uwzględnieniem normalnego zużycia.
+          takim stanie, w jakim zostało wydane, z uwzględnieniem normalnego zużycia.
         </p>
         <ul className="list-inside list-disc space-y-1 text-muted-foreground">
           {deposit > 0 ? (

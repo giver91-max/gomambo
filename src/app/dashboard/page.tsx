@@ -256,7 +256,7 @@ export default async function DashboardPage() {
       {!cars || cars.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
-            Nie dodałeś jeszcze żadnego auta.
+            Nie masz jeszcze żadnego auta.
           </CardContent>
         </Card>
       ) : (

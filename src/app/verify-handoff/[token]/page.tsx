@@ -22,8 +22,8 @@ export default async function VerifyHandoffPage({ params }: { params: { token: s
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
         <h1 className="text-2xl font-bold">Link wygasł</h1>
         <p className="max-w-sm text-base text-muted-foreground">
-          Ta sesja weryfikacji nie jest już aktywna. Wygeneruj nowy kod QR na koncie, z którego
-          rozpocząłeś weryfikację.
+          Ta sesja weryfikacji nie jest już aktywna. Wygeneruj nowy kod QR na koncie, na którym
+          zaczęła się weryfikacja.
         </p>
       </div>
     );
