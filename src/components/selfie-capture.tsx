@@ -3,17 +3,27 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getFrameCropRect } from "@/lib/camera-crop";
+import { captureVideoFrame } from "@/lib/verification-image";
 
 const MAX_ATTEMPTS = 3;
 
 export function SelfieCapture({
   onConfirm,
   onSkip,
+  cameraHelp,
   isSubmitting = false,
   autoStart = false,
 }: {
   onConfirm: (blob: Blob) => void;
-  onSkip: () => void;
+  /**
+   * Closes the camera after it failed to start. It used to be offered as
+   * "Kontynuuj bez selfie — zweryfikujemy ręcznie", but no flow can be sent
+   * without a selfie, so that promised a way out that did not exist. Left
+   * out, there is no close button (the phone route has nowhere to go back to).
+   */
+  onSkip?: () => void;
+  /** What this particular screen can offer when the camera won't start. */
+  cameraHelp?: string;
   isSubmitting?: boolean;
   autoStart?: boolean;
 }) {
@@ -44,8 +54,11 @@ export function SelfieCapture({
   async function startCamera() {
     setError(null);
     try {
+      // Without a size the browser opens the camera at 640×480 and the oval
+      // crop came out around 120×160 px. Soft constraints: a weaker camera
+      // just gives its best.
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+        video: { facingMode: "user", width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
       streamRef.current = stream;
       setIsStreaming(true);
@@ -54,8 +67,8 @@ export function SelfieCapture({
       setAttempts(next);
       setError(
         next >= MAX_ATTEMPTS
-          ? "Nie udało się uzyskać dostępu do kamery. Możesz kontynuować bez selfie — Twoje zgłoszenie zostanie zweryfikowane ręcznie przez administratora."
-          : `Nie udało się uzyskać dostępu do kamery (próba ${next} z ${MAX_ATTEMPTS}).`
+          ? "Nie udało się włączyć kamery. Zezwól tej stronie na dostęp do kamery w ustawieniach przeglądarki i spróbuj ponownie."
+          : `Nie udało się włączyć kamery (próba ${next} z ${MAX_ATTEMPTS}). Sprawdź, czy przeglądarka ma zgodę na użycie kamery.`
       );
     }
   }
@@ -73,7 +86,7 @@ export function SelfieCapture({
     setIsStreaming(false);
   }
 
-  function takePhoto() {
+  async function takePhoto() {
     const video = videoRef.current;
     const frame = frameRef.current;
     if (!video || !frame) return;
@@ -81,31 +94,19 @@ export function SelfieCapture({
     // The preview is mirrored (CSS scale-x(-1)) for a natural selfie feel,
     // but the video's underlying pixel buffer never actually flips — the
     // crop math has to un-mirror to line up with what's on screen.
-    const crop = getFrameCropRect(video, frame, true);
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    if (crop) {
-      canvas.width = crop.sWidth;
-      canvas.height = crop.sHeight;
-      ctx.drawImage(video, crop.sx, crop.sy, crop.sWidth, crop.sHeight, 0, 0, crop.sWidth, crop.sHeight);
-    } else {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0);
-    }
-
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        capturedBlobRef.current = blob;
-        setPreviewUrl(URL.createObjectURL(blob));
-        stopCamera();
-      },
-      "image/jpeg",
-      0.9
-    );
+    //
+    // The crop keeps a small margin around the oval (chin and hair often
+    // spill past it) and at least 480 source px on its short side (the whole
+    // frame height on a 640×480 webcam): the reviewer has to judge a face,
+    // not a thumbnail of one. The margin stays small on purpose — a wider
+    // shot pulls people in the background into frame, and a second face
+    // fails the selfie check.
+    const crop = getFrameCropRect(video, frame, true, { pad: 0.15, minShortSide: 480 });
+    const blob = await captureVideoFrame(video, crop);
+    if (!blob) return;
+    capturedBlobRef.current = blob;
+    setPreviewUrl(URL.createObjectURL(blob));
+    stopCamera();
   }
 
   function retake() {
@@ -145,7 +146,10 @@ export function SelfieCapture({
 
   if (isStreaming) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-black py-6">
+      // z-[60]: above the cookie banner (z-50, rendered after the page in the
+      // root layout), which would otherwise cover the shutter and "Anuluj" —
+      // on a phone that has never been on GoMambo it is always there.
+      <div className="fixed inset-0 z-[60] flex flex-col items-center justify-between bg-black py-6">
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video
           ref={videoRef}
@@ -185,9 +189,12 @@ export function SelfieCapture({
         Zrób selfie
       </Button>
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {attempts >= MAX_ATTEMPTS && (
+      {error && cameraHelp && <p className="text-sm text-muted-foreground">{cameraHelp}</p>}
+      {/* Offered from the first failure: on a computer without a camera,
+          or after a reflexive "Blokuj", every retry fails the same way. */}
+      {error && onSkip && (
         <Button type="button" variant="ghost" onClick={onSkip}>
-          Kontynuuj bez selfie →
+          Zamknij
         </Button>
       )}
     </div>

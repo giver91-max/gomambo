@@ -70,3 +70,12 @@ export const FUEL_LEVEL_LABELS: Record<FuelLevel, string> = {
   three_quarters: "3/4",
   full: "Pełny",
 };
+
+/** "1 miejsce", "4 miejsca", "5 miejsc", "22 miejsca" — Polish plural for a seat count. */
+export function seatsLabel(seats: number): string {
+  const lastTwo = seats % 100;
+  const last = seats % 10;
+  if (seats === 1) return "1 miejsce";
+  if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return `${seats} miejsca`;
+  return `${seats} miejsc`;
+}

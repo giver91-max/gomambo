@@ -5,7 +5,7 @@ import { BackButton } from "@/components/back-button";
 import { VerificationRequiredNotice } from "@/components/verification-required-notice";
 import { createClient } from "@/lib/supabase/server";
 import { getVerificationStatus } from "@/lib/verification-gate";
-import { getPartnerContext, partnerCanList } from "@/lib/partner";
+import { countPartnerDocuments, getPartnerContext, partnerCanList } from "@/lib/partner";
 import { loadCarAsInitialValues } from "@/lib/car-form";
 import { getOwnerCommissionRate } from "@/lib/commission";
 
@@ -20,13 +20,18 @@ export default async function NewCarPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // The same two gates createCarDraft uses, or the form never renders for a
+  // The same two gates createCar uses, or the form never renders for a
   // company: a rental firm has no driving licence to verify, which is the
   // whole reason the Partner gate exists. Fixing only the server action left
   // this page refusing everyone it was meant to let in.
   const partner = await getPartnerContext(supabase, user.id);
   const { status, rejectionReason } = await getVerificationStatus(supabase, user.id);
   const canAddCar = partner ? partnerCanList(partner.status) : status === "approved";
+  // A company is 'pending' from the moment its form is saved, before any
+  // document exists — "we are checking your documents" would leave it waiting
+  // for a verification that cannot start (the dashboard step says the same).
+  const awaitingFirstDocument =
+    partner?.status === "pending" && (await countPartnerDocuments(supabase, partner.partnerId)) === 0;
 
   const initialValues = searchParams.duplicateFrom
     ? await loadCarAsInitialValues(supabase, searchParams.duplicateFrom, user.id)
@@ -51,19 +56,30 @@ export default async function NewCarPage({
           <NewCarForm initialValues={initialValues} commissionRate={await getOwnerCommissionRate(user.id)} />
         </>
       ) : partner ? (
-        // A Partner blocked here is waiting on GoMambo, not on their own
-        // documents — pointing them at the driving-licence screen would be
-        // sending them somewhere that cannot help.
+        // A Partner blocked here is waiting on its company verification, not
+        // on a driving licence — pointing them at the driving-licence screen
+        // would be sending them somewhere that cannot help.
         <div className="space-y-2 rounded-lg border p-4 text-sm">
+          {/* 'draft' is where "Poproś o poprawki" (admin/partnerzy) puts a
+              company: GoMambo is waiting on the company, not the other way
+              round, and the request itself is in the company panel. */}
           <p className="font-medium text-foreground">
-            {partner.status === "pending"
+            {awaitingFirstDocument
+              ? "Weryfikacja wypożyczalni czeka na dokument"
+              : partner.status === "pending"
               ? "Weryfikujemy Twoją wypożyczalnię"
-              : "Wypożyczalnia nie może w tej chwili dodawać aut"}
+              : partner.status === "draft"
+                ? "Prosimy o poprawki danych firmy"
+                : "Wypożyczalnia nie może w tej chwili dodawać aut"}
           </p>
           <p className="text-muted-foreground">
-            {partner.status === "pending"
-              ? "Sprawdzamy dane firmy i dokumenty. Damy znać mailem, gdy będziesz mógł dodać pierwsze auto."
-              : "Napisz do nas, a wyjaśnimy, co jest potrzebne do wznowienia współpracy."}
+            {awaitingFirstDocument
+              ? "Dodaj odpis z CEIDG lub KRS w panelu firmy — bez niego nie zaczniemy weryfikacji. Po weryfikacji dodasz tu pierwsze auto."
+              : partner.status === "pending"
+              ? "Sprawdzamy dane firmy i dokumenty. Damy znać mailem, gdy będzie można dodać pierwsze auto."
+              : partner.status === "draft"
+                ? "Szczegóły są w panelu firmy — po poprawkach wrócicie do weryfikacji."
+                : "Napisz do nas, a wyjaśnimy, co jest potrzebne do wznowienia współpracy."}
           </p>
           <Link href="/dashboard/firma" className="text-primary hover:underline">
             Przejdź do panelu firmy →

@@ -4,6 +4,9 @@ import { useState, useTransition } from "react";
 import { toggleCarPause } from "./[id]/edit/actions";
 import { Button } from "@/components/ui/button";
 
+const CONNECTION_FAILED =
+  "Nie udało się połączyć z GoMambo — sprawdź internet i spróbuj ponownie. Jeśli błąd się powtarza, odśwież stronę.";
+
 export function PauseToggleButton({
   carId,
   status,
@@ -17,8 +20,15 @@ export function PauseToggleButton({
   function handleClick() {
     setError(null);
     startTransition(async () => {
-      const result = await toggleCarPause(carId);
-      if (result.error) setError(result.error);
+      // Caught here: a dropped connection would otherwise rethrow into
+      // Next's bare "Application error" screen.
+      try {
+        const result = await toggleCarPause(carId);
+        if (!result || result.error) setError(result?.error ?? CONNECTION_FAILED);
+      } catch (err) {
+        console.error("pause toggle", err);
+        setError(CONNECTION_FAILED);
+      }
     });
   }
 

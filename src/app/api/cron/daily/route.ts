@@ -3,6 +3,7 @@ import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { addDays, toISODate } from "@/lib/calendar";
 import { sendPickupInstructionsIfDue } from "@/lib/pickup-instructions";
 import { notifyUser } from "@/lib/notify-user";
+import { sendNotificationEmail } from "@/lib/email";
 import { escapeHtml } from "@/lib/html";
 import { SITE_URL } from "@/lib/site";
 import { DOCUMENTS_EXPIRED_REASON } from "@/lib/car-form";
@@ -25,19 +26,34 @@ import {
   runRetentionTransfers,
 } from "@/lib/deposit-service";
 
+// Same inbox as the money alerts (lib/money-alerts.ts).
+const ADMIN_ALERT_EMAIL = "user@gomambo.pl";
+
 /**
- * One deposit step, isolated: a Stripe or database error in one of them must
- * not stop the pickup mails, the verifications or the other money steps.
- * Each step processes a bounded batch (see deposit-service.ts) and whatever
- * is left is picked up by the next run.
+ * Runs each step of the job isolated: a Stripe or database error in one of
+ * them must not stop the pickup mails, the verifications, the money steps or
+ * the document checks after it. A failed step is logged and remembered, and
+ * the run then reports itself as failed (see the end of GET) instead of
+ * answering 200 ok. Each step processes a bounded batch (see
+ * deposit-service.ts) and whatever is left is picked up by the next run.
  */
-async function depositStep<T>(name: string, step: () => Promise<T>): Promise<T | "error"> {
-  try {
-    return await step();
-  } catch (error) {
-    console.error(`[cron] deposit step ${name} failed`, error);
-    return "error";
+function stepRunner() {
+  const failed: { name: string; message: string }[] = [];
+  async function step<T>(name: string, run: () => Promise<T>): Promise<T | "error"> {
+    try {
+      return await run();
+    } catch (error) {
+      console.error(`[cron] step ${name} failed`, error);
+      failed.push({ name, message: error instanceof Error ? error.message : String(error) });
+      return "error";
+    }
   }
+  return { step, failed };
+}
+
+/** A query error from supabase-js, turned into a throw the step can catch. */
+function queryFailed(what: string, error: { message: string }): Error {
+  return new Error(`${what}: ${error.message}`);
 }
 
 // Vercel calls this on the schedule in vercel.json and signs the call with
@@ -64,14 +80,93 @@ export async function GET(request: Request) {
 
   const today = toISODate(new Date());
   const tomorrow = toISODate(addDays(new Date(), 1));
+  const { step, failed } = stepRunner();
 
   // First, so a trip that became due today has its deposit asked for in the
   // same run as its selfie (the two are requested together).
-  const depositsRequested = await depositStep("requests", () => runDepositRequests(admin));
+  const depositsRequested = await step("deposit-requests", () => runDepositRequests(admin));
 
-  // The mail body, the withholding rule and the one-send claim all live in
-  // sendPickupInstructionsIfDue, because an approval landing after this job
-  // has run must be able to send the same thing.
+  const pickup = await step("pickup-instructions", () => runPickupInstructions(admin, today, tomorrow));
+
+  const verificationResult = await step("booking-verifications", () => runBookingVerifications(admin, today));
+
+  // The deposit's day: reminders before pickup, the alarm on pickup day,
+  // the owner's review window after return, the automatic refund when it
+  // closes, the kept amounts whose objection window closed, and the safety
+  // net for anything a webhook or a click left halfway.
+  const deposits = {
+    requested: depositsRequested,
+    reminded: await step("deposit-reminders", () => runDepositReminders(admin)),
+    overdue: await step("deposit-overdue", () => runDepositOverdue(admin)),
+    reviewsStarted: await step("deposit-review-start", () => runDepositReviewStart(admin)),
+    autoRefunded: await step("deposit-auto-refunds", () => runDepositAutoRefunds(admin)),
+    retentionsTransferred: await step("deposit-retention-transfers", () => runRetentionTransfers(admin)),
+    reconciled: await step("deposit-reconcile", () => reconcileDeposits(admin)),
+  };
+
+  const expiredRequests = await step("expire-requests", () => expireStaleRequests(admin, today));
+  const carDocuments = await step("car-documents", () => runCarDocumentChecks(admin, today));
+
+  const result = {
+    ok: failed.length === 0,
+    pickupInstructionsSent: pickup === "error" ? "error" : pickup.sent,
+    pickupInstructionsWithheld: pickup === "error" ? "error" : pickup.withheld,
+    expiredRequests,
+    ...(verificationResult === "error"
+      ? { verificationsRequested: "error", verificationsEscalated: "error" }
+      : verificationResult),
+    deposits,
+    carDocuments,
+    ...(failed.length > 0 ? { failed: failed.map((f) => f.name) } : {}),
+  };
+
+  if (failed.length > 0) {
+    // Logs on the Hobby plan are gone within the hour, so a failed step that
+    // only logged would never be seen. One mail per failed run: Vercel does
+    // not retry a cron call, and a manual re-run cannot double anything for
+    // users — every step claims its rows before it sends (pickup timestamp,
+    // verification insert, escalation and status claims, reminder date) — so
+    // a second mail would only come with a second failure. The 500 marks the
+    // run as failed in the Vercel dashboard as well.
+    const n = failed.length;
+    const howMany =
+      n === 1
+        ? "1 krok się nie powiódł"
+        : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)
+          ? `${n} kroki się nie powiodły`
+          : `${n} kroków się nie powiodło`;
+    await sendNotificationEmail({
+      to: ADMIN_ALERT_EMAIL,
+      subject: `GoMambo: codzienne zadanie — ${howMany}`,
+      html: `
+        <p>Codzienne zadanie (${escapeHtml(today)}) wykonało pozostałe kroki, ale te się nie powiodły:</p>
+        <ul>${failed
+          .map((f) => `<li><strong>${escapeHtml(f.name)}</strong>: ${escapeHtml(f.message.slice(0, 500))}</li>`)
+          .join("")}</ul>
+        <p>Następne uruchomienie (jutro o 7:00 UTC) nadrobi to, co zostało do zrobienia.${
+          failed.some((f) => f.name === "car-documents")
+            ? " Wyjątek: przypomnienia o OC i przeglądzie na 30 i 7 dni przed terminem idą tylko w ten jeden dzień, więc dzisiejsze mogły przepaść."
+            : ""
+        }</p>
+      `,
+    });
+    return NextResponse.json(result, { status: 500 });
+  }
+
+  return NextResponse.json(result);
+}
+
+/**
+ * Pickup details for trips starting today or tomorrow. The mail body, the
+ * withholding rule and the one-send claim all live in
+ * sendPickupInstructionsIfDue, because an approval landing after this job
+ * has run must be able to send the same thing.
+ */
+async function runPickupInstructions(
+  admin: NonNullable<ReturnType<typeof tryCreateAdminClient>>,
+  today: string,
+  tomorrow: string
+): Promise<{ sent: number; withheld: number }> {
   const { data: due, error } = await admin
     .from("bookings")
     .select("id")
@@ -83,11 +178,7 @@ export async function GET(request: Request) {
     .eq("status", "accepted")
     .eq("payment_status", "paid")
     .is("pickup_instructions_sent_at", null);
-
-  if (error) {
-    console.error("[cron] pickup instructions query failed", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) throw queryFailed("pickup instructions query", error);
 
   let sent = 0;
   let withheld = 0;
@@ -98,35 +189,7 @@ export async function GET(request: Request) {
       withheld += 1;
     }
   }
-
-  const verificationResult = await runBookingVerifications(admin, today);
-
-  // The deposit's day: reminders before pickup, the alarm on pickup day,
-  // the owner's review window after return, the automatic refund when it
-  // closes, the kept amounts whose objection window closed, and the safety
-  // net for anything a webhook or a click left halfway.
-  const deposits = {
-    requested: depositsRequested,
-    reminded: await depositStep("reminders", () => runDepositReminders(admin)),
-    overdue: await depositStep("overdue", () => runDepositOverdue(admin)),
-    reviewsStarted: await depositStep("review-start", () => runDepositReviewStart(admin)),
-    autoRefunded: await depositStep("auto-refunds", () => runDepositAutoRefunds(admin)),
-    retentionsTransferred: await depositStep("retention-transfers", () => runRetentionTransfers(admin)),
-    reconciled: await depositStep("reconcile", () => reconcileDeposits(admin)),
-  };
-
-  const expiredRequests = await expireStaleRequests(admin, today);
-  const carDocuments = await runCarDocumentChecks(admin, today);
-
-  return NextResponse.json({
-    ok: true,
-    pickupInstructionsSent: sent,
-    pickupInstructionsWithheld: withheld,
-    expiredRequests,
-    ...verificationResult,
-    deposits,
-    carDocuments,
-  });
+  return { sent, withheld };
 }
 
 /**
@@ -145,13 +208,18 @@ async function runBookingVerifications(
   // Everything from today up to the lead date: a booking made less than two
   // days out never has a T-2 moment, and those are the riskiest of all, so
   // they are asked as soon as the job next runs.
-  const { data: due } = await admin
+  // A failed query is collected rather than thrown straight away, so the
+  // escalation half below still runs; the step fails at the end.
+  const errors: string[] = [];
+
+  const { data: due, error: dueError } = await admin
     .from("bookings")
     .select("id, renter_id, start_date, cars(brand, model, year)")
     .gte("start_date", today)
     .lte("start_date", leadDate)
     .eq("status", "accepted")
     .eq("payment_status", "paid");
+  if (dueError) errors.push(`verification requests query: ${dueError.message}`);
 
   let requested = 0;
   for (const booking of due ?? []) {
@@ -175,7 +243,7 @@ async function runBookingVerifications(
   // would otherwise reach the renter's inbox and the urgent queue at the
   // same moment, giving nobody a chance to act.
   const deadline = toISODate(addDays(new Date(), 1));
-  const { data: stale } = await admin
+  const { data: stale, error: staleError } = await admin
     .from("booking_verifications")
     .select("booking_id, status, bookings!inner(start_date, status, renter_id, owner_id, cars(brand, model, year))")
     .in("status", ["pending_renter", "pending_owner"])
@@ -183,6 +251,7 @@ async function runBookingVerifications(
     .lt("requested_at", today)
     .lte("bookings.start_date", deadline)
     .eq("bookings.status", "accepted");
+  if (staleError) errors.push(`verification escalations query: ${staleError.message}`);
 
   let escalated = 0;
   for (const row of stale ?? []) {
@@ -247,6 +316,9 @@ async function runBookingVerifications(
     escalated += 1;
   }
 
+  if (errors.length > 0) {
+    throw new Error(`${errors.join("; ")} (requested ${requested}, escalated ${escalated})`);
+  }
   return { verificationsRequested: requested, verificationsEscalated: escalated };
 }
 
@@ -266,7 +338,7 @@ async function expireStaleRequests(
 ): Promise<number> {
   const cutoff = new Date(Date.now() - REQUEST_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
 
-  const { data: stale } = await admin
+  const { data: stale, error } = await admin
     .from("bookings")
     .select("id, renter_id, owner_id, start_date, end_date, created_at, cars(brand, model, year)")
     .eq("status", "requested")
@@ -276,6 +348,7 @@ async function expireStaleRequests(
     // PostgREST's or() grammar is delimiter-based. The other .or() calls in
     // this codebase pass bare uuids, which have no reserved characters.
     .or(`created_at.lt."${cutoff}",start_date.lt."${today}"`);
+  if (error) throw queryFailed("stale requests query", error);
 
   let expired = 0;
   for (const booking of stale ?? []) {
@@ -358,13 +431,17 @@ async function runCarDocumentChecks(
 ): Promise<{ paused: number; reminded: number }> {
   let paused = 0;
   let reminded = 0;
+  // Collected, not thrown at once, so a failed pause query does not also
+  // cost the day's reminders; the step fails at the end. Until now these
+  // only reached console.error and the run still answered 200 ok.
+  const errors: string[] = [];
 
   const { data: expired, error: expiredError } = await admin
     .from("car_private")
     .select("car_id, insurance_valid_until, inspection_valid_until, cars!inner(owner_id, brand, model, status)")
     .or(`insurance_valid_until.lt.${today},inspection_valid_until.lt.${today}`)
     .eq("cars.status", "approved");
-  if (expiredError) console.error("[cron] expired car documents query failed", expiredError);
+  if (expiredError) errors.push(`expired car documents query: ${expiredError.message}`);
 
   for (const row of (expired ?? []) as unknown as CarDocumentRow[]) {
     if (!row.cars) continue;
@@ -414,7 +491,7 @@ async function runCarDocumentChecks(
       .select("car_id, insurance_valid_until, inspection_valid_until, cars!inner(owner_id, brand, model, status)")
       .or(`insurance_valid_until.eq.${target},inspection_valid_until.eq.${target}`)
       .in("cars.status", ["approved", "paused", "pending"]);
-    if (dueError) console.error("[cron] car document reminders query failed", dueError);
+    if (dueError) errors.push(`car document reminders query (${days} days): ${dueError.message}`);
 
     for (const row of (rows ?? []) as unknown as CarDocumentRow[]) {
       if (!row.cars) continue;
@@ -456,5 +533,8 @@ async function runCarDocumentChecks(
     reminded += 1;
   }
 
+  if (errors.length > 0) {
+    throw new Error(`${errors.join("; ")} (paused ${paused}, reminded ${reminded})`);
+  }
   return { paused, reminded };
 }

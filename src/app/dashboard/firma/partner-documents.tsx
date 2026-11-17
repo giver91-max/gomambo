@@ -6,16 +6,11 @@ import { addPartnerDocument } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-const KINDS: { value: string; label: string }[] = [
-  { value: "krs", label: "Odpis z KRS" },
-  { value: "ceidg", label: "Wydruk z CEIDG" },
-  { value: "nip_confirmation", label: "Potwierdzenie NIP" },
-  { value: "insurance", label: "Polisa floty" },
-  { value: "other", label: "Inny dokument" },
-];
+import { PARTNER_DOCUMENT_KINDS as KINDS, partnerDocumentLabel } from "./document-kinds";
 
 const MAX_BYTES = 10 * 1024 * 1024;
+const CONNECTION_FAILED =
+  "Nie udało się połączyć z GoMambo — sprawdź internet i spróbuj ponownie. Jeśli błąd się powtarza, odśwież stronę.";
 
 export function PartnerDocuments({
   partnerId,
@@ -40,20 +35,33 @@ export function PartnerDocuments({
     }
 
     startTransition(async () => {
-      const supabase = createClient();
-      const ext = file.name.split(".").pop() || "pdf";
-      // Keyed on the PARTNER, not the uploader — the document belongs to the
-      // company and every member of it must be able to read it.
-      const path = `${partnerId}/${crypto.randomUUID()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from("partner-documents")
-        .upload(path, file, { contentType: file.type });
-      if (uploadError) {
-        setError(`Nie udało się wgrać pliku: ${uploadError.message}`);
-        return;
+      try {
+        const supabase = createClient();
+        const ext = file.name.split(".").pop() || "pdf";
+        // Keyed on the PARTNER, not the uploader — the document belongs to the
+        // company and every member of it must be able to read it.
+        const path = `${partnerId}/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("partner-documents")
+          .upload(path, file, { contentType: file.type });
+        if (uploadError) {
+          // Storage answers in English ("Failed to fetch"); logged, not shown.
+          console.error("partner documents: upload failed", uploadError);
+          setError("Nie udało się wgrać pliku — sprawdź połączenie z internetem i spróbuj ponownie.");
+          return;
+        }
+        const result = await addPartnerDocument(kind, path, file.name);
+        if (!result || result.error) {
+          // A refused document was never recorded, so nothing points at the file.
+          if (result?.error) await supabase.storage.from("partner-documents").remove([path]);
+          setError(result?.error ?? CONNECTION_FAILED);
+        }
+      } catch (err) {
+        // Without this a dropped connection, or a page left open across a
+        // deploy, rethrows into the error screen instead of a message here.
+        console.error("partner documents", err);
+        setError(CONNECTION_FAILED);
       }
-      const result = await addPartnerDocument(kind, path, file.name);
-      if (result?.error) setError(result.error);
     });
   }
 
@@ -74,7 +82,7 @@ export function PartnerDocuments({
             {documents.map((doc) => (
               <li key={doc.id} className="flex items-center justify-between gap-2 border-b py-1">
                 <span className="text-foreground">
-                  {KINDS.find((k) => k.value === doc.kind)?.label ?? doc.kind}
+                  {partnerDocumentLabel(doc.kind)}
                   {doc.originalName ? ` — ${doc.originalName}` : ""}
                 </span>
                 <Badge variant={doc.verifiedAt ? "default" : "secondary"}>

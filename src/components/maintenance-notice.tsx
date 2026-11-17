@@ -4,7 +4,9 @@ import { buttonVariants } from "@/components/ui/button";
 // Shown instead of the catalogue while site_settings.maintenance_mode is on.
 // That lasts weeks, not minutes — the catalogue opens once there is enough
 // to choose from — so it says what IS possible already: owners and rental
-// companies can add their cars now and go live on day one.
+// companies can add their cars now and go live on day one. "Day one" holds
+// only for a car we approved whose OC and inspection are still valid then
+// (the daily cron pauses expired ones), so the copy says that too.
 export function MaintenanceNotice() {
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
@@ -14,8 +16,8 @@ export function MaintenanceNotice() {
         będzie w czym wybierać.
       </p>
       <p className="max-w-md text-muted-foreground">
-        Masz auto albo prowadzisz wypożyczalnię? Dodaj auta już dziś — pojawią się w katalogu od
-        pierwszego dnia.
+        Masz auto albo prowadzisz wypożyczalnię? Dodaj auta już dziś — po zatwierdzeniu, z ważnym
+        OC i przeglądem, pojawią się w katalogu od pierwszego dnia.
       </p>
       <Link href="/zostan-wlascicielem" className={buttonVariants()}>
         Dodaj swoje auto →

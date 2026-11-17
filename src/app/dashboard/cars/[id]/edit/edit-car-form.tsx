@@ -27,6 +27,10 @@ import type {
 import { DEPOSIT_REQUEST_LEAD_DAYS, DEPOSIT_REVIEW_DAYS } from "@/lib/deposit";
 
 const initialState: EditCarState = { error: null };
+const SAVE_FAILED: EditCarState = {
+  error:
+    "Nie udało się zapisać zmian — sprawdź połączenie z internetem i spróbuj ponownie. Jeśli błąd się powtarza, odśwież stronę.",
+};
 const selectClassName =
   "h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
@@ -47,8 +51,21 @@ export function EditCarForm({
   };
   editingAsAdmin: boolean;
 }) {
-  const updateWithId = updateCarDetails.bind(null, car.id);
-  const [state, formAction] = useFormState(updateWithId, initialState);
+  // Wrapped, not passed straight in: a dropped connection or a page left
+  // open across a deploy makes the action throw (React then swaps the page
+  // for Next's bare "Application error") or come back empty. Either way the
+  // owner gets a message and keeps the form.
+  const [state, formAction] = useFormState(
+    async (prevState: EditCarState, formData: FormData): Promise<EditCarState> => {
+      try {
+        return (await updateCarDetails(car.id, prevState, formData)) ?? SAVE_FAILED;
+      } catch (err) {
+        console.error("edit car form", err);
+        return SAVE_FAILED;
+      }
+    },
+    initialState
+  );
   const [deliveryAvailable, setDeliveryAvailable] = useState(car.delivery_available);
 
   return (
@@ -83,7 +100,7 @@ export function EditCarForm({
             id="price_per_day"
             name="price_per_day"
             type="number"
-            step="0.01"
+            step="1"
             min={1}
             required
             defaultValue={car.price_per_day}
@@ -208,7 +225,7 @@ export function EditCarForm({
             id="price_per_month"
             name="price_per_month"
             type="number"
-            step="0.01"
+            step="1"
             min={1}
             placeholder="np. 2400"
             defaultValue={car.price_per_month ?? ""}
@@ -223,7 +240,7 @@ export function EditCarForm({
             id="security_deposit_amount"
             name="security_deposit_amount"
             type="number"
-            step="0.01"
+            step="1"
             min={0}
             placeholder="np. 500"
             defaultValue={car.security_deposit_amount ?? ""}
@@ -341,8 +358,8 @@ export function EditCarForm({
         <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
           <input type="checkbox" name="rental_right" required className="mt-0.5 size-4 shrink-0" />
           <span>
-            Potwierdzam, że mogę wynajmować to auto — jestem jego właścicielem albo mam zgodę
-            właściciela lub leasingodawcy na odpłatny wynajem.
+            Potwierdzam, że mogę wynajmować to auto — auto jest moje albo mam zgodę właściciela
+            lub leasingodawcy na odpłatny wynajem.
           </span>
         </label>
       )}

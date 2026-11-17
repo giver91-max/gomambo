@@ -155,8 +155,8 @@ export function LandingPage() {
         <p className={styles.heroSub}>
           GoMambo to internetowa wypożyczalnia samochodów — działamy jako
           platforma P2P i łączymy oferty lokalnych wypożyczalni w jednym
-          miejscu, żebyś mógł porównać i wybrać dokładnie to auto, które Ci
-          pasuje.
+          miejscu, więc łatwo porównasz i wybierzesz dokładnie to auto, które
+          Ci pasuje.
         </p>
 
         <div className={styles.splitCta}>

@@ -4,9 +4,14 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
 import { stripeMode, type StripeMode } from "@/lib/stripe";
+import { findDeletedAccountLinks } from "@/lib/notifications";
 import { MaintenanceModeToggle } from "./maintenance-mode-toggle";
 import { RecentActivityItem } from "./recent-activity-item";
+import { getAdminQueueCounts } from "./queue-counts";
 import type { AdminNotification } from "@/types/database";
+
+const UNREAD_SHOWN = 8;
+const RECENT_WINDOW = 50;
 
 const notificationTypeLabel: Record<AdminNotification["type"], string> = {
   new_registration: "Nowa rejestracja",
@@ -19,7 +24,9 @@ const notificationTypeLabel: Record<AdminNotification["type"], string> = {
   bank_transfer_declared: "Zadeklarowany przelew",
   damage_reported: "Zgłoszenie do wynajmu",
   booking_verification_escalated: "Weryfikacja przed wynajmem",
-  new_partner_pending: "Nowa wypożyczalnia do weryfikacji",
+  // Also raised when a company sends its first document or answers a
+  // "Poproś o poprawki" request (dashboard/firma) — the row body says which.
+  new_partner_pending: "Wypożyczalnia do sprawdzenia",
   deposit_refund_failed: "Zwrot kaucji nie powiódł się",
   deposit_transfer_failed: "Przelew zatrzymanej kaucji nie powiódł się",
   deposit_overdue: "Kaucja: przekroczony termin",
@@ -61,9 +68,9 @@ export default async function AdminOverviewPage() {
     { count: userCount },
     { data: carStatuses },
     { count: activeBookings },
-    { count: pendingVerifications },
     { data: siteSettings },
     { data: recentActivity },
+    queues,
   ] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase.from("cars").select("status"),
@@ -74,10 +81,6 @@ export default async function AdminOverviewPage() {
       .from("bookings")
       .select("id", { count: "exact", head: true })
       .in("status", ["requested", "accepted"]),
-    supabase
-      .from("identity_verifications")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending"),
     supabase.from("site_settings").select("maintenance_mode").eq("id", 1).single(),
     // Read a wider window than we display: the list shows what is still
     // UNREAD, so it has to be filtered after the read markers come back.
@@ -86,7 +89,9 @@ export default async function AdminOverviewPage() {
       .select("id, type, body, link, created_at")
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
-      .limit(50),
+      .limit(RECENT_WINDOW),
+    // The same counts as the nav badges, from the same request-scoped cache.
+    getAdminQueueCounts(),
   ]);
 
   const { data: activityReads } = await supabase
@@ -94,9 +99,9 @@ export default async function AdminOverviewPage() {
     .select("notification_id")
     .eq("user_id", user!.id);
   const readActivityIds = new Set((activityReads ?? []).map((r) => r.notification_id));
-  const unreadActivity = (recentActivity ?? [])
-    .filter((n) => !readActivityIds.has(n.id))
-    .slice(0, 8);
+  const allUnread = (recentActivity ?? []).filter((n) => !readActivityIds.has(n.id));
+  const unreadActivity = allUnread.slice(0, UNREAD_SHOWN);
+  const deadLinks = await findDeletedAccountLinks(supabase, unreadActivity.map((n) => n.link));
 
   const pendingCars = (carStatuses ?? []).filter((c) => c.status === "pending").length;
   const approvedCars = (carStatuses ?? []).filter((c) => c.status === "approved").length;
@@ -108,8 +113,21 @@ export default async function AdminOverviewPage() {
     { label: "Auta zatwierdzone", value: approvedCars, href: "/admin/cars?status=approved" },
     { label: "Auta wstrzymane", value: pausedCars, href: "/admin/cars?status=paused" },
     { label: "Aktywne rezerwacje", value: activeBookings ?? 0 },
-    { label: "Weryfikacje oczekujące", value: pendingVerifications ?? 0, href: "/admin/verifications" },
+    { label: "Weryfikacje oczekujące", value: queues.pendingVerifications, href: "/admin/verifications" },
   ];
+
+  // What is actually waiting, from the queues themselves. This list used to
+  // be the unread notifications: opening the bell emptied it ("Nic nie
+  // czeka") while fifteen verifications waited, and decided ones stayed in it.
+  const toReview: { label: string; count: number; href: string }[] = [
+    { label: "Weryfikacje tożsamości", count: queues.pendingVerifications, href: "/admin/verifications" },
+    { label: "Auta do zatwierdzenia", count: queues.pendingCars, href: "/admin/cars?status=pending" },
+    { label: "Wypożyczalnie do weryfikacji", count: queues.pendingPartners, href: "/admin/partnerzy" },
+    { label: "Przelewy do potwierdzenia", count: queues.pendingTransfers, href: "/admin/przelewy" },
+    { label: "Kaucje do decyzji", count: queues.depositCases, href: "/admin/kaucje" },
+    { label: "Otwarte zgłoszenia do wynajmu", count: queues.openReports, href: "/admin/zgloszenia" },
+    { label: "Weryfikacje przed wynajmem", count: queues.openVerifications, href: "/admin/weryfikacje-najmu" },
+  ].filter((item) => item.count > 0);
 
   const stripeNotice = stripeModeNotice[stripeMode()];
 
@@ -153,9 +171,31 @@ export default async function AdminOverviewPage() {
 
       <div className="space-y-3">
         <h2 className="font-semibold">Do sprawdzenia</h2>
+        {toReview.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nic nie czeka na decyzję.</p>
+        ) : (
+          <Card>
+            <CardContent className="divide-y py-1">
+              {toReview.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="flex items-center justify-between gap-3 py-2.5 text-sm hover:text-primary"
+                >
+                  <span>{item.label}</span>
+                  <span className="font-semibold">{item.count} →</span>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="font-semibold">Nowe powiadomienia</h2>
         {unreadActivity.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Nic nie czeka. Wszystkie powiadomienia znajdziesz w{" "}
+            Brak nowych powiadomień. Wszystkie znajdziesz w{" "}
             <Link href="/dashboard/notifications" className="text-primary hover:underline">
               Powiadomieniach
             </Link>
@@ -167,12 +207,23 @@ export default async function AdminOverviewPage() {
               <RecentActivityItem
                 key={item.id}
                 id={item.id}
-                label={notificationTypeLabel[item.type]}
+                label={notificationTypeLabel[item.type] ?? "Powiadomienie"}
                 body={item.body}
                 link={item.link}
+                accountDeleted={!!item.link && deadLinks.has(item.link)}
                 createdAt={item.created_at}
               />
             ))}
+            {allUnread.length > unreadActivity.length && (
+              <p className="text-sm text-muted-foreground">
+                I jeszcze {allUnread.length - unreadActivity.length}
+                {(recentActivity ?? []).length >= RECENT_WINDOW ? "+" : ""} — wszystkie w{" "}
+                <Link href="/dashboard/notifications" className="text-primary hover:underline">
+                  Powiadomieniach
+                </Link>
+                .
+              </p>
+            )}
           </div>
         )}
       </div>

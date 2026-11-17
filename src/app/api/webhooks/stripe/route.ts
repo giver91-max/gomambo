@@ -22,6 +22,7 @@ import {
 import { notifyUser } from "@/lib/notify-user";
 import { escapeHtml } from "@/lib/html";
 import { SITE_URL } from "@/lib/site";
+import { formatZl } from "@/lib/deposit";
 
 // Answered when a deposit write failed: Stripe retries a non-2xx delivery,
 // a 200 would lose the event for good.
@@ -195,13 +196,13 @@ export async function POST(request: Request) {
               userId: booking.owner_id,
               type: "extra_charge_requested",
               subject: `Dopłata opłacona: ${carLabel}`,
-              body: `Najemca opłacił dodatkową opłatę ${Number(extraCharge.amount_pln).toFixed(2)} zł za ${carLabel} (${extraCharge.reason}).`,
+              body: `Najemca opłacił dodatkową opłatę ${formatZl(Number(extraCharge.amount_pln))} za ${carLabel} (${extraCharge.reason}).`,
               emailHtml: `
                 <p>Najemca opłacił zgłoszoną przez Ciebie dodatkową opłatę na GoMambo.</p>
                 <ul>
-                  <li><strong>Auto:</strong> ${carLabel}</li>
-                  <li><strong>Kwota:</strong> ${Number(extraCharge.amount_pln).toFixed(2)} zł</li>
-                  <li><strong>Powód:</strong> ${extraCharge.reason}</li>
+                  <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
+                  <li><strong>Kwota:</strong> ${formatZl(Number(extraCharge.amount_pln))}</li>
+                  <li><strong>Powód:</strong> ${escapeHtml(extraCharge.reason)}</li>
                 </ul>
                 <p><a href="${SITE_URL}/dashboard/bookings">Zobacz rezerwacje →</a></p>
               `,
@@ -340,7 +341,7 @@ export async function POST(request: Request) {
               emailHtml: `
                 <p>Wynajem na GoMambo został przedłużony.</p>
                 <ul>
-                  <li><strong>Auto:</strong> ${carLabel}</li>
+                  <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
                   <li><strong>Nowa data zakończenia:</strong> ${extension.new_end_date}</li>
                 </ul>
                 <p><a href="${SITE_URL}/dashboard/bookings">Zobacz rezerwacje →</a></p>
@@ -429,8 +430,8 @@ export async function POST(request: Request) {
             ? `Najemca opłacił wynajem ${car.brand} ${car.model}. Rezerwacja jest potwierdzona.`
             : "Najemca opłacił wynajem. Rezerwacja jest potwierdzona.",
           emailHtml: `
-            <p>Najemca opłacił rezerwację${car ? ` — ${car.brand} ${car.model}` : ""}.</p>
-            <p>Kwota: ${booking.total_price ? Number(booking.total_price).toFixed(2) : "?"} zł.</p>
+            <p>Najemca opłacił rezerwację${car ? ` — ${escapeHtml(`${car.brand} ${car.model}`)}` : ""}.</p>
+            <p>Kwota: ${booking.total_price ? formatZl(Number(booking.total_price)) : "? zł"}.</p>
             <p><a href="${SITE_URL}/dashboard/bookings">Przejdź do rezerwacji →</a></p>
           `,
         });
@@ -472,7 +473,7 @@ export async function POST(request: Request) {
         body: `Twoja płatność za ${failedLabel} nie doszła do skutku. Nie pobraliśmy żadnych środków — możesz spróbować ponownie.`,
         emailHtml: `
           <p>Twoja płatność na GoMambo nie doszła do skutku — nie pobraliśmy żadnych środków.</p>
-          <ul><li><strong>Auto:</strong> ${failedLabel}</li></ul>
+          <ul><li><strong>Auto:</strong> ${escapeHtml(failedLabel)}</li></ul>
           <p>Możesz spróbować ponownie w panelu.</p>
           <p><a href="${SITE_URL}/dashboard/rentals">Przejdź do rezerwacji →</a></p>
         `,
@@ -520,7 +521,7 @@ export async function POST(request: Request) {
       if (event.type === "refund.failed") {
         await reportMoneyFailure(
           "refund_failed",
-          `Zwrot ${refund.id} (${(refund.amount / 100).toFixed(2)} zł, płatność ${paymentIntentId ?? "?"}) nie powiódł się w Stripe (${refund.failure_reason ?? "brak powodu"}). Pieniądze wróciły na saldo GoMambo — zwróć je najemcy ponownie albo przelewem.`
+          `Zwrot ${refund.id} (${formatZl(refund.amount / 100)}, płatność ${paymentIntentId ?? "?"}) nie powiódł się w Stripe (${refund.failure_reason ?? "brak powodu"}). Pieniądze wróciły na saldo GoMambo — zwróć je najemcy ponownie albo przelewem.`
         );
       }
       break;
@@ -547,7 +548,7 @@ export async function POST(request: Request) {
       if (outcome === "not_deposit") {
         await reportMoneyFailure(
           "payment_disputed",
-          `Klient zgłosił w banku reklamację płatności ${paymentIntentId ?? intentIdOf(dispute.charge) ?? "?"} (spór ${dispute.id}, ${(dispute.amount / 100).toFixed(2)} zł, powód: ${dispute.reason}). Odpowiedz na spór w Stripe przed terminem.`
+          `Klient zgłosił w banku reklamację płatności ${paymentIntentId ?? intentIdOf(dispute.charge) ?? "?"} (spór ${dispute.id}, ${formatZl(dispute.amount / 100)}, powód: ${dispute.reason}). Odpowiedz na spór w Stripe przed terminem.`
         );
       }
       break;
@@ -557,7 +558,7 @@ export async function POST(request: Request) {
       const dispute = event.data.object as Stripe.Dispute;
       await reportMoneyFailure(
         "payment_disputed",
-        `Spór ${dispute.id} (płatność ${intentIdOf(dispute.payment_intent) ?? "?"}, ${(dispute.amount / 100).toFixed(2)} zł) został zamknięty ze statusem „${dispute.status}”. Jeśli dotyczył kaucji, rozlicz ją teraz w panelu kaucji.`
+        `Spór ${dispute.id} (płatność ${intentIdOf(dispute.payment_intent) ?? "?"}, ${formatZl(dispute.amount / 100)}) został zamknięty ze statusem „${dispute.status}”. Jeśli dotyczył kaucji, rozlicz ją teraz w panelu kaucji.`
       );
       break;
     }

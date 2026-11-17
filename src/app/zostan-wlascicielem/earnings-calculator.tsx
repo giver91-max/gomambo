@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { formatPriceZl, wholeZl } from "@/lib/money-format";
 
 const SCENARIOS = [
   { days: 8, label: "Okazjonalnie" },
@@ -17,12 +18,18 @@ export function EarningsCalculator() {
     <div className="space-y-6">
       <div className="max-w-xs space-y-2">
         <Label htmlFor="pricePerDay">Twoja cena za dzień (zł)</Label>
+        {/* Prices on GoMambo are whole złoty. step alone does not stop a
+            typed "120,5" — the browser only flags it invalid and still hands
+            it over — so the value is rounded here, and the totals below can
+            never show grosze. */}
         <Input
           id="pricePerDay"
           type="number"
+          inputMode="numeric"
           min={1}
+          step={1}
           value={pricePerDay}
-          onChange={(e) => setPricePerDay(Math.max(0, Number(e.target.value) || 0))}
+          onChange={(e) => setPricePerDay(Math.max(0, wholeZl(e.target.value)))}
         />
       </div>
 
@@ -33,7 +40,7 @@ export function EarningsCalculator() {
               {s.label} · {s.days} dni/mies.
             </p>
             <p className="mt-1 text-2xl font-bold">
-              {(pricePerDay * s.days).toLocaleString("pl-PL")} zł
+              {formatPriceZl(pricePerDay * s.days)}
             </p>
             <p className="text-xs text-muted-foreground">szacunkowo / miesiąc</p>
           </div>

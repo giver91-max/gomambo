@@ -9,13 +9,20 @@ import { escapeHtml } from "@/lib/html";
 import { DEPOSIT_HELD_STATES } from "@/lib/deposit";
 import {
   carDocumentsExpired,
+  carWriteErrorMessage,
   DOCUMENTS_EXPIRED_REASON,
+  joinPolishList,
+  missingCarDocuments,
   ownerListingGate,
   parseCarDocumentsForm,
   parseCarListingForm,
 } from "@/lib/car-form";
 
 export type EditCarState = { error: string | null; success?: boolean };
+
+// Shown instead of the database's own (English) error text; the details go
+// to the server log through carWriteErrorMessage.
+const SAVE_FAILED = "Nie udało się zapisać zmian. Spróbuj ponownie za chwilę.";
 
 async function requireOwnedCar(carId: string) {
   const supabase = await createClient();
@@ -148,12 +155,16 @@ export async function updateCarDetails(
   // car_private goes first, and is put back if the car update fails.
   if (!isAdmin) {
     const { error } = await writeCar();
-    if (error) return { error: error.message };
+    if (error) return { error: carWriteErrorMessage(error, SAVE_FAILED, "updateCarDetails: cars update failed") };
     const { error: privateError } = await writePrivate();
-    if (privateError) return { error: privateError.message };
+    if (privateError) {
+      return { error: carWriteErrorMessage(privateError, SAVE_FAILED, "updateCarDetails: car_private upsert failed") };
+    }
   } else {
     const { error: privateError } = await writePrivate();
-    if (privateError) return { error: privateError.message };
+    if (privateError) {
+      return { error: carWriteErrorMessage(privateError, SAVE_FAILED, "updateCarDetails: car_private upsert failed") };
+    }
     const { data: saved, error } = await writeCar();
     if (error) {
       if (currentPrivate) {
@@ -167,7 +178,7 @@ export async function updateCarDetails(
           })
           .eq("car_id", carId);
       }
-      return { error: error.message };
+      return { error: carWriteErrorMessage(error, SAVE_FAILED, "updateCarDetails: cars update failed") };
     }
     if (wasApproved && saved?.status === "paused" && saved.rejection_reason === DOCUMENTS_EXPIRED_REASON) {
       revalidatePath(`/dashboard/cars/${carId}/edit`);
@@ -206,7 +217,9 @@ export async function setCarInsuranceDocument(
     .upsert({ car_id: carId, insurance_document_path: path });
 
   if (error) {
-    return { error: error.message };
+    return {
+      error: carWriteErrorMessage(error, "Nie udało się zapisać polisy. Spróbuj ponownie.", "setCarInsuranceDocument failed"),
+    };
   }
 
   if (existing?.insurance_document_path && existing.insurance_document_path !== path) {
@@ -224,19 +237,26 @@ export async function addCarPhoto(
   carId: string,
   path: string,
   position: number
-): Promise<{ error: string | null }> {
+): Promise<{ error: string | null; imageId?: string }> {
   const { supabase, user, car, isAdmin } = await requireOwnedCar(carId);
   if (!user) redirect("/login");
   if (!car) {
     return { error: "Nie masz dostępu do tego ogłoszenia." };
   }
 
-  const { error } = await supabase
+  // The new row's id goes back to the photo manager: removing a photo added
+  // in the same visit used to send its storage path as the id, which deleted
+  // the file and left the row — a broken image on the listing.
+  const { data: inserted, error } = await supabase
     .from("car_images")
-    .insert({ car_id: carId, storage_path: path, position });
+    .insert({ car_id: carId, storage_path: path, position })
+    .select("id")
+    .single();
 
-  if (error) {
-    return { error: error.message };
+  if (error || !inserted) {
+    return {
+      error: carWriteErrorMessage(error, "Nie udało się zapisać zdjęcia. Spróbuj ponownie.", "addCarPhoto failed"),
+    };
   }
 
   await revertToPendingIfApproved(carId, car.status === "approved" || car.status === "paused", isAdmin);
@@ -244,7 +264,7 @@ export async function addCarPhoto(
   revalidatePath(`/dashboard/cars/${carId}/edit`);
   revalidatePath(`/auta/${carId}`);
   revalidatePath("/dashboard");
-  return { error: null };
+  return { error: null, imageId: inserted.id };
 }
 
 export async function removeCarPhoto(
@@ -258,12 +278,19 @@ export async function removeCarPhoto(
     return { error: "Nie masz dostępu do tego ogłoszenia." };
   }
 
-  await supabase.storage.from("car-images").remove([storagePath]);
-
-  const { error } = await supabase.from("car_images").delete().eq("id", imageId);
+  // The row first, then the file: a failed delete must not leave the
+  // listing pointing at a file that is already gone.
+  const { error } = await supabase
+    .from("car_images")
+    .delete()
+    .eq("id", imageId)
+    .eq("car_id", carId);
   if (error) {
-    return { error: error.message };
+    return {
+      error: carWriteErrorMessage(error, "Nie udało się usunąć zdjęcia. Spróbuj ponownie.", "removeCarPhoto failed"),
+    };
   }
+  await supabase.storage.from("car-images").remove([storagePath]);
 
   await revertToPendingIfApproved(carId, car.status === "approved" || car.status === "paused", isAdmin);
 
@@ -311,7 +338,9 @@ async function deleteCarCore(carId: string): Promise<{ error: string | null }> {
 
   const { error } = await supabase.from("cars").delete().eq("id", carId);
   if (error) {
-    return { error: error.message };
+    return {
+      error: carWriteErrorMessage(error, "Nie udało się usunąć auta. Spróbuj ponownie.", "deleteCar failed"),
+    };
   }
   return { error: null };
 }
@@ -390,7 +419,10 @@ export async function bulkSetCarStatus(
       .select("status")
       .maybeSingle();
     if (error) {
-      failed.push({ carId, error: error.message });
+      failed.push({
+        carId,
+        error: carWriteErrorMessage(error, "Nie udało się zmienić statusu ogłoszenia.", "bulkSetCarStatus failed"),
+      });
     } else if (updated?.status !== nextStatus) {
       // A database invariant (inactive company, expired documents) kept it paused.
       failed.push({ carId, error: "Nie udało się wznowić ogłoszenia — sprawdź dokumenty auta." });
@@ -436,7 +468,9 @@ export async function toggleCarPause(carId: string): Promise<{ error: string | n
     .select("status")
     .maybeSingle();
   if (error) {
-    return { error: error.message };
+    return {
+      error: carWriteErrorMessage(error, "Nie udało się zmienić statusu ogłoszenia. Spróbuj ponownie.", "toggleCarPause failed"),
+    };
   }
   // Read back: the invariants in enforce_car_update_rules can keep the car
   // paused without an error, and "resumed" must not be reported then.
@@ -467,11 +501,23 @@ export async function resubmitRejectedCar(carId: string): Promise<{ error: strin
 
   const [{ count: photoCount }, { data: carPrivate }, { data: details }] = await Promise.all([
     supabase.from("car_images").select("id", { count: "exact", head: true }).eq("car_id", carId),
-    supabase.from("car_private").select("insurance_document_path").eq("car_id", carId).maybeSingle(),
+    supabase
+      .from("car_private")
+      .select(
+        "registration_number, insurance_document_path, insurance_valid_until, inspection_valid_until, rental_right_confirmed_at"
+      )
+      .eq("car_id", carId)
+      .maybeSingle(),
     supabase.from("cars").select("brand, model, year, city").eq("id", carId).single(),
   ]);
   if (!photoCount) return { error: "Dodaj przynajmniej jedno zdjęcie auta." };
-  if (!carPrivate?.insurance_document_path) return { error: "Dodaj polisę OC." };
+  // Everything a new car must have, not only the policy: a car listed before
+  // 0051 went back to the queue with no plate, dates or statement, and the
+  // reviewer could only reject it again.
+  const missing = missingCarDocuments(carPrivate);
+  if (missing.length > 0) {
+    return { error: `Zanim wyślesz auto ponownie, uzupełnij ${joinPolishList(missing)}.` };
+  }
 
   // Service role: owners cannot move their own car's status (see
   // enforce_car_update_rules), and that is what keeps moderation meaningful.
@@ -485,7 +531,11 @@ export async function resubmitRejectedCar(carId: string): Promise<{ error: strin
     .eq("id", carId)
     .eq("status", "rejected")
     .select("id");
-  if (error) return { error: error.message };
+  if (error) {
+    return {
+      error: carWriteErrorMessage(error, "Nie udało się wysłać auta. Spróbuj ponownie.", "resubmitRejectedCar failed"),
+    };
+  }
   if (!moved?.length) return { error: "To auto nie jest już odrzucone — odśwież stronę." };
 
   const carLabel = details ? `${details.brand} ${details.model} (${details.year})` : "auto";

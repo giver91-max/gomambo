@@ -8,9 +8,12 @@ import { Button } from "@/components/ui/button";
 import { PauseToggleButton } from "./cars/pause-toggle-button";
 import { bulkDeleteCars, bulkSetCarStatus } from "./cars/[id]/edit/actions";
 import { summarizeAvailableRanges } from "@/lib/availability-summary";
+import { formatPriceZl } from "@/lib/money-format";
 import type { CarStatus } from "@/types/database";
 
 const AVAILABILITY_WINDOW_DAYS = 60;
+const CONNECTION_FAILED =
+  "Nie udało się połączyć z GoMambo — sprawdź internet i spróbuj ponownie. Jeśli błąd się powtarza, odśwież stronę.";
 
 const statusLabel: Record<CarStatus, string> = {
   pending: "Oczekuje na zatwierdzenie",
@@ -40,9 +43,12 @@ type FleetCar = {
 export function FleetCarList({
   cars,
   availabilityByCarId,
+  missingDocumentsByCarId,
 }: {
   cars: FleetCar[];
   availabilityByCarId: Record<string, string[]>;
+  /** What each car still lacks, worded to follow "Uzupełnij" (see missingCarDocuments). */
+  missingDocumentsByCarId: Record<string, string>;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -69,8 +75,16 @@ export function FleetCarList({
   function handleBulkStatus(nextStatus: "approved" | "paused") {
     setError(null);
     startTransition(async () => {
-      const result = await bulkSetCarStatus(Array.from(selected), nextStatus);
-      reportFailures(nextStatus === "paused" ? "Wstrzymanie" : "Wznowienie", result.failed);
+      // Caught here: a dropped connection would otherwise rethrow into
+      // Next's bare "Application error" screen.
+      try {
+        const result = await bulkSetCarStatus(Array.from(selected), nextStatus);
+        if (!result) setError(CONNECTION_FAILED);
+        else reportFailures(nextStatus === "paused" ? "Wstrzymanie" : "Wznowienie", result.failed);
+      } catch (err) {
+        console.error("bulk status", err);
+        setError(CONNECTION_FAILED);
+      }
     });
   }
 
@@ -78,8 +92,14 @@ export function FleetCarList({
     if (!confirm(`Usunąć ${selected.size} zaznaczonych aut? Tej operacji nie można cofnąć.`)) return;
     setError(null);
     startTransition(async () => {
-      const result = await bulkDeleteCars(Array.from(selected));
-      reportFailures("Usuwanie", result.failed);
+      try {
+        const result = await bulkDeleteCars(Array.from(selected));
+        if (!result) setError(CONNECTION_FAILED);
+        else reportFailures("Usuwanie", result.failed);
+      } catch (err) {
+        console.error("bulk delete", err);
+        setError(CONNECTION_FAILED);
+      }
     });
   }
 
@@ -124,7 +144,18 @@ export function FleetCarList({
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
               <p>{car.city}</p>
-              <p>{Number(car.price_per_day).toFixed(2)} zł / dzień</p>
+              <p>{formatPriceZl(car.price_per_day)} / dzień</p>
+              {missingDocumentsByCarId[car.id] && (
+                // A car listed before the documents were required (0051)
+                // waits for them, not for GoMambo — so say what to add.
+                <p className="text-amber-600 dark:text-amber-500">
+                  Uzupełnij {missingDocumentsByCarId[car.id]} — bez tego nie możemy dopuścić auta
+                  do wynajmu.{" "}
+                  <Link href={`/dashboard/cars/${car.id}/edit`} className="text-primary hover:underline">
+                    Uzupełnij dane auta →
+                  </Link>
+                </p>
+              )}
               {car.status === "rejected" && car.rejection_reason && (
                 <p className="text-destructive">
                   Powód odrzucenia: {car.rejection_reason} — popraw auto w edycji i wyślij je

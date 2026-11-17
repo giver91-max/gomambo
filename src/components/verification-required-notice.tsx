@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { VERIFICATION_PATH } from "@/lib/links";
 import type { IdentityVerificationStatus } from "@/types/database";
 
 // Shown in place of "add a car" / "send a booking inquiry" whenever the
@@ -35,7 +36,7 @@ export function VerificationRequiredNotice({
           Twoja weryfikacja tożsamości została odrzucona
           {rejectionReason ? `: ${rejectionReason}` : "."}
         </p>
-        <Button render={<Link href="/dashboard/profile" />}>Popraw weryfikację →</Button>
+        <Button render={<Link href={VERIFICATION_PATH} />}>Popraw weryfikację →</Button>
       </div>
     );
   }
@@ -44,8 +45,8 @@ export function VerificationRequiredNotice({
     <div className="space-y-3 rounded-lg border p-4 text-sm">
       <p className="font-medium text-foreground">
         {purpose === "add_car"
-          ? "Aby dodać samochód, musisz zostać zweryfikowany"
-          : "Aby zarezerwować auto, musisz zostać zweryfikowany"}
+          ? "Aby dodać samochód, najpierw zweryfikuj konto"
+          : "Aby zarezerwować auto, najpierw zweryfikuj konto"}
       </p>
 
       <ul className="space-y-2 text-muted-foreground">
@@ -58,12 +59,12 @@ export function VerificationRequiredNotice({
         </li>
         <li>
           <strong className="text-foreground">Selfie i prawo jazdy z obu stron</strong> — zajmuje
-          około 5 minut i robisz to raz. Najszybciej telefonem: zeskanujesz kod QR i zrobisz
-          zdjęcia aparatem.
+          około 5 minut i robisz to raz. Najprościej na telefonie: zdjęcia zrobisz od razu
+          aparatem. Przy komputerze możesz zeskanować telefonem kod QR.
         </li>
       </ul>
 
-      <Button render={<Link href="/dashboard/profile#weryfikacja" />}>Zweryfikuj się →</Button>
+      <Button render={<Link href={VERIFICATION_PATH} />}>Zweryfikuj się →</Button>
 
       {/* A rental company verifies the COMPANY, not someone's licence — sent
           down this path, its staff listed the fleet as a private person. */}

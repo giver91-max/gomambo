@@ -15,6 +15,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+const CONNECTION_FAILED =
+  "Nie udało się połączyć z GoMambo — sprawdź internet i spróbuj ponownie. Jeśli błąd się powtarza, odśwież stronę.";
+
 export function DeleteCarButton({
   carId,
   redirectTo,
@@ -29,9 +32,17 @@ export function DeleteCarButton({
   function handleConfirm() {
     setError(null);
     startTransition(async () => {
-      const result = await deleteCar(carId, redirectTo);
-      if (result?.error) {
-        setError(result.error);
+      // deleteCar redirects on success, so only a returned error is a
+      // failure; a thrown one (dropped connection) is caught so it cannot
+      // rethrow into Next's bare "Application error" screen.
+      try {
+        const result = await deleteCar(carId, redirectTo);
+        if (result?.error) {
+          setError(result.error);
+        }
+      } catch (err) {
+        console.error("delete car", err);
+        setError(CONNECTION_FAILED);
       }
     });
   }

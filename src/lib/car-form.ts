@@ -81,6 +81,11 @@ export function parseCarListingForm(
   if (!(pricePerDay > 0)) {
     return { ok: false, error: "Cena za dzień musi być większa od zera." };
   }
+  // Prices on GoMambo are whole złoty (step="1" in the forms); checked here
+  // too, because the browser's step check is only a suggestion.
+  if (!Number.isInteger(pricePerDay)) {
+    return { ok: false, error: "Podaj cenę za dzień w pełnych złotych, bez groszy." };
+  }
   if (!vehicleType || !fuelType || !transmission) {
     return { ok: false, error: "Wybierz typ pojazdu, rodzaj paliwa i skrzynię biegów." };
   }
@@ -102,14 +107,22 @@ export function parseCarListingForm(
   if (mileageLimit !== null && !(mileageLimit > 0)) {
     return { ok: false, error: "Limit kilometrów musi być większy od zera." };
   }
-  if (mileageOverageFee !== null && mileageOverageFee < 0) {
+  // Negated comparisons so a non-number (NaN) fails too. The per-km fee may
+  // keep grosze (0,50 zł/km is a normal rate) — not a price of the rental.
+  if (mileageOverageFee !== null && !(mileageOverageFee >= 0)) {
     return { ok: false, error: "Opłata za km ponad limit nie może być ujemna." };
   }
-  if (securityDeposit !== null && securityDeposit < 0) {
+  if (securityDeposit !== null && !(securityDeposit >= 0)) {
     return { ok: false, error: "Kaucja nie może być ujemna." };
+  }
+  if (securityDeposit !== null && !Number.isInteger(securityDeposit)) {
+    return { ok: false, error: "Podaj kaucję w pełnych złotych, bez groszy." };
   }
   if (pricePerMonth !== null && !(pricePerMonth > 0)) {
     return { ok: false, error: "Cena za miesiąc musi być większa od zera." };
+  }
+  if (pricePerMonth !== null && !Number.isInteger(pricePerMonth)) {
+    return { ok: false, error: "Podaj cenę za miesiąc w pełnych złotych, bez groszy." };
   }
 
   return {
@@ -201,8 +214,13 @@ export async function ownerListingGate(
         partner,
         error:
           partner.status === "pending"
-            ? "Weryfikujemy jeszcze Twoją wypożyczalnię — damy znać, gdy będziesz mógł dodawać auta."
-            : "Twoja wypożyczalnia nie może w tej chwili dodawać aut. Napisz do nas.",
+            ? // Neutral on purpose: this gate does not know whether a
+              // document has been filed yet (cars/new/page.tsx does).
+              "Najpierw musimy zweryfikować Twoją wypożyczalnię — szczegóły w panelu firmy."
+            : partner.status === "draft"
+              ? // "Poproś o poprawki" (admin/partnerzy) puts a company here.
+                "GoMambo prosi o poprawki danych firmy — szczegóły są w panelu firmy."
+              : "Twoja wypożyczalnia nie może w tej chwili dodawać aut. Napisz do nas.",
       };
     }
     return { partner, error: null };
@@ -260,7 +278,7 @@ export function parseCarDocumentsForm(
   if (!rentalRight && !rentalRightAlreadyConfirmed) {
     return {
       ok: false,
-      error: "Potwierdź, że możesz wynajmować to auto (jesteś właścicielem albo masz zgodę właściciela lub leasingodawcy).",
+      error: "Potwierdź, że możesz wynajmować to auto (auto jest Twoje albo masz zgodę właściciela lub leasingodawcy).",
     };
   }
   return {
@@ -292,4 +310,57 @@ export async function carDocumentsExpired(
     (!!data?.insurance_valid_until && data.insurance_valid_until < today) ||
     (!!data?.inspection_valid_until && data.inspection_valid_until < today)
   );
+}
+
+/** What car_private holds about a car's documents (0037, 0051). */
+export type CarDocumentsRecord = {
+  registration_number: string | null;
+  insurance_document_path: string | null;
+  insurance_valid_until: string | null;
+  inspection_valid_until: string | null;
+  rental_right_confirmed_at: string | null;
+};
+
+/**
+ * What a car still lacks of the documents every listing needs since 0051,
+ * worded to follow "Uzupełnij …". Cars listed before 0051 have no car_private
+ * row at all — every item is missing then. Without this the owner of such a
+ * car only ever saw "Sprawdzamy ogłoszenie — damy znać mailem" while GoMambo
+ * waited for documents nobody had asked for. An expired date is not
+ * "missing": the daily job pauses that car and says so itself.
+ */
+export function missingCarDocuments(record: CarDocumentsRecord | null | undefined): string[] {
+  const missing: string[] = [];
+  if (!record?.registration_number) missing.push("numer rejestracyjny");
+  if (!record?.insurance_document_path) missing.push("polisę OC");
+  const noInsuranceDate = !record?.insurance_valid_until;
+  const noInspectionDate = !record?.inspection_valid_until;
+  if (noInsuranceDate && noInspectionDate) missing.push("daty ważności OC i przeglądu");
+  else if (noInsuranceDate) missing.push("datę ważności OC");
+  else if (noInspectionDate) missing.push("datę ważności przeglądu");
+  if (!record?.rental_right_confirmed_at) missing.push("oświadczenie o prawie do wynajmu");
+  return missing;
+}
+
+/** "a, b, c oraz d" — "oraz", because the items themselves may contain "i". */
+export function joinPolishList(items: string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} oraz ${items[items.length - 1]}`;
+}
+
+/**
+ * The message an owner sees when a car write fails. Our own triggers refuse
+ * in Polish (code P0001, e.g. "Nie należysz do tej wypożyczalni.") and say
+ * exactly what is wrong, so those pass through. Anything else is PostgREST or
+ * Storage talking English to a developer ("new row violates row-level
+ * security policy…"): it goes to the server log, the owner gets `fallback`.
+ */
+export function carWriteErrorMessage(
+  error: { code?: string; message?: string } | null | undefined,
+  fallback: string,
+  context: string
+): string {
+  if (error?.code === "P0001" && error.message) return error.message;
+  console.error(context, error);
+  return fallback;
 }

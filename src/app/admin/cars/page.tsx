@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CarReviewCard } from "./car-review-card";
-import type { CarStatus } from "@/types/database";
+import type { CarStatus, IdentityVerificationStatus, PartnerStatus } from "@/types/database";
 import { cn } from "@/lib/utils";
 import { BackButton } from "@/components/back-button";
+import { PARTNER_STATUS_LABELS } from "@/lib/partner";
+import { adminFileUrl } from "../plik/url";
+import { missingForApproval, OWNER_VERIFICATION_LABELS } from "./approval-gate";
 
 const TABS: { value: CarStatus; label: string }[] = [
   { value: "pending", label: "Oczekujące" },
@@ -34,12 +37,24 @@ export default async function AdminCarsPage({
     .eq("status", status)
     .order("created_at", { ascending: true });
 
+  // Whether each private owner has verified their identity — approval needs
+  // it (approval-gate.ts), and the card used not to show it at all.
+  const ownerIds = Array.from(new Set((cars ?? []).map((c) => c.owner_id)));
+  const { data: ownerVerifications } = ownerIds.length
+    ? await supabase.from("identity_verifications").select("user_id, status").in("user_id", ownerIds)
+    : { data: [] as { user_id: string; status: IdentityVerificationStatus }[] };
+  const verificationByOwner = new Map(
+    (ownerVerifications ?? []).map((v) => [v.user_id, v.status as IdentityVerificationStatus])
+  );
+
   return (
     <div className="space-y-6">
       <BackButton />
       <h1 className="text-2xl font-bold">Samochody</h1>
 
-      <div className="flex gap-2 border-b">
+      {/* Wraps like the other admin tabs: four labels in one row made the
+          page wider than a phone, so the browser zoomed the whole page out. */}
+      <div className="flex flex-wrap gap-2 border-b">
         {TABS.map((tab) => (
           <Link
             key={tab.value}
@@ -81,30 +96,54 @@ export default async function AdminCarsPage({
                 rental_right_confirmed_at: string | null;
               } | null;
 
-              let insuranceUrl: string | null = null;
-              if (carPrivate?.insurance_document_path) {
-                const { data: signed } = await supabase.storage
-                  .from("car-insurance")
-                  .createSignedUrl(carPrivate.insurance_document_path, 60 * 5);
-                insuranceUrl = signed?.signedUrl ?? null;
-              }
+              // A stable link signed when it is opened (../plik/route.ts): a
+              // five-minute signed URL in the HTML had expired by the time the
+              // admin reached the third car and clicked the PDF.
+              const insuranceUrl = carPrivate?.insurance_document_path
+                ? adminFileUrl("polisa", car.id, carPrivate.insurance_document_path)
+                : null;
               const insuranceIsPdf =
                 carPrivate?.insurance_document_path?.toLowerCase().endsWith(".pdf") ?? false;
 
               // Which company this car belongs to, and whether that company
-              // is live. Approving a car for a suspended partner silently
-              // does nothing (the DB invariant forces it back to 'paused'),
-              // so the reviewer has to be able to see it coming.
+              // is live. The DB invariant forces a car of an inactive company
+              // back to 'paused', so approval waits for the company
+              // (approval-gate.ts) and the reviewer sees why.
               const carPartner = (car.partners ?? null) as unknown as {
                 trade_name: string;
-                status: string;
+                status: PartnerStatus;
               } | null;
+              const partnerStatusLabel = carPartner
+                ? PARTNER_STATUS_LABELS[carPartner.status] ?? carPartner.status
+                : null;
+              const ownerVerification = verificationByOwner.get(car.owner_id) ?? null;
+
+              const missing = missingForApproval({
+                registrationNumber: carPrivate?.registration_number ?? null,
+                insuranceDocumentPath: carPrivate?.insurance_document_path ?? null,
+                insuranceValidUntil: carPrivate?.insurance_valid_until ?? null,
+                inspectionValidUntil: carPrivate?.inspection_valid_until ?? null,
+                rentalRightConfirmedAt: carPrivate?.rental_right_confirmed_at ?? null,
+                partner:
+                  car.partner_id && carPartner
+                    ? { status: carPartner.status, statusLabel: partnerStatusLabel ?? "" }
+                    : null,
+                ownerVerification: car.partner_id ? null : ownerVerification,
+              });
 
               return (
                 <CarReviewCard
                   key={car.id}
                   partnerName={carPartner?.trade_name ?? null}
                   partnerStatus={carPartner?.status ?? null}
+                  partnerStatusLabel={partnerStatusLabel}
+                  ownerVerificationLabel={
+                    car.partner_id
+                      ? null
+                      : OWNER_VERIFICATION_LABELS[ownerVerification ?? "none"]
+                  }
+                  ownerVerified={ownerVerification === "approved"}
+                  missing={missing}
                   car={{
                     ...car,
                     registration_number: carPrivate?.registration_number ?? null,

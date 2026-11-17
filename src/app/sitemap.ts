@@ -45,18 +45,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly",
       priority: 0.8,
     },
-    {
-      url: `${SITE_URL}/register`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.5,
-    },
-    {
-      url: `${SITE_URL}/login`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.3,
-    },
+    // No /login or /register: they are noindex (src/app/(auth)/layout.tsx),
+    // and a sitemap listing pages that refuse indexing is a contradiction
+    // Search Console reports. /zostan-wlascicielem is the page to find.
     {
       url: `${SITE_URL}/regulamin`,
       lastModified: new Date(),

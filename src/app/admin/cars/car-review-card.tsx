@@ -10,6 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DeleteCarButton } from "@/app/dashboard/cars/[id]/edit/delete-car-button";
+import { formatPriceZl } from "@/lib/money-format";
+import { todayInPoland } from "@/lib/calendar";
 import type { CarStatus } from "@/types/database";
 
 type Props = {
@@ -32,19 +34,22 @@ type Props = {
   // Set when the car belongs to a rental company rather than an individual.
   partnerName: string | null;
   partnerStatus: string | null;
+  partnerStatusLabel: string | null;
+  // Private owner only: how their identity verification stands.
+  ownerVerificationLabel: string | null;
+  ownerVerified: boolean;
+  // What still stops approval (approval-gate.ts); empty when nothing does.
+  missing: string[];
   imageUrls: string[];
   insuranceUrl: string | null;
   insuranceIsPdf: boolean;
 };
 
-// Plain YYYY-MM-DD comparison — the dates are calendar days, not instants.
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 function DocumentDates({ car }: { car: Props["car"] }) {
-  const today = todayIso();
+  // Plain YYYY-MM-DD comparison — the dates are calendar days, not instants.
+  // The Polish day, not the machine's: this renders on the server (UTC) and
+  // again in the browser, and the two must agree around midnight.
+  const today = todayInPoland();
   const row = (label: string, value: string | null) => (
     <p>
       <span className="text-muted-foreground">{label}: </span>
@@ -79,6 +84,10 @@ export function CarReviewCard({
   ownerName,
   partnerName,
   partnerStatus,
+  partnerStatusLabel,
+  ownerVerificationLabel,
+  ownerVerified,
+  missing,
   imageUrls,
   insuranceUrl,
   insuranceIsPdf,
@@ -87,42 +96,48 @@ export function CarReviewCard({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const carLabel = `${car.brand} ${car.model} (${car.year})`;
+  const trimmedReason = reason.trim();
+  const canApprove = missing.length === 0;
 
-  function handleApprove() {
+  // On an error the card is NOT refreshed: the car may have changed status
+  // meanwhile (e.g. paused by the database), and a refresh would drop it from
+  // this tab together with the only message explaining why.
+  function run(action: () => Promise<{ error: string | null }>) {
     setError(null);
     startTransition(async () => {
       try {
-        const result = await approveCar(car.id);
+        const result = await action();
         if (result.error) setError(result.error);
-        router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Błąd");
+        else router.refresh();
+      } catch {
+        setError("Nie udało się zapisać — sprawdź połączenie i spróbuj ponownie.");
       }
     });
+  }
+
+  // Both decisions mail the owner, so a stray tap while scrolling on a phone
+  // must not be enough.
+  function handleApprove() {
+    if (!confirm(`Zatwierdzić auto ${carLabel}? Właściciel dostanie e-mail, że ogłoszenie jest zatwierdzone.`)) {
+      return;
+    }
+    run(() => approveCar(car.id));
   }
 
   function handleReject() {
-    setError(null);
-    startTransition(async () => {
-      try {
-        await rejectCar(car.id, reason);
-        router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Błąd");
-      }
-    });
+    if (!trimmedReason) {
+      setError("Napisz powód — właściciel musi wiedzieć, co poprawić.");
+      return;
+    }
+    if (!confirm(`Odrzucić auto ${carLabel}? Właściciel dostanie e-mail z tym powodem.`)) {
+      return;
+    }
+    run(() => rejectCar(car.id, trimmedReason));
   }
 
   function handleRevertToPending() {
-    setError(null);
-    startTransition(async () => {
-      try {
-        await revertCarToPending(car.id);
-        router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Błąd");
-      }
-    });
+    run(() => revertCarToPending(car.id));
   }
 
   return (
@@ -135,15 +150,17 @@ export function CarReviewCard({
           <p className="text-sm text-muted-foreground">
             {partnerName ? "Wypożyczalnia" : "Właściciel"}:{" "}
             {partnerName || ownerName || "brak danych"} · {car.city} ·{" "}
-            {Number(car.price_per_day).toFixed(2)} zł/dzień
+            {formatPriceZl(car.price_per_day)}/dzień
           </p>
-          {/* Approving a car whose company is not active silently does
-              nothing — the database invariant forces it straight back to
-              'paused' — so the reviewer has to see this before clicking. */}
+          {/* A car of a company that is not active cannot be published —
+              the database would force it straight back to 'paused' — so
+              approval waits for the company, and the reviewer sees why. */}
           {partnerName && partnerStatus !== "active" && (
             <p className="text-sm text-destructive">
-              Wypożyczalnia nie jest aktywna ({partnerStatus}) — zatwierdzenie nie opublikuje
-              tego auta, dopóki nie zweryfikujesz firmy.
+              Wypożyczalnia nie jest aktywna ({partnerStatusLabel ?? partnerStatus}) —{" "}
+              {car.status === "pending"
+                ? "zweryfikuj najpierw firmę w zakładce Wypożyczalnie, potem zatwierdzisz to auto."
+                : "auto nie będzie widoczne w katalogu, dopóki nie zweryfikujesz firmy."}
             </p>
           )}
         </div>
@@ -190,6 +207,14 @@ export function CarReviewCard({
             )}
           </p>
           <DocumentDates car={car} />
+          {ownerVerificationLabel && (
+            <p>
+              <span className="text-muted-foreground">Weryfikacja tożsamości właściciela: </span>
+              <span className={ownerVerified ? "font-medium" : "font-medium text-destructive"}>
+                {ownerVerificationLabel}
+              </span>
+            </p>
+          )}
           <div className="mt-2">
             {insuranceUrl ? (
               insuranceIsPdf ? (
@@ -241,23 +266,44 @@ export function CarReviewCard({
           </p>
         )}
 
+        {/* Shown on every tab, not only to block approval: an approved car
+            listed before these were required is exactly what needs a look
+            before the catalogue opens. */}
+        {missing.length > 0 && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+            <p className="font-medium text-destructive">
+              {car.status === "pending"
+                ? "Nie można jeszcze zatwierdzić — brakuje:"
+                : "Temu ogłoszeniu brakuje:"}
+            </p>
+            <ul className="mt-1 list-disc pl-5">
+              {missing.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         {car.status === "pending" && (
           <div className="flex flex-wrap items-center gap-2 pt-2">
-            <Button onClick={handleApprove} disabled={isPending} size="sm">
+            <Button onClick={handleApprove} disabled={isPending || !canApprove} size="sm">
               Zatwierdź
             </Button>
+            {/* Its own full-width row on a phone, where squeezed between the
+                buttons it showed only "Powód"; one row with them from sm up. */}
             <Textarea
-              placeholder="Powód odrzucenia (opcjonalnie)"
+              placeholder="Powód odrzucenia (wymagany) — właściciel zobaczy go w e-mailu"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="h-9 min-h-9 flex-1"
+              rows={2}
+              className="min-h-16 basis-full sm:h-9 sm:min-h-9 sm:basis-0 sm:flex-1"
               disabled={isPending}
             />
             <Button
               onClick={handleReject}
-              disabled={isPending}
+              disabled={isPending || !trimmedReason}
               size="sm"
               variant="destructive"
             >

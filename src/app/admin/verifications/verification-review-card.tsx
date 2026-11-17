@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatDateTimePl } from "@/lib/calendar";
 import { approveVerification, rejectVerification } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +23,7 @@ type Props = {
     face_match_result: FaceMatchResult;
     face_match_score: number | null;
     auto_review: AutoReview | null;
+    created_at: string;
   };
   userName: string;
   documentUrl: string | null;
@@ -84,24 +86,40 @@ export function VerificationReviewCard({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  const trimmedReason = reason.trim();
+
+  // Both decisions mail the person and neither can be undone from the panel,
+  // so a stray tap while scrolling on a phone must not be enough.
   function handleApprove() {
+    if (!confirm(`Zatwierdzić tożsamość: ${userName}? Ta osoba dostanie e-mail, że jest zweryfikowana.`)) {
+      return;
+    }
     setError(null);
     startTransition(async () => {
       try {
-        await approveVerification(verification.id);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Błąd");
+        const result = await approveVerification(verification.id);
+        if (result.error) setError(result.error);
+      } catch {
+        setError("Nie udało się zapisać decyzji — sprawdź połączenie i spróbuj ponownie.");
       }
     });
   }
 
   function handleReject() {
+    if (!trimmedReason) {
+      setError("Napisz powód — ta osoba musi wiedzieć, co poprawić.");
+      return;
+    }
+    if (!confirm(`Odrzucić zgłoszenie: ${userName}? Ta osoba dostanie e-mail z tym powodem.`)) {
+      return;
+    }
     setError(null);
     startTransition(async () => {
       try {
-        await rejectVerification(verification.id, reason);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Błąd");
+        const result = await rejectVerification(verification.id, trimmedReason);
+        if (result.error) setError(result.error);
+      } catch {
+        setError("Nie udało się zapisać decyzji — sprawdź połączenie i spróbuj ponownie.");
       }
     });
   }
@@ -111,6 +129,9 @@ export function VerificationReviewCard({
       <CardHeader className="flex flex-row items-start justify-between space-y-0">
         <div className="space-y-1">
           <CardTitle className="text-base">{userName}</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Zgłoszono {formatDateTimePl(verification.created_at)}
+          </p>
           {verification.verification_method === "phone_handoff" && (
             <Badge variant="outline">Weryfikacja przez telefon</Badge>
           )}
@@ -153,26 +174,32 @@ export function VerificationReviewCard({
         />
         <div className="flex flex-wrap gap-3">
           {documentUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
+            // eslint-disable-next-line @next/next/no-img-element -- private file behind a redirect, next/image can't proxy it usefully
             <img
               src={documentUrl}
               alt="Dokument tożsamości — przód"
+              loading="lazy"
+              decoding="async"
               className="max-h-64 rounded-lg border object-contain"
             />
           )}
           {documentBackUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
+            // eslint-disable-next-line @next/next/no-img-element -- private file behind a redirect, next/image can't proxy it usefully
             <img
               src={documentBackUrl}
               alt="Dokument tożsamości — tył"
+              loading="lazy"
+              decoding="async"
               className="max-h-64 rounded-lg border object-contain"
             />
           )}
           {selfieUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- signed URL, next/image can't proxy it usefully
+            // eslint-disable-next-line @next/next/no-img-element -- private file behind a redirect, next/image can't proxy it usefully
             <img
               src={selfieUrl}
               alt="Selfie"
+              loading="lazy"
+              decoding="async"
               className="max-h-64 rounded-lg border object-contain"
             />
           ) : (
@@ -199,9 +226,15 @@ export function VerificationReviewCard({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={2}
-              placeholder="Powód odrzucenia (opcjonalnie)…"
+              placeholder="Powód odrzucenia (wymagany) — ta osoba zobaczy go w e-mailu…"
+              disabled={isPending}
             />
-            <Button onClick={handleReject} disabled={isPending} variant="outline" size="sm">
+            <Button
+              onClick={handleReject}
+              disabled={isPending || !trimmedReason}
+              variant="outline"
+              size="sm"
+            >
               Odrzuć
             </Button>
           </div>

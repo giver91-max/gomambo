@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { acceptCurrentTerms } from "./actions";
 import { Button } from "@/components/ui/button";
+import { SUBMIT_FAILED_MESSAGE } from "@/app/(auth)/auth-errors";
 
 export function AcceptTermsForm({ redirectTo }: { redirectTo: string }) {
   const [accepted, setAccepted] = useState(false);
@@ -14,8 +15,14 @@ export function AcceptTermsForm({ redirectTo }: { redirectTo: string }) {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await acceptCurrentTerms(redirectTo, accepted);
-      if (result?.error) setError(result.error);
+      try {
+        // Redirects on success, so a result only ever comes back with an error.
+        const result = await acceptCurrentTerms(redirectTo, accepted);
+        if (result?.error) setError(result.error);
+      } catch {
+        // The checkbox stays ticked; one more click once the connection is back.
+        setError(SUBMIT_FAILED_MESSAGE);
+      }
     });
   }
 

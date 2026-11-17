@@ -44,6 +44,23 @@ export async function getPartnerContext(
 }
 
 /**
+ * How many registration documents the company has filed. A company is
+ * created as 'pending' straight from the form, before any document exists —
+ * GoMambo cannot start checking it until there is one, so pages must not tell
+ * such a company "we are checking your documents".
+ */
+export async function countPartnerDocuments(
+  supabase: SupabaseClient<Database>,
+  partnerId: string
+): Promise<number> {
+  const { count } = await supabase
+    .from("partner_documents")
+    .select("id", { count: "exact", head: true })
+    .eq("partner_id", partnerId);
+  return count ?? 0;
+}
+
+/**
  * Whether this Partner may list cars and take bookings.
  *
  * A company that has not been verified by GoMambo must not appear in the
@@ -57,7 +74,9 @@ export function partnerCanList(status: PartnerStatus): boolean {
 }
 
 export const PARTNER_STATUS_LABELS: Record<PartnerStatus, string> = {
-  draft: "Szkic — uzupełnij dane",
+  // 'draft' is where "Poproś o poprawki" (admin/partnerzy) sends a company
+  // — the company sees this on its badge, so it says what to do, not "szkic".
+  draft: "Do poprawy — uzupełnij dane",
   pending: "Czeka na weryfikację GoMambo",
   active: "Zweryfikowana",
   suspended: "Zawieszona",

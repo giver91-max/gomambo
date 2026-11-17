@@ -55,22 +55,6 @@ export type IdentityAssessment = {
   passes: boolean;
 };
 
-export function emptyAssessment(): IdentityAssessment {
-  const gates: IdentityGates = {
-    strongMatch: false,
-    onlyOnePerson: false,
-    isLicence: false,
-    notExpired: false,
-    selfieIsSharp: false,
-  };
-  return {
-    match: { result: "error", score: null, minScore: null, unmatchedFaces: 0, faces: [] },
-    licence: { isDrivingLicence: false, expiry: null, expired: null, possiblyIndefinite: false, dates: [] },
-    gates,
-    passes: false,
-  };
-}
-
 /**
  * The document shows the holder TWICE, and only the holder.
  *
@@ -178,7 +162,9 @@ export function buildAutoReview(
 /** The face gate in words, with the numbers the reviewer needs to judge it. */
 function describeFaceProblem({ match }: IdentityAssessment): string {
   if (match.result === "error") {
-    return "automat nie mógł porównać twarzy (błąd usługi) — oceń zdjęcia samodzielnie";
+    return match.imageUnusable
+      ? "automat nie mógł odczytać zdjęć (nieobsługiwany format albo za duży plik) — oceń zdjęcia samodzielnie"
+      : "automat nie mógł porównać twarzy (błąd usługi) — oceń zdjęcia samodzielnie";
   }
   const compared = match.faces.filter((f) => f.similarity !== null) as {
     similarity: number;

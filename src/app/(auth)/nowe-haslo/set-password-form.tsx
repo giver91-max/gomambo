@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { updatePasswordAfterReset, type AuthActionState } from "../actions";
+import { SUBMIT_FAILED_MESSAGE } from "../auth-errors";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -16,10 +17,14 @@ export function SetPasswordForm() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
-      const result = await updatePasswordAfterReset(initialState, formData);
-      // Redirects to /dashboard on success instead of returning a value —
-      // only update state on failure, otherwise the page is navigating away.
-      if (result) setState(result);
+      try {
+        const result = await updatePasswordAfterReset(initialState, formData);
+        // Redirects to /dashboard on success instead of returning a value —
+        // only update state on failure, otherwise the page is navigating away.
+        if (result) setState(result);
+      } catch {
+        setState({ error: SUBMIT_FAILED_MESSAGE });
+      }
     });
   }
 

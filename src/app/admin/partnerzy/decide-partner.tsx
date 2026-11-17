@@ -16,12 +16,16 @@ export function DecidePartner({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function decide(next: "active" | "suspended" | "terminated" | "pending") {
+  function decide(next: "active" | "suspended" | "terminated" | "pending" | "draft") {
     setError(null);
     startTransition(async () => {
-      const result = await decidePartner(partnerId, next, reason);
-      if (result?.error) setError(result.error);
-      else setReason("");
+      try {
+        const result = await decidePartner(partnerId, next, reason);
+        if (result?.error) setError(result.error);
+        else setReason("");
+      } catch {
+        setError("Nie udało się zapisać decyzji — sprawdź połączenie i spróbuj ponownie.");
+      }
     });
   }
 
@@ -30,12 +34,27 @@ export function DecidePartner({
       <Input
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        placeholder="Powód (wymagany przy odmowie, zawieszeniu i zakończeniu)"
+        placeholder="Powód (wymagany przy prośbie o poprawki, zawieszeniu i zakończeniu)"
       />
       <div className="flex flex-wrap gap-2">
         {status !== "active" && (
           <Button type="button" size="sm" disabled={isPending} onClick={() => decide("active")}>
             {isPending ? "Chwileczkę…" : "Zweryfikuj — może dodawać auta"}
+          </Button>
+        )}
+        {/* A missing or wrong document is a correction, not the end of the
+            partnership — "Zakończ współpracę" used to be the only button that
+            took a reason here. The company goes back to draft with the reason
+            on its panel, and is told by notification and e-mail. */}
+        {status === "pending" && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={isPending}
+            onClick={() => decide("draft")}
+          >
+            Poproś o poprawki
           </Button>
         )}
         {status === "active" && (
@@ -78,15 +97,28 @@ export function DecidePartner({
 
 export function VerifyDocumentButton({ documentId }: { documentId: string }) {
   const [isPending, startTransition] = useTransition();
+  // The result used to be thrown away, so a failure just put the button back
+  // as if nothing had been clicked.
+  const [error, setError] = useState<string | null>(null);
+
+  function handleClick() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await verifyPartnerDocument(documentId);
+        if (result.error) setError(result.error);
+      } catch {
+        setError("Nie udało się zapisać — sprawdź połączenie i spróbuj ponownie.");
+      }
+    });
+  }
+
   return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      disabled={isPending}
-      onClick={() => startTransition(() => verifyPartnerDocument(documentId).then(() => undefined))}
-    >
-      {isPending ? "…" : "Oznacz jako sprawdzony"}
-    </Button>
+    <>
+      <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={handleClick}>
+        {isPending ? "…" : "Oznacz jako sprawdzony"}
+      </Button>
+      {error && <span className="text-xs text-destructive">{error}</span>}
+    </>
   );
 }

@@ -12,6 +12,7 @@ import { NotificationForm } from "./notification-form";
 import { ReferralLink } from "@/components/referral-link";
 import { StripeConnectManager } from "@/components/stripe-connect-manager";
 import { DeleteAccountButton } from "./delete-account-button";
+import { ScrollToVerification } from "./scroll-to-verification";
 import { isConnectAccountOnboarded, stripeMode } from "@/lib/stripe";
 import { SITE_URL } from "@/lib/site";
 
@@ -61,7 +62,7 @@ export default async function ProfilePage() {
 
   const { data: verification } = await supabase
     .from("identity_verifications")
-    .select("status, rejection_reason, document_path, document_back_path, selfie_path")
+    .select("status, rejection_reason, document_path, document_back_path, selfie_path, updated_at")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -164,7 +165,9 @@ export default async function ProfilePage() {
       </Card>
 
       {/* Anchored: the dashboard's "steps" card links straight here instead of
-          to the top of a long page where this sits eighth. */}
+          to the top of a long page where this sits eighth. ScrollToVerification
+          covers the visits whose #fragment was lost on the way (login, terms). */}
+      <ScrollToVerification />
       <Card id="weryfikacja" className="scroll-mt-24">
         <CardHeader>
           <CardTitle>Weryfikacja tożsamości</CardTitle>
@@ -177,6 +180,7 @@ export default async function ProfilePage() {
             initialDocumentUrl={documentUrl}
             initialDocumentBackUrl={documentBackUrl}
             initialSelfieUrl={selfieUrl}
+            verificationUpdatedAt={verification?.updated_at ?? null}
           />
         </CardContent>
       </Card>

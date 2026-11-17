@@ -615,6 +615,40 @@ a.navCtaName {
   }
 }
 
+/* 320 px phones (first-generation iPhone SE, Android at the largest display
+   size). At the sizes above, logo + "Zaloguj się" + CTA need ~306 px of a
+   280 px row: the logo ran into the login link and the CTA was cut off at
+   the screen edge (the nav is fixed, so nothing scrolls it into view).
+   Tighter side padding, gaps and type make all three fit at 320 px; on
+   anything narrower the CTA truncates with an ellipsis inside the button
+   instead of overflowing. The login link stays — on the landing page it is
+   the only way in for people who already have an account. */
+@media (max-width: 359px) {
+  .page nav {
+    gap: 8px;
+    padding: 16px 12px;
+  }
+  .page nav .logo {
+    flex-shrink: 0;
+  }
+  .navActions {
+    gap: 8px;
+    min-width: 0;
+  }
+  .navLogin {
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+  a.navCta {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    letter-spacing: 0;
+    padding: 8px 10px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .scrollHint {
     animation: none;

@@ -74,3 +74,32 @@ export async function getUnreadCounts(
 
   return { unreadMessages, unreadNotifications };
 }
+
+const ADMIN_USER_LINK = /^\/admin\/users\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+/**
+ * Admin notifications about a new account link to /admin/users/<id>. When the
+ * account is deleted later, its notifications stay and the link opens a 404.
+ * Returns the links whose account no longer exists, so the lists can say
+ * "konto usunięte" instead of offering a dead link. One query for all of them.
+ */
+export async function findDeletedAccountLinks(
+  supabase: SupabaseClient<Database>,
+  links: (string | null)[]
+): Promise<Set<string>> {
+  const idByLink = new Map<string, string>();
+  for (const link of links) {
+    const match = link ? ADMIN_USER_LINK.exec(link) : null;
+    if (link && match) idByLink.set(link, match[1].toLowerCase());
+  }
+  if (idByLink.size === 0) return new Set();
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .in("id", Array.from(new Set(idByLink.values())));
+  // Unknown is not "deleted": on a failed lookup keep every link.
+  if (error) return new Set();
+  const existing = new Set((data ?? []).map((p) => p.id.toLowerCase()));
+  return new Set(Array.from(idByLink).filter(([, id]) => !existing.has(id)).map(([link]) => link));
+}

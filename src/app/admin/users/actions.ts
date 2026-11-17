@@ -11,7 +11,9 @@ export async function startConversationWithUser(userId: string) {
   const supabase = await createClient();
   const conversationId = await getOrCreateAdminConversation(supabase, userId);
   if (!conversationId) {
-    throw new Error("Nie udało się utworzyć wątku.");
+    // A form action: thrown, this became Next's generic English error page.
+    // Back to the profile with a notice instead.
+    redirect(`/admin/users/${encodeURIComponent(userId)}?wiadomosc=blad`);
   }
   redirect(`/admin/messages/${conversationId}`);
 }

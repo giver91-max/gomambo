@@ -23,7 +23,7 @@ export default function PolitykaPrywatnosciPage() {
 
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">Polityka prywatności</h1>
-          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 16 lipca 2026</p>
+          <p className="text-sm text-muted-foreground">Ostatnia aktualizacja: 17 listopada 2026</p>
         </div>
 
         <section className="space-y-2">
@@ -45,8 +45,13 @@ export default function PolitykaPrywatnosciPage() {
         <section className="space-y-2">
           <h2 className="text-lg font-semibold">2. Jakie dane przetwarzamy</h2>
           <ul className="list-disc space-y-1 pl-6">
-            <li>dane podane przy rejestracji konta: imię i nazwisko, adres e-mail, hasło (przechowywane w formie zaszyfrowanej), opcjonalnie numer telefonu i zdjęcie profilowe,</li>
+            {/* The phone is not optional: middleware sends every account
+                without one to /uzupelnij-dane before the dashboard opens. */}
+            <li>dane podane przy rejestracji i uzupełnieniu konta: imię i nazwisko, adres e-mail, hasło (przechowywane w formie zaszyfrowanej), numer telefonu (wymagany do korzystania z konta), opcjonalnie zdjęcie profilowe,</li>
             <li>dane ogłoszeń dodawanych przez właścicieli pojazdów: marka, model, rok, cena, miasto, opis, zdjęcia, a także dokumenty pojazdu wymagane do jego dodania (np. dowód rejestracyjny, polisa OC),</li>
+            {/* What /dashboard/firma collects. For a sole trader (JDG) these
+                identify a person, so they are personal data too. */}
+            <li>dane firmy podawane przez wypożyczalnie przy zakładaniu konta firmy: nazwa firmy, NIP, REGON, numer KRS, adres, e-mail i telefon kontaktowy, miasto działalności i opis firmy, a także przesłane dokumenty firmy (np. odpis z KRS, wydruk z CEIDG, potwierdzenie NIP, polisa floty) — w przypadku jednoosobowej działalności gospodarczej są to również dane osobowe,</li>
             <li>
               dokument tożsamości (prawo jazdy) oraz zdjęcie selfie przesyłane w procesie
               weryfikacji tożsamości, w tym{" "}

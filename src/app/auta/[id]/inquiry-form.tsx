@@ -118,6 +118,9 @@ export function InquiryForm({
                 selectedRange.end
               );
               const { commission, gross } = applyCommission(total, commissionRate);
+              // Exact, not rounded to whole złoty: this is what the renter is
+              // charged, and the fee can carry grosze (10% of 155 zł). formatZl
+              // drops the ".00" whenever there are none.
               return (
                 <div className="space-y-1 rounded-lg border p-3 text-sm">
                   <p className="text-muted-foreground">
@@ -126,17 +129,17 @@ export function InquiryForm({
                   </p>
                   <div className="flex justify-between text-muted-foreground">
                     <span>Wynajem</span>
-                    <span>{total.toFixed(2)} zł</span>
+                    <span>{formatZl(total)}</span>
                   </div>
                   {commission > 0 && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Opłata serwisowa GoMambo</span>
-                      <span>{commission.toFixed(2)} zł</span>
+                      <span>{formatZl(commission)}</span>
                     </div>
                   )}
                   <div className="flex justify-between border-t pt-1 font-semibold text-foreground">
                     <span>Razem</span>
-                    <span>{gross.toFixed(2)} zł</span>
+                    <span>{formatZl(gross)}</span>
                   </div>
                   {/* Part of the booking summary because the fee is pinned
                       on the booking the moment this form is sent. */}

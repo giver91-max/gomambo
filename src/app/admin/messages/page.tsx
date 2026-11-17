@@ -5,6 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/back-button";
 import { ComposeForm } from "./compose-form";
 
+// A message to everyone goes into every conversation and out by e-mail in
+// batches (see actions.ts) — seconds, but with the whole account list
+// behind it; kept well above the default function timeout. The action runs
+// on this page's route, so the limit is set here.
+export const maxDuration = 60;
+
 export default async function AdminMessagesPage() {
   const supabase = await createClient();
   const {
@@ -59,7 +65,10 @@ export default async function AdminMessagesPage() {
           <CardTitle>Nowa wiadomość</CardTitle>
         </CardHeader>
         <CardContent>
-          <ComposeForm users={users ?? []} />
+          <ComposeForm
+            users={users ?? []}
+            allUsersCount={(users ?? []).filter((u) => u.id !== user!.id).length}
+          />
         </CardContent>
       </Card>
 

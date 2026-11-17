@@ -9,7 +9,7 @@ import { ReviewForm } from "./review-form";
 import { TripPhotosManager, type TripPhotoItem } from "@/components/trip-photos-manager";
 import { DepositOwnerPanel } from "@/components/deposit-owner-panel";
 import { DEPOSIT_PANEL_COLUMNS, type DepositPanelRow } from "@/components/deposit-renter-panel";
-import { bookingDepositAmounts } from "@/lib/deposit";
+import { bookingDepositAmounts, formatZl } from "@/lib/deposit";
 import { RequestExtraChargeButton } from "@/components/request-extra-charge-button";
 import { ReportDamageButton } from "@/components/report-damage-button";
 import { DamageReportList, type DamageReportItem } from "@/components/damage-report-list";
@@ -256,7 +256,7 @@ export default async function OwnerBookingsPage() {
                     {/* The renter pays the listing price plus the platform fee,
                         so the gross would overstate what the owner receives. */}
                     {booking.total_price
-                      ? `Do wypłaty: ${(Number(booking.total_price) - Number(booking.platform_fee_amount ?? 0)).toFixed(2)} zł`
+                      ? `Do wypłaty: ${formatZl(Number(booking.total_price) - Number(booking.platform_fee_amount ?? 0))}`
                       : "Opłacono"}
                   </p>
                 )}

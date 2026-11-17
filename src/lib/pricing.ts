@@ -1,4 +1,5 @@
 import { eachDateInRange } from "@/lib/calendar";
+import { formatPriceZl } from "@/lib/money-format";
 
 export const MONTHLY_THRESHOLD_NIGHTS = 28;
 
@@ -42,4 +43,15 @@ export function applyCommission(rentalTotal: number, commissionRate: number): Pr
     commission,
     gross: Math.round((rentalTotal + commission) * 100) / 100,
   };
+}
+
+/**
+ * The fee or the renter's total for an explanatory hint, in whole złoty.
+ * applyCommission keeps grosze (10% of 155 zł is 15.50 zł) because that is
+ * exactly what checkout charges, so a rounded figure is marked "ok." rather
+ * than passed off as the amount. Rounding the fee itself would change what
+ * Stripe charges — a pricing decision, not a display one.
+ */
+export function formatHintPriceZl(amount: number): string {
+  return Number.isInteger(amount) ? formatPriceZl(amount) : `ok. ${formatPriceZl(amount)}`;
 }

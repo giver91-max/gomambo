@@ -19,7 +19,7 @@ import type { CarDraftResult, CarFormState } from "@/app/dashboard/cars/actions"
  * auto-confirms), and the photos and policy end up in THEIR Storage folder,
  * so they can edit and delete them later like any of their own. What the
  * admin does not get is a way around the listing gates: a company must be
- * active, a private owner verified — the same rules as createCarDraft. The
+ * active, a private owner verified — the same rules as createCar (dashboard/cars/actions.ts). The
  * admin is the reviewer here, so the car is approved on the spot instead of
  * waiting in the queue the admin would only clear a minute later.
  *
@@ -46,7 +46,7 @@ async function requireAdmin(): Promise<string> {
   return user.id;
 }
 
-/** The same two gates createCarDraft applies, worded for the admin. */
+/** The same two gates createCar (dashboard/cars/actions.ts) applies, worded for the admin. */
 async function listingGate(
   admin: ReturnType<typeof createAdminClient>,
   ownerId: string

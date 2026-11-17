@@ -6,12 +6,45 @@ import { notifyUser } from "@/lib/notify-user";
 import { escapeHtml } from "@/lib/html";
 import { isMaintenanceMode } from "@/lib/maintenance";
 import { carDocumentsExpired, DOCUMENTS_EXPIRED_REASON } from "@/lib/car-form";
+import { getVerificationStatus } from "@/lib/verification-gate";
+import { PARTNER_STATUS_LABELS } from "@/lib/partner";
+import type { PartnerStatus } from "@/types/database";
+import { missingForApproval } from "./approval-gate";
 
-// Returns the problem instead of throwing it: in production Next replaces a
-// thrown server-action message with a generic one, and the admin would never
-// learn WHY the car did not go live.
-export async function approveCar(carId: string): Promise<{ error: string | null }> {
+// Every action here returns the problem instead of throwing it: in production
+// Next replaces a thrown server-action message with a generic English one,
+// and the admin would never learn WHY the car did not go live.
+
+const SESSION_EXPIRED = "Sesja wygasła — zaloguj się ponownie i spróbuj jeszcze raz.";
+
+// An expired session does not fail an update, RLS just matches no row — which
+// would read as "the car is gone".
+async function sessionClient() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user ? supabase : null;
+}
+
+export async function approveCar(carId: string): Promise<{ error: string | null }> {
+  const supabase = await sessionClient();
+  if (!supabase) return { error: SESSION_EXPIRED };
+
+  const { data: current } = await supabase
+    .from("cars")
+    .select(
+      "owner_id, partner_id, status, car_private(registration_number, insurance_document_path, insurance_valid_until, inspection_valid_until, rental_right_confirmed_at), partners(status)"
+    )
+    .eq("id", carId)
+    .maybeSingle();
+  if (!current) return { error: "Nie ma takiego auta — mogło zostać usunięte. Odśwież stronę." };
+  // Only a car waiting for review: a double click would otherwise mail the
+  // owner "approved" twice, and a paused car goes back through "Cofnij do
+  // oczekujących" first.
+  if (current.status !== "pending") {
+    return { error: "To auto nie czeka już na zatwierdzenie — odśwież stronę." };
+  }
 
   // A car whose OC or inspection has run out cannot be published (0051) — the
   // typical case is a paused car whose owner uploaded a new policy but kept
@@ -53,18 +86,53 @@ export async function approveCar(carId: string): Promise<{ error: string | null 
     };
   }
 
+  // Everything a new car is asked for today, and a verified owner or company
+  // (see approval-gate.ts). The card greys the button out; this is the rule.
+  const priv = (Array.isArray(current.car_private) ? current.car_private[0] : current.car_private) as
+    | {
+        registration_number: string | null;
+        insurance_document_path: string | null;
+        insurance_valid_until: string | null;
+        inspection_valid_until: string | null;
+        rental_right_confirmed_at: string | null;
+      }
+    | null
+    | undefined;
+  const partner = current.partners as unknown as { status: PartnerStatus } | null;
+  const missing = missingForApproval({
+    registrationNumber: priv?.registration_number ?? null,
+    insuranceDocumentPath: priv?.insurance_document_path ?? null,
+    insuranceValidUntil: priv?.insurance_valid_until ?? null,
+    inspectionValidUntil: priv?.inspection_valid_until ?? null,
+    rentalRightConfirmedAt: priv?.rental_right_confirmed_at ?? null,
+    partner:
+      current.partner_id && partner
+        ? { status: partner.status, statusLabel: PARTNER_STATUS_LABELS[partner.status] }
+        : null,
+    ownerVerification: current.partner_id
+      ? null
+      : (await getVerificationStatus(supabase, current.owner_id)).status,
+  });
+  if (missing.length > 0) {
+    return {
+      error: `Nie można jeszcze zatwierdzić — brakuje: ${missing.join(", ")}. Zatwierdzisz auto, gdy wszystko będzie uzupełnione.`,
+    };
+  }
+
   const { data: car, error } = await supabase
     .from("cars")
     .update({ status: "approved", rejection_reason: null })
     .eq("id", carId)
+    .eq("status", "pending")
     // status is read BACK on purpose: the catalogue invariant in 0042 can
     // silently force this row to 'paused' when the car belongs to a company
     // that is not active. That is not an error, so without this the owner
     // would be emailed "your car is live" about a car nobody can see.
     .select("owner_id, brand, model, year, status, rejection_reason")
-    .single();
+    .maybeSingle();
 
-  if (error) return { error: error.message };
+  if (error) return { error: `Nie udało się zatwierdzić auta: ${error.message}` };
+  if (!car) return { error: "To auto nie czeka już na zatwierdzenie — odśwież stronę." };
 
   if (car.status !== "approved" && car.rejection_reason === DOCUMENTS_EXPIRED_REASON) {
     return {
@@ -116,17 +184,30 @@ export async function approveCar(carId: string): Promise<{ error: string | null 
   return { error: null };
 }
 
-export async function rejectCar(carId: string, reason: string) {
-  const supabase = await createClient();
-  const rejectionReason = reason || "Brak podanego powodu.";
+export async function rejectCar(
+  carId: string,
+  reason: string
+): Promise<{ error: string | null }> {
+  // The owner has to know what to fix; "Brak podanego powodu." used to be
+  // mailed when the field was left empty.
+  const rejectionReason = reason.trim();
+  if (!rejectionReason) {
+    return { error: "Napisz powód — właściciel musi wiedzieć, co poprawić." };
+  }
+
+  const supabase = await sessionClient();
+  if (!supabase) return { error: SESSION_EXPIRED };
   const { data: car, error } = await supabase
     .from("cars")
     .update({ status: "rejected", rejection_reason: rejectionReason })
     .eq("id", carId)
+    // Only from review: a double click must not mail the owner twice.
+    .eq("status", "pending")
     .select("owner_id, brand, model, year")
-    .single();
+    .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (error) return { error: `Nie udało się odrzucić auta: ${error.message}` };
+  if (!car) return { error: "To auto nie czeka już na decyzję — odśwież stronę." };
 
   await notifyUser({
     userId: car.owner_id,
@@ -147,16 +228,22 @@ export async function rejectCar(carId: string, reason: string) {
   revalidatePath("/admin/cars");
   revalidatePath("/admin");
   revalidatePath("/dashboard");
+  return { error: null };
 }
 
-export async function revertCarToPending(carId: string) {
-  const supabase = await createClient();
-  const { error } = await supabase
+export async function revertCarToPending(carId: string): Promise<{ error: string | null }> {
+  const supabase = await sessionClient();
+  if (!supabase) return { error: SESSION_EXPIRED };
+  const { data: car, error } = await supabase
     .from("cars")
     .update({ status: "pending", rejection_reason: null })
-    .eq("id", carId);
+    .eq("id", carId)
+    .select("id")
+    .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (error) return { error: `Nie udało się cofnąć auta do oczekujących: ${error.message}` };
+  if (!car) return { error: "Nie ma takiego auta — mogło zostać usunięte. Odśwież stronę." };
   revalidatePath("/admin/cars");
   revalidatePath("/admin");
+  return { error: null };
 }

@@ -108,7 +108,26 @@ export type FaceMatchOutcome = {
   /** Every face in the document image: its similarity to the selfie (null if
    *  it could not be compared) and its share of the image area. */
   faces: { similarity: number | null; area: number }[];
+  /**
+   * The 'error' came from Rekognition refusing the IMAGE (wrong format, too
+   * large), not from the service failing — so the reviewer is told that,
+   * instead of "błąd usługi" about what was simply a wrong file.
+   */
+  imageUnusable?: boolean;
 };
+
+/**
+ * Rekognition's verdict that the image itself cannot be used: not a JPEG/PNG,
+ * corrupt, or over its size limits. Unlike a network blip this is
+ * deterministic — retrying gets the same answer, and waving the photo through
+ * as if the check had passed only hands a human an image nobody can open. The
+ * server actions check format and size before calling Rekognition, so this
+ * is the last line, for files that look right and still are not.
+ */
+function isUnusableImageError(error: unknown): boolean {
+  const name = (error as { name?: unknown } | null)?.name;
+  return name === "InvalidImageFormatException" || name === "ImageTooLargeException";
+}
 
 // Unlike verifyRecaptcha's "missing credentials = pass", missing credentials
 // here must mean "inconclusive" — falling through to the existing manual
@@ -176,6 +195,9 @@ export async function compareFaces(selfieBytes: Buffer, documentFrontBytes: Buff
       };
     } catch (error) {
       console.error(`compareFaces: Rekognition call failed (attempt ${attempt})`, error);
+      if (isUnusableImageError(error)) {
+        return { result: "error", score: null, minScore: null, unmatchedFaces: 0, faces: [], imageUnusable: true };
+      }
       if (attempt === 2) return { result: "error", score: null, minScore: null, unmatchedFaces: 0, faces: [] };
     }
   }
@@ -183,7 +205,10 @@ export async function compareFaces(selfieBytes: Buffer, documentFrontBytes: Buff
   return { result: "error", score: null, minScore: null, unmatchedFaces: 0, faces: [] };
 }
 
-export type FaceDetectionOutcome = { ok: boolean; reason?: "no_face" | "multiple_faces" };
+export type FaceDetectionOutcome = {
+  ok: boolean;
+  reason?: "no_face" | "multiple_faces" | "unreadable_image";
+};
 
 // A cheap pre-check run right after each photo upload, so a bad shot (no
 // face visible, or two people in frame) gets caught and the user is asked
@@ -193,7 +218,9 @@ export type FaceDetectionOutcome = { ok: boolean; reason?: "no_face" | "multiple
 // transient-error case it lets the upload through rather than blocking the
 // user for something that isn't their fault — compareFaces() at finalize
 // time is still the authoritative check and routes to manual review if
-// anything is actually wrong.
+// anything is actually wrong. The one exception is an image Rekognition
+// refuses outright (isUnusableImageError): that IS fixable by the user, and
+// letting it through would only reach the admin as a photo nobody can open.
 /**
  * Rekognition's own quality reading for the largest face in a photo. DEFAULT
  * attributes already include Quality, so this costs one call and no extra
@@ -235,11 +262,12 @@ export async function detectFace(
     return { ok: true };
   } catch (error) {
     console.error("detectFace: Rekognition call failed", error);
+    if (isUnusableImageError(error)) return { ok: false, reason: "unreadable_image" };
     return { ok: true };
   }
 }
 
-export type LegibilityOutcome = { ok: boolean };
+export type LegibilityOutcome = { ok: boolean; reason?: "unreadable_image" };
 
 // A real license photo — even a mediocre one — has plenty of printed text
 // (name, dates, document number, category table). A blurry, dark, or badly
@@ -259,6 +287,7 @@ export async function checkDocumentLegibility(imageBytes: Buffer): Promise<Legib
     return { ok: lineCount >= MIN_TEXT_LINES };
   } catch (error) {
     console.error("checkDocumentLegibility: Rekognition call failed", error);
+    if (isUnusableImageError(error)) return { ok: false, reason: "unreadable_image" };
     return { ok: true };
   }
 }

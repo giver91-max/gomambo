@@ -4,6 +4,9 @@ import { useState, useTransition } from "react";
 import { resubmitRejectedCar } from "./actions";
 import { Button } from "@/components/ui/button";
 
+const CONNECTION_FAILED =
+  "Nie udało się połączyć z GoMambo — sprawdź internet i spróbuj ponownie. Jeśli błąd się powtarza, odśwież stronę.";
+
 export function ResubmitCarButton({ carId }: { carId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -12,9 +15,16 @@ export function ResubmitCarButton({ carId }: { carId: string }) {
   function handleClick() {
     setError(null);
     startTransition(async () => {
-      const result = await resubmitRejectedCar(carId);
-      if (result.error) setError(result.error);
-      else setDone(true);
+      // Caught here: a dropped connection would otherwise rethrow into
+      // Next's bare "Application error" screen.
+      try {
+        const result = await resubmitRejectedCar(carId);
+        if (!result || result.error) setError(result?.error ?? CONNECTION_FAILED);
+        else setDone(true);
+      } catch (err) {
+        console.error("resubmit car", err);
+        setError(CONNECTION_FAILED);
+      }
     });
   }
 

@@ -5,8 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/back-button";
 import { buttonVariants } from "@/components/ui/button";
 import { PARTNER_STATUS_LABELS } from "@/lib/partner";
+import { adminFileUrl } from "../plik/url";
 import { DecidePartner, VerifyDocumentButton } from "./decide-partner";
-import type { PartnerStatus } from "@/types/database";
+import type { PartnerMemberRole, PartnerStatus } from "@/types/database";
+import { partnerDocumentLabel } from "@/app/dashboard/firma/document-kinds";
 
 // Whose account a car added by the admin goes on: the company's owner-role
 // member, else whoever is there. A company car carries the partner_id either
@@ -15,19 +17,21 @@ function listerId(members: { profile_id: string; role: string }[]): string | nul
   return (members.find((m) => m.role === "owner") ?? members[0])?.profile_id ?? null;
 }
 
+// "Do poprawy" holds the companies asked for a correction ("Poproś o
+// poprawki" puts them back to draft) — without the tab they would vanish from
+// this page until they resubmitted.
 const TABS: { value: PartnerStatus; label: string }[] = [
   { value: "pending", label: "Do weryfikacji" },
+  { value: "draft", label: "Do poprawy" },
   { value: "active", label: "Zweryfikowane" },
   { value: "suspended", label: "Zawieszone" },
   { value: "terminated", label: "Zakończone" },
 ];
 
-const DOC_LABELS: Record<string, string> = {
-  krs: "Odpis z KRS",
-  ceidg: "Wydruk z CEIDG",
-  nip_confirmation: "Potwierdzenie NIP",
-  insurance: "Polisa floty",
-  other: "Inny dokument",
+const ROLE_LABELS: Record<PartnerMemberRole, string> = {
+  owner: "właściciel",
+  manager: "menedżer",
+  staff: "pracownik",
 };
 
 // Service role: the joins reach partner_private and profiles, and profiles
@@ -44,7 +48,7 @@ export default async function AdminPartnersPage({
   const { data: partners } = await admin
     .from("partners")
     .select(
-      `id, trade_name, city, description, status, created_at,
+      `id, trade_name, city, description, status, rejection_reason, created_at,
        partner_private(legal_name, nip, regon, krs, address_street,
                        address_postal_code, address_city, contact_email, contact_phone),
        partner_members(profile_id, role, profiles(full_name, phone)),
@@ -59,6 +63,7 @@ export default async function AdminPartnersPage({
     city: string | null;
     description: string | null;
     status: PartnerStatus;
+    rejection_reason: string | null;
     created_at: string;
     partner_private: {
       legal_name: string | null;
@@ -85,15 +90,13 @@ export default async function AdminPartnersPage({
     }[];
   }[];
 
-  // Short-lived signed links: these documents sit in a private bucket and
-  // must never become durable URLs.
+  // These documents sit in a private bucket and must never become durable
+  // URLs, so the link signs a fresh one when it is clicked (../plik/route.ts).
+  // A signed URL put in the page used to expire ten minutes after loading.
   const docUrls = new Map<string, string>();
   for (const partner of rows) {
     for (const doc of partner.partner_documents ?? []) {
-      const { data: signed } = await admin.storage
-        .from("partner-documents")
-        .createSignedUrl(doc.storage_path, 60 * 10);
-      if (signed?.signedUrl) docUrls.set(doc.id, signed.signedUrl);
+      docUrls.set(doc.id, adminFileUrl("firma", doc.id, doc.storage_path));
     }
   }
 
@@ -149,6 +152,14 @@ export default async function AdminPartnersPage({
                   </Badge>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm text-muted-foreground">
+                  {/* What GoMambo last told the company — the request for a
+                      correction, or why it was suspended. */}
+                  {partner.status !== "active" && partner.rejection_reason && (
+                    <p className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-foreground">
+                      {partner.status === "draft" ? "Poprosiliśmy o poprawki: " : "Powód: "}
+                      {partner.rejection_reason}
+                    </p>
+                  )}
                   <div className="space-y-0.5">
                     <p className="text-foreground">{priv?.legal_name ?? "—"}</p>
                     <p className="text-xs">
@@ -202,7 +213,12 @@ export default async function AdminPartnersPage({
                   <p className="text-xs">
                     Osoby w firmie:{" "}
                     {(partner.partner_members ?? [])
-                      .map((m) => `${m.profiles?.full_name ?? "—"} (${m.role})`)
+                      .map(
+                        (m) =>
+                          `${m.profiles?.full_name ?? "—"} (${
+                            ROLE_LABELS[m.role as PartnerMemberRole] ?? m.role
+                          })`
+                      )
                       .join(", ") || "—"}
                     {" · "}
                     aut w systemie: {carsByPartner.get(partner.id) ?? 0}
@@ -213,7 +229,7 @@ export default async function AdminPartnersPage({
                       {partner.partner_documents.map((doc) => (
                         <li key={doc.id} className="flex flex-wrap items-center gap-2 border-t pt-1">
                           <span className="text-foreground">
-                            {DOC_LABELS[doc.kind] ?? doc.kind}
+                            {partnerDocumentLabel(doc.kind)}
                             {doc.original_name ? ` — ${doc.original_name}` : ""}
                           </span>
                           {docUrls.has(doc.id) && (

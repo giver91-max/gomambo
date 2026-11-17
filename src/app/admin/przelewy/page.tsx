@@ -1,7 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
+import { formatZl } from "@/lib/deposit";
 import { ConfirmTransferButton } from "./confirm-transfer-button";
+
+// Amounts to match against the bank statement: formatZl drops the pointless
+// ".00" but keeps real grosze (a 10% fee can produce them), never rounds.
 
 export default async function AdminTransfersPage() {
   const admin = createAdminClient();
@@ -71,7 +75,7 @@ export default async function AdminTransfersPage() {
               <CardHeader>
                 <CardTitle className="text-base">
                   {booking.cars ? `${booking.cars.brand} ${booking.cars.model}` : "Auto"} —{" "}
-                  {booking.total_price ? Number(booking.total_price).toFixed(2) : "?"} zł
+                  {booking.total_price ? formatZl(Number(booking.total_price)) : "? zł"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">
@@ -81,7 +85,7 @@ export default async function AdminTransfersPage() {
                 </p>
                 <p className="text-xs">
                   W tym opłata serwisowa:{" "}
-                  {booking.platform_fee_amount ? Number(booking.platform_fee_amount).toFixed(2) : "0.00"} zł
+                  {formatZl(Number(booking.platform_fee_amount ?? 0))}
                   {" · "}tytuł przelewu: <code className="font-mono">{booking.id.slice(0, 8)}</code>
                 </p>
                 <ConfirmTransferButton id={booking.id} kind="booking" />
@@ -103,7 +107,7 @@ export default async function AdminTransfersPage() {
                   {charge.bookings?.cars
                     ? `${charge.bookings.cars.brand} ${charge.bookings.cars.model}`
                     : "Auto"}{" "}
-                  — {Number(charge.amount_pln).toFixed(2)} zł
+                  — {formatZl(Number(charge.amount_pln))}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">

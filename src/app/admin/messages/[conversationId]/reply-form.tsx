@@ -14,11 +14,17 @@ export function AdminReplyForm({ conversationId }: { conversationId: string }) {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await sendAdminChatMessage(conversationId, body);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setBody("");
+      try {
+        const result = await sendAdminChatMessage(conversationId, body);
+        if (result.error) {
+          setError(result.error);
+        } else {
+          setBody("");
+          // Sent to the chat, but the e-mail about it did not go out.
+          if (result.warning) setError(result.warning);
+        }
+      } catch {
+        setError("Nie udało się wysłać — sprawdź połączenie i spróbuj ponownie.");
       }
     });
   }

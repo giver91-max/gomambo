@@ -13,8 +13,7 @@ import { raiseToGoMambo } from "@/lib/booking-verification";
 import { depositHoldsPickup } from "@/lib/deposit-service";
 import type { FaceMatchResult } from "@/types/database";
 import { BIOMETRIC_CONSENT_VERSION } from "@/lib/terms";
-
-const MAX_SELFIE_BYTES = 8 * 1024 * 1024;
+import { rekognitionImageProblem, sniffImageFormat } from "@/lib/verification-image";
 
 function carLabelOf(car: { brand: string; model: string; year: number } | null): string {
   return car ? `${car.brand} ${car.model} (${car.year})` : "auto";
@@ -46,11 +45,18 @@ export async function submitBookingVerificationSelfie(
   if (!(selfie instanceof File) || selfie.size === 0) {
     return { error: "Brak zdjęcia. Spróbuj ponownie." };
   }
-  if (selfie.size > MAX_SELFIE_BYTES) {
-    return { error: "Zdjęcie jest za duże." };
+  // Checked on the bytes, not the declared type: Rekognition takes only JPEG
+  // or PNG up to 5 MB, and anything else used to reach it and come back as
+  // "error" — sending a genuine renter to GoMambo's manual queue. The camera
+  // always sends a JPEG well under that, so this only catches a stale page
+  // or a hand-made request.
+  const selfieBuffer = Buffer.from(await selfie.arrayBuffer());
+  const imageProblem = rekognitionImageProblem(selfieBuffer);
+  if (imageProblem === "size") {
+    return { error: "Zdjęcie jest za duże. Odśwież stronę i zrób selfie ponownie." };
   }
-  if (!selfie.type.startsWith("image/")) {
-    return { error: "To nie jest zdjęcie." };
+  if (imageProblem) {
+    return { error: "Nie możemy odczytać zdjęcia. Odśwież stronę i zrób selfie ponownie." };
   }
   const consented = formData.get("biometricConsent") === "on";
   if (!consented) {
@@ -114,12 +120,14 @@ export async function submitBookingVerificationSelfie(
   }
 
   const selfiePath = `${user.id}/${crypto.randomUUID()}-booking-selfie.jpg`;
-  const selfieBuffer = Buffer.from(await selfie.arrayBuffer());
   const { error: uploadError } = await admin.storage
     .from("id-documents")
-    .upload(selfiePath, selfieBuffer, { contentType: "image/jpeg" });
+    .upload(selfiePath, selfieBuffer, {
+      contentType: sniffImageFormat(selfieBuffer) === "png" ? "image/png" : "image/jpeg",
+    });
   if (uploadError) {
-    return { error: `Nie udało się zapisać zdjęcia: ${uploadError.message}` };
+    console.error("[booking-verification] selfie upload failed", uploadError);
+    return { error: "Nie udało się zapisać zdjęcia. Spróbuj ponownie za chwilę." };
   }
 
   let matchResult: FaceMatchResult = "error";
@@ -209,7 +217,7 @@ export async function submitBookingVerificationSelfie(
               ? `zgodne z dokumentem${matchScore !== null ? ` (${matchScore.toFixed(0)}%)` : ""}`
               : matchResult === "no_match"
                 ? `niska zgodność${matchScore !== null ? ` (${matchScore.toFixed(0)}%)` : ""} — obejrzyj zdjęcie uważnie`
-                : "brak wyniku — oceń sam"
+                : "brak wyniku — oceń samodzielnie"
           }</li>
         </ul>
         <p>Potwierdź w panelu, żeby najemca dostał numer rejestracyjny i kontakt do Ciebie.</p>

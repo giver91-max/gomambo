@@ -11,14 +11,29 @@ export function MaintenanceModeToggle({ initialEnabled }: { initialEnabled: bool
 
   function handleToggle() {
     const next = !enabled;
+    // Showing the cars is the one direction that cannot be taken back quietly:
+    // the catalogue and booking open to everyone at once, including any
+    // approved car still missing its documents. Hiding them asks nothing.
+    if (
+      !next &&
+      !confirm(
+        "Pokazać auta publicznie? Katalog i rezerwacje staną się dostępne dla wszystkich odwiedzających."
+      )
+    ) {
+      return;
+    }
     setError(null);
     setEnabled(next);
     startTransition(async () => {
       try {
-        await setMaintenanceMode(next);
-      } catch (e) {
+        const result = await setMaintenanceMode(next);
+        if (result.error) {
+          setEnabled(!next);
+          setError(result.error);
+        }
+      } catch {
         setEnabled(!next);
-        setError(e instanceof Error ? e.message : "Błąd");
+        setError("Nie udało się zmienić ustawienia — sprawdź połączenie i spróbuj ponownie.");
       }
     });
   }

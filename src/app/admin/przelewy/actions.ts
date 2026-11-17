@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/notify-user";
 import { SITE_URL } from "@/lib/site";
+import { escapeHtml } from "@/lib/html";
+import { formatZl } from "@/lib/deposit";
 import { requestVerificationIfDue } from "@/lib/booking-verification";
 import { requestDepositIfDue } from "@/lib/deposit-service";
 
@@ -65,8 +67,8 @@ export async function confirmBookingTransfer(bookingId: string): Promise<{ error
     subject: "Płatność za wynajem otrzymana",
     body: `Najemca opłacił wynajem ${label} przelewem. Rezerwacja jest potwierdzona.`,
     emailHtml: `
-      <p>Najemca opłacił rezerwację przelewem bankowym — ${label}.</p>
-      <p>Kwota: ${booking.total_price ? Number(booking.total_price).toFixed(2) : "?"} zł.</p>
+      <p>Najemca opłacił rezerwację przelewem bankowym — ${escapeHtml(label)}.</p>
+      <p>Kwota: ${booking.total_price ? formatZl(Number(booking.total_price)) : "? zł"}.</p>
       <p><a href="${SITE_URL}/dashboard/bookings">Przejdź do rezerwacji →</a></p>
     `,
     link: "/dashboard/bookings",
@@ -118,13 +120,13 @@ export async function confirmExtraChargeTransfer(
       userId: chargeBooking.owner_id,
       type: "extra_charge_requested",
       subject: `Dopłata opłacona: ${label}`,
-      body: `Najemca opłacił przelewem dopłatę ${Number(extraCharge.amount_pln).toFixed(2)} zł za ${label} (${extraCharge.reason}).`,
+      body: `Najemca opłacił przelewem dopłatę ${formatZl(Number(extraCharge.amount_pln))} za ${label} (${extraCharge.reason}).`,
       emailHtml: `
         <p>Najemca opłacił przelewem zgłoszoną przez Ciebie dopłatę.</p>
         <ul>
-          <li><strong>Auto:</strong> ${label}</li>
-          <li><strong>Kwota:</strong> ${Number(extraCharge.amount_pln).toFixed(2)} zł</li>
-          <li><strong>Powód:</strong> ${extraCharge.reason}</li>
+          <li><strong>Auto:</strong> ${escapeHtml(label)}</li>
+          <li><strong>Kwota:</strong> ${formatZl(Number(extraCharge.amount_pln))}</li>
+          <li><strong>Powód:</strong> ${escapeHtml(extraCharge.reason)}</li>
         </ul>
         <p><a href="${SITE_URL}/dashboard/bookings">Zobacz rezerwacje →</a></p>
       `,

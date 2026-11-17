@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
+import { formatDateTimePl } from "@/lib/calendar";
 import { DeleteReviewButton } from "./delete-review-button";
 
 // reviews_select_public lets anyone (including admin's session client) read
@@ -53,7 +54,7 @@ export default async function AdminReviewsPage() {
                     {review.reviewee?.full_name ?? "?"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(review.created_at).toLocaleString("pl-PL")}
+                    {formatDateTimePl(review.created_at)}
                   </p>
                 </div>
                 {review.cars && (

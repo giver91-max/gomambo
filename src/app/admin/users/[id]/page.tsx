@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -10,6 +9,8 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BackButton } from "@/components/back-button";
+import { formatDatePl, formatDateTimePl } from "@/lib/calendar";
+import { formatPriceZl } from "@/lib/money-format";
 import { setOwnerCommission, startConversationWithUser } from "../actions";
 import { DeleteUserButton } from "./delete-user-button";
 import type { CarStatus } from "@/types/database";
@@ -47,7 +48,7 @@ export default async function AdminUserDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { commission?: string };
+  searchParams?: { commission?: string; wiadomosc?: string };
 }) {
   const supabase = await createClient();
 
@@ -65,8 +66,25 @@ export default async function AdminUserDetailPage({
       .maybeSingle(),
   ]);
 
+  // Old "Nowa rejestracja" notifications keep linking here after the account
+  // is deleted; a bare 404 read like a broken panel.
   if (!profile) {
-    notFound();
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <BackButton />
+        <Card>
+          <CardContent className="space-y-2 py-8 text-center">
+            <p className="font-medium">To konto już nie istnieje</p>
+            <p className="text-sm text-muted-foreground">
+              Zostało usunięte albo link jest nieaktualny.
+            </p>
+            <Link href="/admin/users" className="text-sm text-primary hover:underline">
+              Wszyscy użytkownicy →
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const admin = createAdminClient();
@@ -79,6 +97,9 @@ export default async function AdminUserDetailPage({
       .maybeSingle(),
   ]);
   const email = authUser?.user?.email ?? "";
+  // Supabase refuses this account's password until the sign-up link is
+  // clicked — the first thing to know when someone cannot log in.
+  const emailUnconfirmed = !!authUser?.user && !authUser.user.email_confirmed_at;
 
   const avatarUrl = profile.avatar_path
     ? supabase.storage.from("avatars").getPublicUrl(profile.avatar_path).data.publicUrl
@@ -110,6 +131,7 @@ export default async function AdminUserDetailPage({
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold">{profile.full_name || "Użytkownik"}</h1>
             {profile.role === "admin" && <Badge variant="secondary">Admin</Badge>}
+            {emailUnconfirmed && <Badge variant="destructive">E-mail niepotwierdzony</Badge>}
           </div>
           <p className="text-muted-foreground">{email}</p>
         </div>
@@ -124,6 +146,11 @@ export default async function AdminUserDetailPage({
         </Link>
         <DeleteUserButton userId={params.id} userName={profile.full_name || "ten użytkownik"} />
       </div>
+      {searchParams?.wiadomosc === "blad" && (
+        <p className="text-sm text-destructive">
+          Nie udało się otworzyć rozmowy z tym użytkownikiem. Spróbuj ponownie.
+        </p>
+      )}
 
       <Card>
         <CardHeader>
@@ -131,11 +158,19 @@ export default async function AdminUserDetailPage({
         </CardHeader>
         <CardContent className="space-y-1 text-sm text-muted-foreground">
           <p>Telefon: {profile.phone || "brak"}</p>
-          <p>Zarejestrowano: {new Date(profile.created_at).toLocaleDateString("pl-PL")}</p>
+          {/* Polish time: the server renders in UTC, so a sign-up at 00:30
+              read as the previous day. */}
+          <p>Zarejestrowano: {formatDatePl(profile.created_at)}</p>
+          {emailUnconfirmed && (
+            <p className="text-destructive">
+              Adres e-mail niepotwierdzony — logowanie hasłem nie zadziała, dopóki ta osoba nie
+              kliknie linku z maila rejestracyjnego.
+            </p>
+          )}
           <p>
             Regulamin zaakceptowany:{" "}
             {profile.terms_accepted_at
-              ? new Date(profile.terms_accepted_at).toLocaleString("pl-PL")
+              ? formatDateTimePl(profile.terms_accepted_at)
               : "brak danych (konto sprzed wprowadzenia zgody)"}
           </p>
         </CardContent>
@@ -234,7 +269,10 @@ export default async function AdminUserDetailPage({
                     ? "Zweryfikowano"
                     : "Odrzucono"}
               </Badge>
-              <Link href="/admin/verifications" className="block text-sm text-primary hover:underline">
+              <Link
+                href={`/admin/verifications?status=${verification.status}`}
+                className="block text-sm text-primary hover:underline"
+              >
                 Zobacz w panelu weryfikacji →
               </Link>
             </>
@@ -257,7 +295,7 @@ export default async function AdminUserDetailPage({
                         {car.brand} {car.model} ({car.year})
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {car.city} · {Number(car.price_per_day).toFixed(2)} zł/dzień
+                        {car.city} · {formatPriceZl(car.price_per_day)}/dzień
                       </p>
                     </div>
                     <Badge variant={carStatusVariant[car.status]}>

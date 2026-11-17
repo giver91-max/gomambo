@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
 import { cn } from "@/lib/utils";
+import { formatDateTimePl } from "@/lib/calendar";
+import { findDeletedAccountLinks } from "@/lib/notifications";
 import { markAdminNotificationsRead, markNotificationsRead } from "./actions";
 import { NotificationDeleteButton } from "./notification-delete-button";
 import { RefreshOnce } from "./refresh-once";
@@ -19,7 +21,9 @@ const systemTypeLabel: Record<AdminNotification["type"], string> = {
   bank_transfer_declared: "Zadeklarowany przelew",
   damage_reported: "Zgłoszenie do wynajmu",
   booking_verification_escalated: "Weryfikacja przed wynajmem",
-  new_partner_pending: "Nowa wypożyczalnia do weryfikacji",
+  // Also raised when a company sends its first document or answers a
+  // "Poproś o poprawki" request (dashboard/firma) — the row body says which.
+  new_partner_pending: "Wypożyczalnia do sprawdzenia",
   deposit_refund_failed: "Zwrot kaucji nie powiódł się",
   deposit_transfer_failed: "Przelew zatrzymanej kaucji nie powiódł się",
   deposit_overdue: "Kaucja: przekroczony termin",
@@ -52,7 +56,22 @@ const personalTypeLabel: Record<Notification["type"], string> = {
   deposit_refunded: "Zwrot kaucji",
   deposit_overdue: "Kaucja niewpłacona",
   deposit_objection: "Sprzeciw wobec zatrzymania kaucji",
+  partner_approved: "Wypożyczalnia zweryfikowana",
+  partner_changes_requested: "Wypożyczalnia: prośba o poprawki",
+  partner_status_changed: "Status wypożyczalni",
 };
+
+// Before 0053 a decision about a rental company was filed under the car
+// types, so the company read "Auto zatwierdzone" over "you can add cars now".
+// Those rows (and any written while 0053 is not yet applied) are told apart
+// by where they point: only a company decision links to /dashboard/firma.
+function personalLabel(type: Notification["type"], link: string | null): string {
+  if (link === "/dashboard/firma") {
+    if (type === "car_approved") return personalTypeLabel.partner_approved;
+    if (type === "car_rejected") return personalTypeLabel.partner_status_changed;
+  }
+  return personalTypeLabel[type] ?? "Powiadomienie";
+}
 
 type FeedItem = {
   id: string;
@@ -95,27 +114,33 @@ export default async function NotificationsPage() {
   const personal = rawPersonal ?? [];
   const unreadPersonalIds = personal.filter((n) => !n.read_at).map((n) => n.id);
 
-  await Promise.all([
+  const [deadLinks] = await Promise.all([
+    findDeletedAccountLinks(supabase, system.map((n) => n.link)),
     markAdminNotificationsRead(unreadSystemIds),
     markNotificationsRead(unreadPersonalIds),
   ]);
 
   const feed: FeedItem[] = [
-    ...system.map((n) => ({
-      id: `system-${n.id}`,
-      rawId: n.id,
-      kind: "system" as const,
-      label: systemTypeLabel[n.type],
-      body: n.body,
-      link: n.link,
-      createdAt: n.created_at,
-      isUnread: !readSystemIds.has(n.id),
-    })),
+    ...system.map((n) => {
+      // A "Nowa rejestracja" whose account has since been deleted: say so
+      // rather than link to a 404.
+      const accountGone = !!n.link && deadLinks.has(n.link);
+      return {
+        id: `system-${n.id}`,
+        rawId: n.id,
+        kind: "system" as const,
+        label: systemTypeLabel[n.type] ?? "Powiadomienie",
+        body: accountGone ? `${n.body}\n(To konto zostało już usunięte.)` : n.body,
+        link: accountGone ? null : n.link,
+        createdAt: n.created_at,
+        isUnread: !readSystemIds.has(n.id),
+      };
+    }),
     ...personal.map((n) => ({
       id: `personal-${n.id}`,
       rawId: n.id,
       kind: "personal" as const,
-      label: personalTypeLabel[n.type],
+      label: personalLabel(n.type, n.link),
       body: n.body,
       link: n.link,
       createdAt: n.created_at,
@@ -161,7 +186,7 @@ export default async function NotificationsPage() {
                 <p className="whitespace-pre-wrap text-sm text-muted-foreground">{notification.body}</p>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-muted-foreground">
-                    {new Date(notification.createdAt).toLocaleString("pl-PL")}
+                    {formatDateTimePl(notification.createdAt)}
                   </p>
                   <div className="relative z-10 flex items-center gap-3">
                     {notification.link && (

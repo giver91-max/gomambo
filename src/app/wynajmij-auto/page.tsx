@@ -11,14 +11,37 @@ import {
   CANCELLATION_POLICY_LABELS,
   FUEL_TYPE_LABELS,
   VEHICLE_TYPE_LABELS,
+  seatsLabel,
 } from "@/lib/car-options";
 import type { CancellationPolicy } from "@/types/database";
+import { formatPriceZl } from "@/lib/money-format";
+import { SITE_NAME } from "@/lib/site";
+
+const TITLE = "Jak wynająć auto na GoMambo — zasady i FAQ";
+const DESCRIPTION =
+  "Wynajmij auto od lokalnej wypożyczalni albo prywatnego właściciela na GoMambo — wszystkie oferty w jednym miejscu. Wymagania, odpowiedzialność najemcy, ubezpieczenie i polityka anulowania.";
 
 export const metadata: Metadata = {
-  title: "Jak wynająć auto na GoMambo — zasady i FAQ",
-  description:
-    "Wynajmij auto od lokalnej wypożyczalni albo prywatnego właściciela na GoMambo — wszystkie oferty w jednym miejscu. Wymagania, odpowiedzialność najemcy, ubezpieczenie i polityka anulowania.",
+  title: TITLE,
+  description: DESCRIPTION,
   alternates: { canonical: "/wynajmij-auto" },
+  // Without its own url and title, a shared link to this page inherited the
+  // root layout's og:url and og:title — the preview showed (and Facebook
+  // linked) the home page. A page's openGraph REPLACES the layout's whole
+  // object, so type, locale, site name and image are repeated here; keep the
+  // image in step with app/layout.tsx.
+  openGraph: {
+    type: "website",
+    locale: "pl_PL",
+    siteName: SITE_NAME,
+    url: "/wynajmij-auto",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: [{ url: "/hero.png", width: 1672, height: 543, alt: SITE_NAME }],
+  },
+  // Card type only: with no title, description or image here, Next fills the
+  // Twitter tags from openGraph above instead of keeping the home page's.
+  twitter: { card: "summary_large_image" },
 };
 
 const STEPS = [
@@ -265,7 +288,7 @@ export default async function RentACarInfoPage() {
         </section>
 
         <section className="space-y-4 rounded-xl bg-muted p-8 text-center">
-          <h2 className="text-2xl font-bold">Gotowy, żeby ruszyć w trasę?</h2>
+          <h2 className="text-2xl font-bold">Ruszamy w trasę?</h2>
           <p className="text-muted-foreground">
             Przejrzyj dostępne auta i wyślij pierwsze zapytanie — to zajmuje dosłownie chwilę.
           </p>
@@ -307,10 +330,10 @@ export default async function RentACarInfoPage() {
                       <p className="flex flex-wrap gap-x-2 text-xs">
                         {car.vehicle_type && <span>{VEHICLE_TYPE_LABELS[car.vehicle_type]}</span>}
                         {car.fuel_type && <span>· {FUEL_TYPE_LABELS[car.fuel_type]}</span>}
-                        {car.seats && <span>· {car.seats} miejsc</span>}
+                        {car.seats && <span>· {seatsLabel(car.seats)}</span>}
                       </p>
                       <p className="font-semibold text-foreground">
-                        {Number(car.price_per_day).toFixed(2)} zł / dzień
+                        {formatPriceZl(car.price_per_day)} / dzień
                       </p>
                     </CardContent>
                   </Card>

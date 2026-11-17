@@ -1,4 +1,4 @@
-import { computeResizedDimensions, IMAGE_JPEG_QUALITY } from "@/lib/image-resize";
+import { computeResizedDimensions, decodeImage, IMAGE_JPEG_QUALITY } from "@/lib/image-resize";
 
 // Center-based (not top-left) so rotating around the badge's own center
 // doesn't require also shifting its position.
@@ -45,19 +45,28 @@ export function getBadgeFontSizeCqw(): number {
 // Bakes the GoMambo badge into the actual image pixels (not just a DOM
 // overlay) so the covered plate never leaves the browser in the uploaded
 // file.
+//
+// Throws when the photo cannot be decoded or drawn (HEIC in Chrome, a broken
+// file, a canvas the browser refuses). It never falls back to the original:
+// that file still shows the plate the owner just covered, and may be in a
+// format renters' browsers cannot display.
 export async function flattenImageWithSticker(
   file: File,
   rect: StickerRect | null
 ): Promise<File> {
-  const bitmap = await createImageBitmap(file);
-  const { width, height } = computeResizedDimensions(bitmap.width, bitmap.height);
+  const decoded = await decodeImage(file);
+  const { width, height } = computeResizedDimensions(decoded.width, decoded.height);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return file;
+  if (!ctx) {
+    decoded.release();
+    throw new Error("Canvas 2D context unavailable");
+  }
 
-  ctx.drawImage(bitmap, 0, 0, width, height);
+  ctx.drawImage(decoded.image, 0, 0, width, height);
+  decoded.release();
 
   if (!rect) {
     return canvasToFile(canvas, file);
@@ -104,7 +113,7 @@ async function canvasToFile(canvas: HTMLCanvasElement, originalFile: File): Prom
   const blob: Blob | null = await new Promise((resolve) =>
     canvas.toBlob((b) => resolve(b), "image/jpeg", IMAGE_JPEG_QUALITY)
   );
-  if (!blob) return originalFile;
+  if (!blob) throw new Error("Canvas could not encode a JPEG");
 
   const newName = originalFile.name.replace(/\.[^.]+$/, "") + ".jpg";
   return new File([blob], newName, { type: "image/jpeg" });

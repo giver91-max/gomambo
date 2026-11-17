@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { formatDatePl } from "@/lib/calendar";
 
 export type DamageReportItem = {
   id: string;
@@ -32,7 +33,7 @@ export function DamageReportList({ reports }: { reports: DamageReportItem[] }) {
                 : report.reporter_role === "owner"
                   ? "Zgłoszenie właściciela"
                   : "Zgłoszenie najemcy"}{" "}
-              · {new Date(report.created_at).toLocaleDateString("pl-PL")}
+              · {formatDatePl(report.created_at)}
             </span>
           </div>
           <p className="whitespace-pre-wrap text-xs">{report.description}</p>

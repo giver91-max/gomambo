@@ -7,9 +7,67 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/notify-user";
 import { escapeHtml } from "@/lib/html";
 import { SITE_URL } from "@/lib/site";
-import type { PartnerStatus } from "@/types/database";
+import type { NotificationType, PartnerStatus } from "@/types/database";
 import { PARTNER_STATUS_LABELS } from "@/lib/partner";
 
+type Decision = Extract<PartnerStatus, "active" | "suspended" | "terminated" | "pending" | "draft">;
+
+/**
+ * What the company's members are told, per decision. Each has its own
+ * notification type (0053) — they used to be filed as "Auto zatwierdzone" /
+ * "Auto odrzucone". If 0053 is not applied yet, notifyUser stores the in-app
+ * row under the legacy car_approved / car_rejected type instead (labelled by
+ * its /dashboard/firma link), and the e-mail goes out either way.
+ */
+function decisionMessage(
+  status: Decision,
+  tradeName: string,
+  reason: string
+): { type: NotificationType; subject: string; body: string; emailHtml: string } {
+  const name = escapeHtml(tradeName);
+  if (status === "active") {
+    return {
+      type: "partner_approved",
+      subject: `Wypożyczalnia ${tradeName} zweryfikowana`,
+      body: "Możecie dodawać auta do GoMambo. Każde ogłoszenie przechodzi jeszcze krótką moderację.",
+      emailHtml: `
+            <p>Zweryfikowaliśmy ${name} — możecie dodawać auta.</p>
+            <p>Każde ogłoszenie przechodzi jeszcze krótką moderację, zanim trafi do katalogu.
+            Rezerwacje w Waszych autach wymagają Waszego potwierdzenia — klient nie rezerwuje
+            automatycznie.</p>
+            <p><a href="${SITE_URL}/dashboard/cars/new">Dodaj pierwsze auto →</a></p>
+          `,
+    };
+  }
+  if (status === "draft") {
+    // A correction, not a verdict: the company fixes the data or adds the
+    // document, and the verification carries on. Worded so, because the only
+    // option with a reason field used to be "Zakończ współpracę".
+    return {
+      type: "partner_changes_requested",
+      subject: `Wypożyczalnia ${tradeName} — prosimy o uzupełnienie`,
+      body: `Zanim zweryfikujemy wypożyczalnię, prosimy o poprawki: ${reason}${
+        /[.!?]$/.test(reason) ? "" : "."
+      } Uzupełnijcie je w panelu firmy — wtedy sprawdzimy firmę ponownie.`,
+      emailHtml: `
+            <p>Sprawdzamy ${name} i zanim zweryfikujemy firmę, prosimy o poprawki:</p>
+            <p><strong>${escapeHtml(reason)}</strong></p>
+            <p>Uzupełnijcie dane albo dodajcie dokument w panelu firmy — wtedy sprawdzimy firmę ponownie.</p>
+            <p><a href="${SITE_URL}/dashboard/firma">Przejdź do panelu firmy →</a></p>
+          `,
+    };
+  }
+  return {
+    type: "partner_status_changed",
+    subject: `Wypożyczalnia ${tradeName} — wymagane działanie`,
+    body: `Status współpracy: ${PARTNER_STATUS_LABELS[status]}. ${reason}`,
+    emailHtml: `
+            <p>Status współpracy z ${name}: <strong>${escapeHtml(PARTNER_STATUS_LABELS[status])}</strong>.</p>
+            <p>${escapeHtml(reason)}</p>
+            <p><a href="${SITE_URL}/dashboard/firma">Przejdź do panelu firmy →</a></p>
+          `,
+  };
+}
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -35,7 +93,7 @@ async function requireAdmin() {
  */
 export async function decidePartner(
   partnerId: string,
-  status: Extract<PartnerStatus, "active" | "suspended" | "terminated" | "pending">,
+  status: Decision,
   reason: string
 ): Promise<{ error: string | null }> {
   const { admin } = await requireAdmin();
@@ -53,7 +111,9 @@ export async function decidePartner(
     .single();
 
   if (error || !partner) {
-    return { error: error?.message ?? "Nie udało się zapisać decyzji." };
+    return {
+      error: error ? `Nie udało się zapisać decyzji: ${error.message}` : "Nie udało się zapisać decyzji.",
+    };
   }
 
   // Pausing and restoring this partner's fleet is done by the
@@ -66,33 +126,16 @@ export async function decidePartner(
     .select("profile_id")
     .eq("partner_id", partnerId);
 
+  const message = decisionMessage(status, partner.trade_name, trimmed);
   for (const member of members ?? []) {
     await notifyUser({
       userId: member.profile_id,
-      type: status === "active" ? "car_approved" : "car_rejected",
-      subject:
-        status === "active"
-          ? `Wypożyczalnia ${partner.trade_name} zweryfikowana`
-          : `Wypożyczalnia ${partner.trade_name} — wymagane działanie`,
-      body:
-        status === "active"
-          ? "Możecie dodawać auta do GoMambo. Każde ogłoszenie przechodzi jeszcze krótką moderację."
-          : `Status współpracy: ${PARTNER_STATUS_LABELS[status]}. ${trimmed}`,
-      emailHtml:
-        status === "active"
-          ? `
-            <p>Zweryfikowaliśmy ${escapeHtml(partner.trade_name)} — możecie dodawać auta.</p>
-            <p>Każde ogłoszenie przechodzi jeszcze krótką moderację, zanim trafi do katalogu.
-            Rezerwacje w Waszych autach wymagają Waszego potwierdzenia — klient nie rezerwuje
-            automatycznie.</p>
-            <p><a href="${SITE_URL}/dashboard/cars/new">Dodaj pierwsze auto →</a></p>
-          `
-          : `
-            <p>Status współpracy z ${escapeHtml(partner.trade_name)}: <strong>${escapeHtml(PARTNER_STATUS_LABELS[status])}</strong>.</p>
-            <p>${escapeHtml(trimmed)}</p>
-            <p><a href="${SITE_URL}/dashboard/firma">Przejdź do panelu firmy →</a></p>
-          `,
+      ...message,
       link: "/dashboard/firma",
+      // Until 0053 is applied the partner_* types are refused by the CHECK;
+      // the notifications page labels these legacy types by their
+      // /dashboard/firma link as company decisions.
+      fallbackType: message.type === "partner_approved" ? "car_approved" : "car_rejected",
     });
   }
 
@@ -109,7 +152,7 @@ export async function verifyPartnerDocument(documentId: string): Promise<{ error
     .eq("id", documentId)
     .is("verified_at", null);
 
-  if (error) return { error: error.message };
+  if (error) return { error: `Nie udało się oznaczyć dokumentu: ${error.message}` };
 
   revalidatePath("/admin/partnerzy");
   return { error: null };

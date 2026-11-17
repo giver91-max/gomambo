@@ -15,10 +15,12 @@ import { MaintenanceNotice } from "@/components/maintenance-notice";
 import { ResultsViewToggle } from "@/components/results-view-toggle";
 import { eachDateInRange, toISODate } from "@/lib/calendar";
 import { firstNameOnly } from "@/lib/utils";
+import { formatPriceZl } from "@/lib/money-format";
 import {
   FUEL_TYPE_LABELS,
   TRANSMISSION_LABELS,
   VEHICLE_TYPE_LABELS,
+  seatsLabel,
 } from "@/lib/car-options";
 import type { FuelType, Transmission, VehicleType } from "@/types/database";
 
@@ -427,7 +429,7 @@ export default async function AutaPage({
                     <p className="flex flex-wrap gap-x-2 text-xs">
                       {car.vehicle_type && <span>{VEHICLE_TYPE_LABELS[car.vehicle_type]}</span>}
                       {car.fuel_type && <span>· {FUEL_TYPE_LABELS[car.fuel_type]}</span>}
-                      {car.seats && <span>· {car.seats} miejsc</span>}
+                      {car.seats && <span>· {seatsLabel(car.seats)}</span>}
                     </p>
                     {(() => {
                       // A Partner car is rented out by the company, so it is
@@ -463,11 +465,11 @@ export default async function AutaPage({
                       );
                     })()}
                     <p className="font-semibold text-foreground">
-                      {Number(car.price_per_day).toFixed(2)} zł / dzień
+                      {formatPriceZl(car.price_per_day)} / dzień
                     </p>
                     {car.price_per_month && (
                       <p className="text-xs">
-                        {Number(car.price_per_month).toFixed(2)} zł / miesiąc
+                        {formatPriceZl(car.price_per_month)} / miesiąc
                       </p>
                     )}
                   </CardContent>

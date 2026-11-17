@@ -4,10 +4,17 @@
 // mirrored (CSS scale-x(-1)) preview like a selfie camera — the fact that
 // the video's underlying pixel buffer is never actually flipped, only its
 // on-screen rendering is.
+//
+// `pad` widens the rectangle by that fraction of its size on every side, and
+// `minShortSide` grows it (same centre, same proportions) until its shorter
+// side has at least that many source pixels. Both stop at the edges of the
+// video. A selfie needs them: the oval guide is small, so on a 640×480 webcam
+// the bare oval was a ~120×160 px file the admin could barely judge.
 export function getFrameCropRect(
   video: HTMLVideoElement,
   frameEl: HTMLElement,
-  mirrored: boolean
+  mirrored: boolean,
+  { pad = 0, minShortSide = 0 }: { pad?: number; minShortSide?: number } = {}
 ): { sx: number; sy: number; sWidth: number; sHeight: number } | null {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
@@ -32,17 +39,33 @@ export function getFrameCropRect(
 
   let sx = (relLeft + offsetX) / scale;
   const sy = (relTop + offsetY) / scale;
-  const sWidth = frameRect.width / scale;
-  const sHeight = frameRect.height / scale;
+  const frameW = frameRect.width / scale;
+  const frameH = frameRect.height / scale;
+  if (!frameW || !frameH) return null;
 
   if (mirrored) {
-    sx = vw - sx - sWidth;
+    sx = vw - sx - frameW;
   }
 
+  let sWidth = frameW * (1 + 2 * pad);
+  let sHeight = frameH * (1 + 2 * pad);
+  const shortSide = Math.min(sWidth, sHeight);
+  if (minShortSide > 0 && shortSide < minShortSide) {
+    sWidth *= minShortSide / shortSide;
+    sHeight *= minShortSide / shortSide;
+  }
+  // Never larger than the video itself; shrinking keeps the proportions.
+  const fit = Math.min(1, vw / sWidth, vh / sHeight);
+  sWidth *= fit;
+  sHeight *= fit;
+
+  const centreX = sx + frameW / 2;
+  const centreY = sy + frameH / 2;
+
   return {
-    sx: Math.max(0, Math.min(sx, vw - sWidth)),
-    sy: Math.max(0, Math.min(sy, vh - sHeight)),
-    sWidth: Math.min(sWidth, vw),
-    sHeight: Math.min(sHeight, vh),
+    sx: Math.max(0, Math.min(centreX - sWidth / 2, vw - sWidth)),
+    sy: Math.max(0, Math.min(centreY - sHeight / 2, vh - sHeight)),
+    sWidth,
+    sHeight,
   };
 }

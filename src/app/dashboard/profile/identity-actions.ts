@@ -9,6 +9,8 @@ import { checkDocumentLegibility, detectFace } from "@/lib/face-match";
 import { assessIdentity, buildAutoReview } from "@/lib/identity-gates";
 import { alertAdminsAboutVerification } from "@/lib/identity-alerts";
 import { BIOMETRIC_CONSENT_VERSION } from "@/lib/terms";
+import { rekognitionImageProblem } from "@/lib/verification-image";
+import { retireUnfinishedHandoffs } from "@/lib/verification-handoff";
 
 type Slot = "front" | "back" | "selfie";
 
@@ -20,7 +22,8 @@ const SLOT_LABEL: Record<Slot, string> = {
   selfie: "selfie",
 };
 
-const MAX_BYTES = 8 * 1024 * 1024;
+const UNREADABLE_PHOTO = (slot: Slot) =>
+  `Nie możemy odczytać zdjęcia „${SLOT_LABEL[slot]}”. Wybierz zdjęcie JPG lub PNG albo zrób je ponownie.`;
 
 /**
  * The desktop route into identity verification. It collects what the phone
@@ -52,7 +55,10 @@ const MAX_BYTES = 8 * 1024 * 1024;
  */
 export async function submitIdentityVerification(
   paths: { front: string; back: string; selfie: string },
-  biometricConsent: boolean
+  biometricConsent: boolean,
+  // An approved account replacing its documents — something the profile
+  // only sends after asking. See the check below.
+  options: { replaceApproved?: boolean } = {}
 ): Promise<{ error: string | null; approved?: boolean }> {
   const supabase = await createClient();
   const {
@@ -82,16 +88,60 @@ export async function submitIdentityVerification(
 
   const admin = createAdminClient();
 
+  const { data: existing } = await admin
+    .from("identity_verifications")
+    .select("id, status, rejection_reason, document_path, document_back_path, selfie_path")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  // Every refusal from here on leaves three identity photos in storage that
+  // no row points at — and that delete-account therefore never finds. They
+  // go now. Only files this form itself names (<uuid>-front|back|selfie.jpg
+  // under the caller's prefix) and never one the saved verification uses, so
+  // a crafted request cannot make this delete the current documents.
+  const ownUpload = new RegExp(
+    `^${user.id}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-(front|back|selfie)\\.jpg$`
+  );
+  const current = new Set(
+    [existing?.document_path, existing?.document_back_path, existing?.selfie_path].filter(Boolean)
+  );
+  async function refuse(message: string): Promise<{ error: string }> {
+    const discard = SLOTS.map((slot) => paths[slot]).filter(
+      (p) => ownUpload.test(p) && !current.has(p)
+    );
+    if (discard.length > 0) await admin.storage.from("id-documents").remove(discard);
+    return { error: message };
+  }
+
+  // Resubmitting would re-run the automatic gates and, if any of them fails
+  // — as it did for most accounts a human approved — silently drop an
+  // approved account back to pending and block "Dodaj auto". Replacing an
+  // approved document is allowed, but only as the explicit, confirmed action
+  // the profile offers ("Zmień dokument").
+  if (existing?.status === "approved" && !options.replaceApproved) {
+    return refuse(
+      "Twoja tożsamość jest już zweryfikowana. Jeśli chcesz wymienić dokument, użyj przycisku „Zmień dokument”."
+    );
+  }
+
   const buffers = {} as Record<Slot, Buffer>;
   for (const slot of SLOTS) {
     const { data, error } = await admin.storage.from("id-documents").download(paths[slot]);
     if (error || !data) {
-      return { error: `Nie udało się odczytać zdjęcia „${SLOT_LABEL[slot]}”. Spróbuj ponownie.` };
+      return refuse(`Nie udało się odczytać zdjęcia „${SLOT_LABEL[slot]}”. Spróbuj ponownie.`);
     }
     const buffer = Buffer.from(await data.arrayBuffer());
-    if (buffer.byteLength === 0 || buffer.byteLength > MAX_BYTES) {
-      return { error: `Zdjęcie „${SLOT_LABEL[slot]}” ma nieprawidłowy rozmiar.` };
+    // Rekognition takes only JPEG/PNG up to 5 MB. The page converts every
+    // photo before upload, so this catches a stale page or a hand-made
+    // request — refused here with a message the person can act on, instead
+    // of reaching the admin as "błąd usługi" and an image Chrome won't open.
+    const problem = rekognitionImageProblem(buffer);
+    if (problem === "size") {
+      return refuse(
+        `Zdjęcie „${SLOT_LABEL[slot]}” jest za duże (maks. 5 MB). Odśwież stronę i dodaj je ponownie.`
+      );
     }
+    if (problem) return refuse(UNREADABLE_PHOTO(slot));
     buffers[slot] = buffer;
   }
 
@@ -100,46 +150,43 @@ export async function submitIdentityVerification(
     crypto.createHash("sha256").update(buffers[slot]).digest("hex")
   );
   if (new Set(hashes).size !== hashes.length) {
-    return {
-      error:
-        "Te same zdjęcia zostały przesłane więcej niż raz. Potrzebujemy osobnych zdjęć przodu, tyłu i selfie.",
-    };
+    return refuse(
+      "Te same zdjęcia zostały przesłane więcej niż raz. Potrzebujemy osobnych zdjęć przodu, tyłu i selfie."
+    );
   }
 
   // Catch an unusable photo now, with the person still at the keyboard,
   // rather than at the end.
   const frontFace = await detectFace(buffers.front, "document");
   if (!frontFace.ok) {
-    return {
-      error:
-        "Nie widać zdjęcia w dokumencie. Upewnij się, że fotografujesz przód prawa jazdy i że zdjęcie jest ostre.",
-    };
+    return refuse(
+      frontFace.reason === "unreadable_image"
+        ? UNREADABLE_PHOTO("front")
+        : "Nie widać zdjęcia w dokumencie. Upewnij się, że fotografujesz przód prawa jazdy i że zdjęcie jest ostre."
+    );
   }
   const selfieFace = await detectFace(buffers.selfie, "selfie");
   if (!selfieFace.ok) {
-    return {
-      error:
-        selfieFace.reason === "multiple_faces"
-          ? "Na selfie widać więcej niż jedną osobę. Zrób zdjęcie ponownie — w kadrze powinna być tylko Twoja twarz."
-          : "Nie wykryto wyraźnej twarzy na selfie. Sprawdź oświetlenie i ostrość i spróbuj ponownie.",
-    };
+    return refuse(
+      selfieFace.reason === "multiple_faces"
+        ? "Na selfie widać więcej niż jedną osobę. Zrób zdjęcie ponownie — w kadrze powinna być tylko Twoja twarz."
+        : selfieFace.reason === "unreadable_image"
+          ? UNREADABLE_PHOTO("selfie")
+          : "Nie wykryto wyraźnej twarzy na selfie. Sprawdź oświetlenie i ostrość i spróbuj ponownie."
+    );
   }
   for (const slot of ["front", "back"] as const) {
     const legible = await checkDocumentLegibility(buffers[slot]);
     if (!legible.ok) {
-      return {
-        error: `Zdjęcie „${SLOT_LABEL[slot]}” jest nieczytelne. Sprawdź oświetlenie i ostrość, upewnij się, że cały dokument jest w kadrze, i spróbuj ponownie.`,
-      };
+      return refuse(
+        legible.reason === "unreadable_image"
+          ? UNREADABLE_PHOTO(slot)
+          : `Zdjęcie „${SLOT_LABEL[slot]}” jest nieczytelne. Sprawdź oświetlenie i ostrość, upewnij się, że cały dokument jest w kadrze, i spróbuj ponownie.`
+      );
     }
   }
 
   const assessment = await assessIdentity(buffers.selfie, buffers.front);
-
-  const { data: existing } = await admin
-    .from("identity_verifications")
-    .select("id, status, rejection_reason, document_path, document_back_path, selfie_path")
-    .eq("user_id", user.id)
-    .maybeSingle();
 
   // A human's rejection outranks every automatic gate. Resubmitting after one
   // is supported on purpose — the rejection e-mail asks for it — but the gates
@@ -164,7 +211,10 @@ export async function submitIdentityVerification(
   let verificationId: string;
   if (existing) {
     const { error } = await admin.from("identity_verifications").update(row).eq("id", existing.id);
-    if (error) return { error: error.message };
+    if (error) {
+      console.error("[identity] could not save the verification", error);
+      return refuse("Nie udało się zapisać weryfikacji. Spróbuj ponownie.");
+    }
     verificationId = existing.id;
     const stale = [existing.document_path, existing.document_back_path, existing.selfie_path].filter(
       (p): p is string => !!p && !Object.values(paths).includes(p)
@@ -177,10 +227,16 @@ export async function submitIdentityVerification(
       .select("id")
       .single();
     if (error || !inserted) {
-      return { error: error?.message ?? "Nie udało się zapisać weryfikacji." };
+      console.error("[identity] could not save the verification", error);
+      return refuse("Nie udało się zapisać weryfikacji. Spróbuj ponownie.");
     }
     verificationId = inserted.id;
   }
+
+  // A phone session still open from before is superseded by what was just
+  // saved: left alive, it could finish later and overwrite this result (an
+  // approval included) with its own.
+  await retireUnfinishedHandoffs(admin, user.id, Object.values(paths));
 
   // Every verification reaches the admins by e-mail; the ones that need a
   // decision also land in the panel queue. See lib/identity-alerts.ts.

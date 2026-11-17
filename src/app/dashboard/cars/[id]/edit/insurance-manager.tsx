@@ -4,8 +4,11 @@ import { useRef, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { setCarInsuranceDocument } from "./actions";
 import { Button } from "@/components/ui/button";
+import { fileExtension, prepareDocumentFile } from "@/lib/image-resize";
 
 const MAX_INSURANCE_BYTES = 8 * 1024 * 1024;
+const CONNECTION_FAILED =
+  "Nie udało się połączyć z GoMambo — sprawdź internet i spróbuj ponownie. Jeśli błąd się powtarza, odśwież stronę.";
 
 export function InsuranceManager({
   carId,
@@ -31,41 +34,50 @@ export function InsuranceManager({
 
     setError(null);
 
-    const isValidType = file.type.startsWith("image/") || file.type === "application/pdf";
-    if (!isValidType) {
-      setError("Plik musi być zdjęciem lub PDF-em.");
-      return;
-    }
-    if (file.size > MAX_INSURANCE_BYTES) {
-      setError("Plik przekracza 8 MB.");
-      return;
-    }
-
     startTransition(async () => {
-      const supabase = createClient();
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${ownerId}/${carId}/${crypto.randomUUID()}.${ext}`;
+      try {
+        // A phone photo over the limit, or a HEIC one other browsers cannot
+        // show, is re-encoded as a JPEG instead of being refused.
+        const prepared = await prepareDocumentFile(file, MAX_INSURANCE_BYTES);
+        if (prepared.error !== undefined) {
+          setError(prepared.error);
+          return;
+        }
+        const upload = prepared.file;
+        const uploadIsPdf = upload.type === "application/pdf" || /\.pdf$/i.test(upload.name);
 
-      const { error: uploadError } = await supabase.storage
-        .from("car-insurance")
-        .upload(path, file, { contentType: file.type });
+        const supabase = createClient();
+        const path = `${ownerId}/${carId}/${crypto.randomUUID()}.${fileExtension(upload, uploadIsPdf ? "pdf" : "jpg")}`;
 
-      if (uploadError) {
-        setError(`Błąd wgrywania pliku: ${uploadError.message}`);
-        return;
+        const { error: uploadError } = await supabase.storage
+          .from("car-insurance")
+          .upload(path, upload, { contentType: upload.type || undefined });
+
+        if (uploadError) {
+          console.error("insurance manager: upload failed", uploadError);
+          setError("Nie udało się wgrać pliku — sprawdź połączenie z internetem i spróbuj ponownie.");
+          return;
+        }
+
+        const result = await setCarInsuranceDocument(carId, path);
+        if (!result || result.error) {
+          // A refused save never pointed the car at this file.
+          if (result?.error) await supabase.storage.from("car-insurance").remove([path]);
+          setError(result?.error ?? CONNECTION_FAILED);
+          return;
+        }
+
+        const { data: signed } = await supabase.storage
+          .from("car-insurance")
+          .createSignedUrl(path, 60 * 5);
+        setUrl(signed?.signedUrl ?? null);
+        setIsPdf(uploadIsPdf);
+      } catch (err) {
+        // Without this a dropped connection rethrows into Next's bare
+        // "Application error" screen.
+        console.error("insurance manager", err);
+        setError(CONNECTION_FAILED);
       }
-
-      const result = await setCarInsuranceDocument(carId, path);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-
-      const { data: signed } = await supabase.storage
-        .from("car-insurance")
-        .createSignedUrl(path, 60 * 5);
-      setUrl(signed?.signedUrl ?? null);
-      setIsPdf(file.type === "application/pdf");
     });
   }
 

@@ -14,7 +14,7 @@ export async function acceptCurrentTerms(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect(`/login?redirect=${encodeURIComponent(safeRedirectPath(redirectTo))}`);
 
   if (!accepted) {
     return { error: "Zaznacz akceptację regulaminu i polityki prywatności." };
@@ -26,7 +26,10 @@ export async function acceptCurrentTerms(
     .from("profiles")
     .update({ terms_accepted_at: new Date().toISOString(), terms_version: CURRENT_TERMS_VERSION })
     .eq("id", user.id);
-  if (error) return { error: error.message };
+  if (error) {
+    console.error(`[terms] acceptance not saved: ${error.message}`);
+    return { error: "Nie udało się zapisać akceptacji. Spróbuj ponownie za chwilę." };
+  }
 
   redirect(safeRedirectPath(redirectTo));
 }

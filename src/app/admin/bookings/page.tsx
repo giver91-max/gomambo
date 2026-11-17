@@ -95,7 +95,7 @@ export default async function AdminBookingsPage() {
                 </p>
                 <p>
                   Płatność: {paymentLabel[booking.payment_status]}
-                  {booking.total_price ? ` (${Number(booking.total_price).toFixed(2)} zł)` : ""}
+                  {booking.total_price ? ` (${formatZl(Number(booking.total_price))})` : ""}
                   {" · "}Kaucja:{" "}
                   {booking.deposit_amount && Number(booking.deposit_amount) > 0 ? (
                     <Link href="/admin/kaucje" className="text-primary hover:underline">

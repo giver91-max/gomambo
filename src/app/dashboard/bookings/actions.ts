@@ -19,6 +19,7 @@ import { formatDateTimePl, todayInPoland } from "@/lib/calendar";
 import { escapeHtml } from "@/lib/html";
 import { SITE_URL } from "@/lib/site";
 import type { BookingDeposit, BookingStatus, CancellationPolicy } from "@/types/database";
+import { formatZl } from "@/lib/deposit";
 
 // A retention reason is shown to the renter and kept as GoMambo's case
 // record; long enough for a real description, short enough for a mail.
@@ -109,7 +110,7 @@ export async function updateBookingStatus(
           ? `
             <p>Właściciel zaakceptował Twoje zapytanie o wynajem na GoMambo.</p>
             <ul>
-              <li><strong>Auto:</strong> ${carLabel}</li>
+              <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
               <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
             </ul>
             <p><a href="https://www.gomambo.pl/dashboard/rentals">Zobacz szczegóły →</a></p>
@@ -117,7 +118,7 @@ export async function updateBookingStatus(
           : `
             <p>Właściciel odrzucił Twoje zapytanie o wynajem na GoMambo.</p>
             <ul>
-              <li><strong>Auto:</strong> ${carLabel}</li>
+              <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
               <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
             </ul>
             <p>Przejrzyj inne dostępne auta w Twojej okolicy.</p>
@@ -183,7 +184,7 @@ export async function cancelBooking(bookingId: string): Promise<void> {
     emailHtml: `
       <p>Najemca anulował rezerwację na GoMambo.</p>
       <ul>
-        <li><strong>Auto:</strong> ${carLabel}</li>
+        <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
         <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
       </ul>
       <p><a href="https://www.gomambo.pl/dashboard/bookings">Zobacz rezerwacje →</a></p>
@@ -204,7 +205,7 @@ export async function cancelBooking(bookingId: string): Promise<void> {
       emailHtml: `
         <p>Twoja rezerwacja na GoMambo została anulowana.</p>
         <ul>
-          <li><strong>Auto:</strong> ${carLabel}</li>
+          <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
           <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
         </ul>
         <p>Wpłatę zwrócimy przelewem na konto, z którego przyszła — odezwiemy się do Ciebie. Pytania: kontakt@gomambo.pl.</p>
@@ -245,7 +246,7 @@ export async function cancelBooking(bookingId: string): Promise<void> {
       emailHtml: `
         <p>Twoja rezerwacja na GoMambo została anulowana, ale automatyczny zwrot płatności nie powiódł się w całości.</p>
         <ul>
-          <li><strong>Auto:</strong> ${carLabel}</li>
+          <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
           <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
         </ul>
         <p>Zwrot wykonamy ręcznie i potwierdzimy osobno — nie musisz nic robić. Pytania: kontakt@gomambo.pl.</p>
@@ -323,7 +324,7 @@ export async function ownerCancelBooking(bookingId: string): Promise<{ error: st
     emailHtml: `
       <p>Właściciel odwołał Twoją rezerwację na GoMambo.${escapeHtml(refundLine)}</p>
       <ul>
-        <li><strong>Auto:</strong> ${carLabel}</li>
+        <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
         <li><strong>Termin:</strong> ${booking.start_date} – ${booking.end_date}</li>
       </ul>
       <p><a href="https://www.gomambo.pl/auta">Przeglądaj inne auta →</a></p>
@@ -720,13 +721,13 @@ export async function requestExtraCharge(
     userId: booking.renter_id,
     type: "extra_charge_requested",
     subject: `Prośba o dopłatę: ${carLabel}`,
-    body: `Właściciel prosi o dopłatę ${amountPln.toFixed(2)} zł za ${carLabel}. Powód: ${trimmedReason}`,
+    body: `Właściciel prosi o dopłatę ${formatZl(amountPln)} za ${carLabel}. Powód: ${trimmedReason}`,
     emailHtml: `
       <p>Właściciel prosi o dodatkową opłatę za wynajem na GoMambo, ponad kaucję.</p>
       <ul>
-        <li><strong>Auto:</strong> ${carLabel}</li>
-        <li><strong>Kwota:</strong> ${amountPln.toFixed(2)} zł</li>
-        <li><strong>Powód:</strong> ${trimmedReason}</li>
+        <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
+        <li><strong>Kwota:</strong> ${formatZl(amountPln)}</li>
+        <li><strong>Powód:</strong> ${escapeHtml(trimmedReason)}</li>
       </ul>
       <p>Jeśli się z tym nie zgadzasz, napisz do nas przez czat — decyzję można cofnąć tylko ręcznie.</p>
       <p><a href="${SITE_URL}/dashboard/rentals">Zapłać lub zobacz szczegóły →</a></p>

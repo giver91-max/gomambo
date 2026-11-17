@@ -23,8 +23,8 @@ import {
   DepositRenterPanel,
   type DepositPanelRow,
 } from "@/components/deposit-renter-panel";
-import { bookingDepositAmounts } from "@/lib/deposit";
-import { todayInPoland } from "@/lib/calendar";
+import { bookingDepositAmounts, formatZl } from "@/lib/deposit";
+import { formatDatePl, todayInPoland } from "@/lib/calendar";
 
 const statusLabel: Record<BookingStatus, string> = {
   requested: "Oczekuje na potwierdzenie",
@@ -246,7 +246,7 @@ export default async function RentalHistoryPage() {
                         <p>
                           Kwota:{" "}
                           <strong className="text-foreground">
-                            {booking.total_price ? Number(booking.total_price).toFixed(2) : "—"} zł
+                            {booking.total_price ? formatZl(Number(booking.total_price)) : "— zł"}
                           </strong>{" "}
                           · tytuł przelewu:{" "}
                           <code className="font-mono text-foreground">{booking.id.slice(0, 8)}</code>
@@ -266,7 +266,7 @@ export default async function RentalHistoryPage() {
                 )}
                 {booking.payment_status === "paid" && (
                   <p className="text-xs">
-                    Opłacono{booking.total_price ? `: ${Number(booking.total_price).toFixed(2)} zł` : ""}
+                    Opłacono{booking.total_price ? `: ${formatZl(Number(booking.total_price))}` : ""}
                   </p>
                 )}
                 {(booking.status === "accepted" ||
@@ -324,7 +324,7 @@ export default async function RentalHistoryPage() {
                         <p className="text-xs">
                           Polityka anulowania: {CANCELLATION_POLICY_LABELS[policy]} —{" "}
                           {withinFreeWindow
-                            ? `darmowe anulowanie do ${deadline.toLocaleDateString("pl-PL")}`
+                            ? `darmowe anulowanie do ${formatDatePl(deadline)}`
                             : "termin darmowego anulowania minął"}
                         </p>
                         {/* PAY-1: from the start date on only GoMambo cancels. */}

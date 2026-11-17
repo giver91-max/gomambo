@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getAuthEmailsByUserId } from "@/lib/admin-users";
+import { getAuthAccountsByUserId } from "@/lib/admin-users";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -14,13 +14,13 @@ export default async function AdminUsersPage({
 }) {
   const supabase = await createClient();
 
-  const [{ data: profiles }, emailsById, { data: cars }, { data: verifications }] =
+  const [{ data: profiles }, accountsById, { data: cars }, { data: verifications }] =
     await Promise.all([
       supabase
         .from("profiles")
         .select("id, full_name, role, created_at")
         .order("created_at", { ascending: false }),
-      getAuthEmailsByUserId(),
+      getAuthAccountsByUserId(),
       supabase.from("cars").select("owner_id"),
       supabase.from("identity_verifications").select("user_id, status"),
     ]);
@@ -35,7 +35,9 @@ export default async function AdminUsersPage({
   const rows = (profiles ?? [])
     .map((p) => ({
       ...p,
-      email: emailsById.get(p.id) ?? "",
+      email: accountsById.get(p.id)?.email ?? "",
+      // Unknown (no auth row read) is not flagged — only a known unconfirmed one.
+      emailUnconfirmed: accountsById.get(p.id)?.emailConfirmed === false,
       carCount: carCountByOwner.get(p.id) ?? 0,
       verificationStatus: verificationByUser.get(p.id) ?? null,
     }))
@@ -75,6 +77,12 @@ export default async function AdminUsersPage({
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {p.role === "admin" && <Badge variant="secondary">Admin</Badge>}
+                    {/* Supabase refuses this account's password until the
+                        sign-up link is clicked — the first thing to know when
+                        someone says they cannot log in. */}
+                    {p.emailUnconfirmed && (
+                      <Badge variant="destructive">E-mail niepotwierdzony</Badge>
+                    )}
                     {p.verificationStatus === "approved" && <Badge>Zweryfikowany</Badge>}
                     {p.carCount > 0 && (
                       <Badge variant="secondary">

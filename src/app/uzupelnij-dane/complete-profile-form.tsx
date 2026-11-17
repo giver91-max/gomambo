@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { safeRedirectPath } from "@/lib/safe-redirect";
+import { SUBMIT_FAILED_MESSAGE } from "@/app/(auth)/auth-errors";
 
 const initialState: ProfileState = { error: null };
 
@@ -27,11 +28,18 @@ export function CompleteProfileForm({
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
-      const result = await updateProfile(initialState, formData);
-      if (result.error) {
-        setState(result);
-      } else {
-        router.push(safeRedirectPath(redirectTo));
+      try {
+        const result = await updateProfile(initialState, formData);
+        if (result.error) {
+          setState(result);
+        } else {
+          // The full path and query the middleware handed over, so a deep
+          // link (e.g. krok=weryfikacja) still lands where it pointed.
+          router.push(safeRedirectPath(redirectTo));
+        }
+      } catch {
+        // Uncontrolled inputs keep what was typed; only the message changes.
+        setState({ error: SUBMIT_FAILED_MESSAGE });
       }
     });
   }

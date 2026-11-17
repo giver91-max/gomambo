@@ -6,6 +6,11 @@ import { PhotoManager } from "./photo-manager";
 import { InsuranceManager } from "./insurance-manager";
 import { DeleteCarButton } from "./delete-car-button";
 import { ResubmitCarButton } from "./resubmit-car-button";
+import { joinPolishList, missingCarDocuments } from "@/lib/car-form";
+import { getVerificationStatus } from "@/lib/verification-gate";
+import { countPartnerDocuments, getPartnerContext } from "@/lib/partner";
+import { ownerSideReadyForReview } from "@/app/admin/cars/approval-gate";
+import { VERIFICATION_PATH } from "@/lib/links";
 
 export default async function EditCarPage({
   params,
@@ -71,6 +76,37 @@ export default async function EditCarPage({
   }
   const insuranceIsPdf =
     carPrivate?.insurance_document_path?.toLowerCase().endsWith(".pdf") ?? false;
+  // Cars listed before 0051 have none of this; their owners used to be told
+  // only "Auto czeka na weryfikację" while GoMambo waited for the documents.
+  const missingDocuments = missingCarDocuments(carPrivate);
+
+  // A pending car with every document is GoMambo's to review only if its
+  // owner side is ready too (approval-gate.ts): until then "Zatwierdź" stays
+  // greyed out and the promised mail would never come. Only asked when that
+  // banner is about to be shown.
+  let ownerReady = true;
+  let partnerForCar: Awaited<ReturnType<typeof getPartnerContext>> = null;
+  if (car.status === "pending" && isOwner && missingDocuments.length === 0) {
+    if (car.partner_id) {
+      partnerForCar = await getPartnerContext(supabase, user.id);
+      ownerReady = ownerSideReadyForReview({
+        carPartnerId: car.partner_id,
+        partner: partnerForCar,
+        partnerDocumentCount: partnerForCar
+          ? await countPartnerDocuments(supabase, partnerForCar.partnerId)
+          : 0,
+        ownerVerification: null,
+      });
+    } else {
+      const { status } = await getVerificationStatus(supabase, user.id);
+      ownerReady = ownerSideReadyForReview({
+        carPartnerId: null,
+        partner: null,
+        partnerDocumentCount: 0,
+        ownerVerification: status,
+      });
+    }
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -102,9 +138,46 @@ export default async function EditCarPage({
         </div>
       )}
 
-      {car.status === "pending" && isOwner && (
+      {car.status === "pending" && isOwner && missingDocuments.length === 0 && ownerReady && (
         <p className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
           Auto czeka na weryfikację GoMambo — damy znać mailem, gdy je sprawdzimy.
+        </p>
+      )}
+
+      {car.status === "pending" && isOwner && missingDocuments.length === 0 && !ownerReady && (
+        <div className="space-y-2 rounded-lg border border-yellow-600/30 bg-yellow-600/10 p-3 text-sm text-yellow-700 dark:text-yellow-400">
+          {car.partner_id ? (
+            <>
+              <p>
+                {partnerForCar?.status === "draft"
+                  ? "Auto sprawdzimy po weryfikacji wypożyczalni — prosimy o poprawki danych firmy."
+                  : partnerForCar?.status === "pending"
+                    ? "Auto sprawdzimy po weryfikacji wypożyczalni — dodaj odpis z CEIDG lub KRS w panelu firmy, bez niego nie zaczniemy weryfikacji."
+                    : "Auto sprawdzimy, gdy wypożyczalnia będzie aktywna w GoMambo — szczegóły w panelu firmy."}
+              </p>
+              <Link href="/dashboard/firma" className="font-medium underline underline-offset-4">
+                Przejdź do panelu firmy →
+              </Link>
+            </>
+          ) : (
+            <>
+              <p>
+                Dane auta są kompletne. Auto sprawdzimy, gdy zweryfikujesz tożsamość — prawo jazdy
+                i selfie, kilka minut.
+              </p>
+              <Link href={VERIFICATION_PATH} className="font-medium underline underline-offset-4">
+                Zweryfikuj tożsamość →
+              </Link>
+            </>
+          )}
+        </div>
+      )}
+
+      {isOwner && missingDocuments.length > 0 && (
+        <p className="rounded-lg border border-yellow-600/30 bg-yellow-600/10 p-3 text-sm text-yellow-700 dark:text-yellow-400">
+          Uzupełnij {joinPolishList(missingDocuments)} — bez tego nie możemy dopuścić auta do
+          wynajmu. Polisę dodasz w sekcji „Polisa OC”, a numer, daty i oświadczenie w sekcji „Dane
+          auta” poniżej.
         </p>
       )}
 

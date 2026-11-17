@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/back-button";
+import { formatDateTimePl } from "@/lib/calendar";
+import { formatZl } from "@/lib/deposit";
 import { ResolveReportButton } from "./resolve-report-button";
 
 // Service role: damage_reports is readable by the two booking participants
@@ -93,14 +95,14 @@ export default async function AdminDamageReportsPage({
                 <CardContent className="space-y-2 text-sm text-muted-foreground">
                   <p>
                     {report.reporter?.full_name || "—"} ·{" "}
-                    {new Date(report.created_at).toLocaleString("pl-PL")}
+                    {formatDateTimePl(report.created_at)}
                   </p>
                   {report.bookings && (
                     <p className="text-xs">
                       {car?.city} · termin {report.bookings.start_date} – {report.bookings.end_date} ·
                       status rezerwacji: {report.bookings.status}
                       {report.bookings.total_price
-                        ? ` · ${Number(report.bookings.total_price).toFixed(2)} zł`
+                        ? ` · ${formatZl(Number(report.bookings.total_price))}`
                         : ""}
                     </p>
                   )}
@@ -119,7 +121,7 @@ export default async function AdminDamageReportsPage({
                     <p className="text-xs">
                       Zamknięte{" "}
                       {report.resolved_at
-                        ? new Date(report.resolved_at).toLocaleString("pl-PL")
+                        ? formatDateTimePl(report.resolved_at)
                         : ""}
                     </p>
                   )}

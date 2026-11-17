@@ -22,10 +22,38 @@ type Initial = {
   contact_phone: string;
 };
 
-export function PartnerForm({ initial, isNew }: { initial: Initial; isNew: boolean }) {
-  const [state, formAction] = useFormState(savePartner, {
-    error: null as string | null,
-  });
+type SaveState = { error: string | null; success?: boolean };
+
+const SAVE_FAILED: SaveState = {
+  error:
+    "Nie udało się połączyć z GoMambo — sprawdź internet i spróbuj ponownie. Jeśli błąd się powtarza, odśwież stronę.",
+};
+
+export function PartnerForm({
+  initial,
+  isNew,
+  awaitingFirstDocument = false,
+}: {
+  initial: Initial;
+  isNew: boolean;
+  /** Waiting for verification with no document in yet — verification cannot start without one. */
+  awaitingFirstDocument?: boolean;
+}) {
+  // Wrapped, not passed straight in: a dropped connection or a page left
+  // open across a deploy makes the action throw (React then swaps the page
+  // for the error screen, and a dozen typed fields are gone) or come back
+  // empty. Either way the company gets a message and keeps the form.
+  const [state, formAction] = useFormState(
+    async (prevState: SaveState, formData: FormData): Promise<SaveState> => {
+      try {
+        return (await savePartner(prevState, formData)) ?? SAVE_FAILED;
+      } catch (err) {
+        console.error("partner form", err);
+        return SAVE_FAILED;
+      }
+    },
+    { error: null }
+  );
 
   return (
     <form action={formAction}>
@@ -125,13 +153,21 @@ export function PartnerForm({ initial, isNew }: { initial: Initial; isNew: boole
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Dane rejestrowe firmy widzi wyłącznie GoMambo. Klient zobaczy nazwę, miasto, opis i
-            logo — nigdy NIP-u ani adresu siedziby.
+            Dane rejestrowe firmy widzi wyłącznie GoMambo. Klient zobaczy nazwę, miasto i opis —
+            nigdy NIP-u ani adresu siedziby.
           </p>
 
           {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+          {/* Next to the button, often the only line in view on a phone:
+              right after the first save no document exists yet, and
+              "odezwiemy się" would leave the company waiting for a
+              verification that cannot start (worded like the status card). */}
           {state.success && (
-            <p className="text-sm text-primary">Zapisane. Dziękujemy — odezwiemy się po weryfikacji.</p>
+            <p className="text-sm text-primary">
+              {awaitingFirstDocument
+                ? "Zapisane ✓ Teraz dodaj poniżej odpis z CEIDG lub KRS — bez niego nie zaczniemy weryfikacji."
+                : "Zapisane. Dziękujemy — odezwiemy się po weryfikacji."}
+            </p>
           )}
 
           <SubmitButton>{isNew ? "Zgłoś wypożyczalnię" : "Zapisz zmiany"}</SubmitButton>

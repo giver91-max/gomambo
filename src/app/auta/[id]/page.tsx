@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AvailabilityAndInquiry } from "./availability-and-inquiry";
-import { toISODate } from "@/lib/calendar";
+import { formatDatePl, toISODate } from "@/lib/calendar";
 import { BackButton } from "@/components/back-button";
 import { FavoriteButton } from "@/components/favorite-button";
 import { MaintenanceNotice } from "@/components/maintenance-notice";
@@ -17,7 +17,8 @@ import { firstNameOnly } from "@/lib/utils";
 import { getVerificationStatus } from "@/lib/verification-gate";
 import { getOwnerCommissionRate } from "@/lib/commission";
 import { isMaintenanceMode } from "@/lib/maintenance";
-import { applyCommission } from "@/lib/pricing";
+import { applyCommission, formatHintPriceZl } from "@/lib/pricing";
+import { formatPriceZl } from "@/lib/money-format";
 import { DEPOSIT_REQUEST_LEAD_DAYS, DEPOSIT_REVIEW_DAYS, depositFee, formatZl } from "@/lib/deposit";
 import type { IdentityVerificationStatus } from "@/types/database";
 import {
@@ -28,6 +29,7 @@ import {
   FUEL_TYPE_LABELS,
   TRANSMISSION_LABELS,
   VEHICLE_TYPE_LABELS,
+  seatsLabel,
 } from "@/lib/car-options";
 
 const getCar = cache(async (id: string) => {
@@ -89,7 +91,7 @@ export async function generateMetadata({
   const title = `${car.brand} ${car.model} (${car.year}) — ${car.city}`;
   const description =
     car.description ??
-    `Wynajmij ${car.brand} ${car.model} z ${car.year} roku w ${car.city} za ${Number(car.price_per_day).toFixed(0)} zł/dzień na GoMambo.`;
+    `Wynajmij ${car.brand} ${car.model} z ${car.year} roku w ${car.city} za ${formatPriceZl(car.price_per_day)}/dzień na GoMambo.`;
 
   return {
     title,
@@ -281,7 +283,7 @@ export default async function CarDetailPage({
           {car.transmission && (
             <Badge variant="secondary">{TRANSMISSION_LABELS[car.transmission]}</Badge>
           )}
-          {car.seats && <Badge variant="secondary">{car.seats} miejsc</Badge>}
+          {car.seats && <Badge variant="secondary">{seatsLabel(car.seats)}</Badge>}
           <Badge variant="secondary">
             {car.mileage_limit_km ? `${car.mileage_limit_km} km / dzień` : "Bez limitu km"}
           </Badge>
@@ -310,14 +312,14 @@ export default async function CarDetailPage({
             <div className="text-right text-sm text-muted-foreground">
               <p>
                 <span className="font-semibold text-foreground">
-                  {Number(car.price_per_day).toFixed(2)} zł
+                  {formatPriceZl(car.price_per_day)}
                 </span>{" "}
                 / dzień
               </p>
               {car.price_per_month && (
                 <p>
                   <span className="font-semibold text-foreground">
-                    {Number(car.price_per_month).toFixed(2)} zł
+                    {formatPriceZl(car.price_per_month)}
                   </span>{" "}
                   / miesiąc (28+ dni)
                 </p>
@@ -361,9 +363,9 @@ export default async function CarDetailPage({
             <div className="space-y-2 rounded-lg border p-3 text-sm">
               <p>
                 Tutaj najemcy wybierają termin i wysyłają zapytanie. W ogłoszeniu widzą Twoją cenę{" "}
-                {ownerDayPrice.rental.toFixed(2)} zł/dzień
+                {formatPriceZl(ownerDayPrice.rental)}/dzień
                 {ownerDayPrice.commission > 0
-                  ? `; przy rezerwacji doliczamy im opłatę serwisową GoMambo (${ownerDayPrice.commission.toFixed(2)} zł za dzień), więc zapłacą ${ownerDayPrice.gross.toFixed(2)} zł za dzień`
+                  ? `; przy rezerwacji doliczamy im opłatę serwisową GoMambo (${formatHintPriceZl(ownerDayPrice.commission)} za dzień), więc zapłacą ${formatHintPriceZl(ownerDayPrice.gross)} za dzień`
                   : ""}
                 . Ty dostajesz całą swoją cenę.
               </p>
@@ -471,7 +473,7 @@ export default async function CarDetailPage({
               <p className="mt-1 text-muted-foreground">{review.comment}</p>
             )}
             <p className="mt-1 text-xs text-muted-foreground">
-              {new Date(review.created_at).toLocaleDateString("pl-PL")}
+              {formatDatePl(review.created_at)}
             </p>
           </div>
         ))}

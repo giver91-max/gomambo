@@ -42,22 +42,21 @@ export const metadata: Metadata = {
     "GoMambo",
   ],
   authors: [{ name: SITE_NAME }],
-  alternates: {
-    canonical: "/",
-  },
+  // No canonical, og:url, og:title/description or twitter title/description
+  // here. Whatever the root layout sets, every page without its own copy
+  // inherits — so /login, /register and the 404 page all declared the home
+  // page as their canonical, and every shared link previewed (and linked
+  // back to) the home page. Next fills og:title/description and the Twitter
+  // ones from each page's own title and description; a page with a public
+  // URL worth sharing sets its canonical itself.
   openGraph: {
     type: "website",
     locale: "pl_PL",
-    url: SITE_URL,
     siteName: SITE_NAME,
-    title: "GoMambo — wynajem aut P2P i wypożyczalnie w jednym miejscu",
-    description: SITE_DESCRIPTION,
     images: [{ url: "/hero.png", width: 1672, height: 543, alt: SITE_NAME }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "GoMambo — wynajem aut P2P i wypożyczalnie w jednym miejscu",
-    description: SITE_DESCRIPTION,
     images: ["/hero.png"],
   },
   robots: {

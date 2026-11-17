@@ -64,7 +64,7 @@ export default async function PartnerPage() {
               variant={
                 partner.status === "active"
                   ? "default"
-                  : partner.status === "pending"
+                  : partner.status === "pending" || partner.status === "draft"
                     ? "secondary"
                     : "destructive"
               }
@@ -73,11 +73,23 @@ export default async function PartnerPage() {
             </Badge>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
+            {/* Worded by whether a document is in, as on /dashboard and
+                /dashboard/cars/new: right after an upload this card must not
+                still ask for one. */}
             {partner.status === "pending" && (
               <p>
-                Zweryfikujemy firmę, gdy dodasz odpis z CEIDG lub KRS (poniżej) — damy znać mailem.
-                Auta dodasz zaraz po weryfikacji; możesz też przesłać nam listę aut, a dodamy je za
-                Ciebie.
+                {(documents ?? []).length > 0
+                  ? "Sprawdzamy dane firmy i dokumenty — damy znać mailem."
+                  : "Zweryfikujemy firmę, gdy dodasz odpis z CEIDG lub KRS (poniżej) — damy znać mailem."}{" "}
+                Auta dodasz zaraz po weryfikacji; możesz też wysłać listę aut na
+                kontakt@gomambo.pl (numery rejestracyjne, polisy OC, daty ważności OC i przeglądu,
+                zdjęcia) — dodamy je za Ciebie po weryfikacji firmy.
+              </p>
+            )}
+            {partner.status === "draft" && (
+              <p>
+                Popraw dane firmy i zapisz albo dodaj brakujący dokument (poniżej) — firma wróci
+                wtedy do weryfikacji, a my damy znać mailem.
               </p>
             )}
             {partner.status === "active" && (
@@ -86,8 +98,19 @@ export default async function PartnerPage() {
                 każdego ogłoszenia.
               </p>
             )}
+            {/* GoMambo's note with the last decision: on a 'draft' company a
+                request for corrections, on a 'pending' one the note it was
+                sent back to review with. Cleared once the company answers
+                with changed data or a new document (see actions.ts). */}
             {publicData?.rejection_reason && (
               <p className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-foreground">
+                <strong>
+                  {partner.status === "draft"
+                    ? "Prosimy o poprawki: "
+                    : partner.status === "pending"
+                      ? "Wiadomość od GoMambo: "
+                      : "Powód: "}
+                </strong>
                 {publicData.rejection_reason}
               </p>
             )}
@@ -116,6 +139,9 @@ export default async function PartnerPage() {
           contact_phone: privateData?.contact_phone ?? "",
         }}
         isNew={!partner}
+        // The save revalidates this page, so the render that brings the
+        // success message already carries the fresh status and documents.
+        awaitingFirstDocument={partner?.status === "pending" && (documents ?? []).length === 0}
       />
 
       {partner && (

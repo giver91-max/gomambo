@@ -10,6 +10,9 @@ import { toISODate, eachDateInRange, getMonthGrid } from "@/lib/calendar";
 type Mode = "add" | "remove";
 type PendingRange = { from: string; to: string };
 
+const SAVE_FAILED =
+  "Nie udało się zapisać zmian — sprawdź połączenie z internetem i spróbuj ponownie. Jeśli błąd się powtarza, odśwież stronę.";
+
 export function AvailabilityEditor({
   carId,
   initialAvailable,
@@ -23,21 +26,44 @@ export function AvailabilityEditor({
   const [rangeMode, setRangeMode] = useState(false);
   const [pendingStart, setPendingStart] = useState<string | null>(null);
   const [pendingRange, setPendingRange] = useState<PendingRange | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const todayIso = toISODate(new Date());
 
+  // The calendar changes at once, but the change is only reported as saved
+  // once the server says so; a failed save puts the days back as they were
+  // and says why. It used to fire the save and forget it, so a lost
+  // connection or an expired session showed days that were never stored.
   function applyRange(from: string, to: string, mode: Mode) {
     const dates = eachDateInRange(from, to);
+    const before = new Map(dates.map((d) => [d, available.has(d)]));
     setAvailable((prev) => {
       const next = new Set(prev);
       dates.forEach((d) => (mode === "add" ? next.add(d) : next.delete(d)));
       return next;
     });
-    startTransition(() => {
-      if (mode === "add") {
-        addAvailabilityRange(carId, from, to);
-      } else {
-        removeAvailabilityRange(carId, from, to);
+    setSaveError(null);
+    setSaved(false);
+    startTransition(async () => {
+      let result: { error: string | null } | undefined;
+      try {
+        result =
+          mode === "add"
+            ? await addAvailabilityRange(carId, from, to)
+            : await removeAvailabilityRange(carId, from, to);
+      } catch (err) {
+        console.error("availability editor", err);
       }
+      if (result && result.error === null) {
+        setSaved(true);
+        return;
+      }
+      setAvailable((prev) => {
+        const next = new Set(prev);
+        before.forEach((wasAvailable, d) => (wasAvailable ? next.add(d) : next.delete(d)));
+        return next;
+      });
+      setSaveError(result?.error ?? SAVE_FAILED);
     });
   }
 
@@ -144,6 +170,15 @@ export function AvailabilityEditor({
           </>
         )}
       </p>
+
+      {(isPending || saveError || saved) && (
+        <p
+          aria-live="polite"
+          className={cn("text-sm", saveError ? "text-destructive" : "text-muted-foreground")}
+        >
+          {isPending ? "Zapisywanie…" : saveError ?? "Zapisano."}
+        </p>
+      )}
 
       {pendingRange && (
         <div className="flex flex-wrap gap-2">

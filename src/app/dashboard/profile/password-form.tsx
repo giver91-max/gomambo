@@ -19,11 +19,11 @@ export function PasswordForm() {
       </div>
       <div className="space-y-2">
         <Label htmlFor="newPassword">Nowe hasło</Label>
-        <Input id="newPassword" name="newPassword" type="password" required minLength={6} autoComplete="new-password" />
+        <Input id="newPassword" name="newPassword" type="password" required minLength={8} autoComplete="new-password" />
       </div>
       <div className="space-y-2">
         <Label htmlFor="confirmPassword">Powtórz nowe hasło</Label>
-        <Input id="confirmPassword" name="confirmPassword" type="password" required minLength={6} autoComplete="new-password" />
+        <Input id="confirmPassword" name="confirmPassword" type="password" required minLength={8} autoComplete="new-password" />
       </div>
 
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}

@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 import { getCityCoords } from "@/lib/pl-cities";
+import { escapeHtml } from "@/lib/html";
+import { formatPriceZl } from "@/lib/money-format";
 
 export type MapCar = {
   id: string;
@@ -49,14 +51,17 @@ export function CarsMap({ cars }: { cars: MapCar[] }) {
         const coords = getCityCoords(city);
         if (!coords) continue;
         const marker = L.marker(coords).addTo(map!);
+        // Leaflet puts the popup in as HTML, and brand and model are free
+        // text typed by owners — escaped, or a model name could carry markup
+        // into every visitor's browser.
         const popupHtml = `
           <div style="min-width:180px">
-            <p style="font-weight:600;margin-bottom:4px">${city} (${cityCars.length})</p>
+            <p style="font-weight:600;margin-bottom:4px">${escapeHtml(city)} (${cityCars.length})</p>
             ${cityCars
               .slice(0, 5)
               .map(
                 (c) =>
-                  `<a href="/auta/${c.id}" style="display:block;font-size:13px;padding:2px 0;color:#0284c7">${c.brand} ${c.model} — ${c.pricePerDay.toFixed(0)} zł/dzień</a>`
+                  `<a href="/auta/${encodeURIComponent(c.id)}" style="display:block;font-size:13px;padding:2px 0;color:#0284c7">${escapeHtml(`${c.brand} ${c.model}`)} — ${formatPriceZl(c.pricePerDay)}/dzień</a>`
               )
               .join("")}
             ${cityCars.length > 5 ? `<p style="font-size:12px;color:#888;margin-top:4px">+ ${cityCars.length - 5} więcej</p>` : ""}

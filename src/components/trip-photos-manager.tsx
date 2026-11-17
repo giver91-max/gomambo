@@ -11,7 +11,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FUEL_LEVEL_LABELS } from "@/lib/car-options";
-import { resizeImageForUpload } from "@/lib/image-resize";
+import {
+  checkPhotoFile,
+  fileExtension,
+  MAX_UPLOAD_IMAGE_BYTES,
+  resizeImageForUpload,
+  unreadablePhotoMessage,
+} from "@/lib/image-resize";
 import type { FuelLevel, TripPhotoStage } from "@/types/database";
 
 const selectClassName =
@@ -97,7 +103,8 @@ function TripConditionForm({
   );
 }
 
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const CONNECTION_FAILED =
+  "Nie udało się połączyć z GoMambo — sprawdź internet i spróbuj ponownie. Jeśli błąd się powtarza, odśwież stronę.";
 
 export type TripPhotoItem = {
   id: string;
@@ -134,56 +141,86 @@ function PhotoStageSection({
     if (files.length === 0) return;
     setError(null);
 
-    for (const file of files) {
-      if (!file.type.startsWith("image/")) {
-        setError(`Plik "${file.name}" nie jest zdjęciem.`);
-        return;
-      }
-      if (file.size > MAX_PHOTO_BYTES) {
-        setError(`Zdjęcie "${file.name}" przekracza 5 MB.`);
-        return;
-      }
-    }
-
     startTransition(async () => {
-      const supabase = createClient();
-      for (const file of files) {
-        // Downscaled before upload, like the listing photos already are. A
-        // phone shot is 3-5 MB and there are two sets of these per rental;
-        // uploading them raw would burn the storage quota for evidence
-        // nobody ever views at full resolution.
-        const image = await resizeImageForUpload(file);
-        const ext = image.name.split(".").pop() || "jpg";
-        const path = `${bookingId}/${stage}/${crypto.randomUUID()}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("trip-photos")
-          .upload(path, image, { contentType: image.type });
-        if (uploadError) {
-          setError(`Błąd wgrywania: ${uploadError.message}`);
-          continue;
+      try {
+        // The size limit applies to the downscaled file that is uploaded,
+        // not the original: a phone shot is often over 5 MB and becomes a
+        // few hundred KB below. Checked (and decoded) up front, so a HEIC
+        // photo in Chrome is refused before anything is sent.
+        for (const file of files) {
+          const problem = await checkPhotoFile(file);
+          if (problem) {
+            setError(problem);
+            return;
+          }
         }
-        const result = await addTripPhoto(bookingId, stage, path);
-        if (result.error) {
-          setError(result.error);
-          continue;
+
+        const supabase = createClient();
+        for (const file of files) {
+          // Downscaled before upload, like the listing photos already are. A
+          // phone shot is 3-5 MB and there are two sets of these per rental;
+          // uploading them raw would burn the storage quota for evidence
+          // nobody ever views at full resolution.
+          let image: File;
+          try {
+            image = await resizeImageForUpload(file);
+          } catch (err) {
+            console.error("trip photos: could not prepare a photo", err);
+            setError(unreadablePhotoMessage(file));
+            continue;
+          }
+          if (image.size > MAX_UPLOAD_IMAGE_BYTES) {
+            setError(`Zdjęcie „${file.name}” jest za duże nawet po zmniejszeniu — wybierz inne.`);
+            continue;
+          }
+          const path = `${bookingId}/${stage}/${crypto.randomUUID()}.${fileExtension(image)}`;
+          const { error: uploadError } = await supabase.storage
+            .from("trip-photos")
+            .upload(path, image, { contentType: image.type });
+          if (uploadError) {
+            console.error("trip photos: upload failed", uploadError);
+            setError(`Nie udało się wgrać zdjęcia „${file.name}”. Sprawdź internet i spróbuj ponownie.`);
+            continue;
+          }
+          const result = await addTripPhoto(bookingId, stage, path);
+          if (result.error || !result.photoId) {
+            // No row points at the file — do not leave it behind.
+            await supabase.storage.from("trip-photos").remove([path]);
+            setError(result.error ?? CONNECTION_FAILED);
+            continue;
+          }
+          const photoId = result.photoId;
+          const { data: signed } = await supabase.storage
+            .from("trip-photos")
+            .createSignedUrl(path, 60 * 5);
+          if (signed?.signedUrl) {
+            setItems((prev) => [
+              ...prev,
+              { id: photoId, url: signed.signedUrl, storagePath: path, uploaderId: currentUserId },
+            ]);
+          }
         }
-        const { data: signed } = await supabase.storage
-          .from("trip-photos")
-          .createSignedUrl(path, 60 * 5);
-        if (signed?.signedUrl) {
-          setItems((prev) => [
-            ...prev,
-            { id: path, url: signed.signedUrl, storagePath: path, uploaderId: currentUserId },
-          ]);
-        }
+      } catch (err) {
+        console.error("trip photos: upload threw", err);
+        setError(CONNECTION_FAILED);
       }
     });
   }
 
   function handleRemove(item: TripPhotoItem) {
+    setError(null);
     startTransition(async () => {
-      await removeTripPhoto(item.id, item.storagePath);
-      setItems((prev) => prev.filter((p) => p.id !== item.id));
+      try {
+        const result = await removeTripPhoto(item.id, item.storagePath);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setItems((prev) => prev.filter((p) => p.id !== item.id));
+      } catch (err) {
+        console.error("trip photos: remove threw", err);
+        setError(CONNECTION_FAILED);
+      }
     });
   }
 
@@ -202,12 +239,15 @@ function PhotoStageSection({
                 className="object-cover"
                 unoptimized
               />
+              {/* Visible by default — a phone has no hover, and the button
+                  used to exist only under group-hover. Mouse users still get
+                  it on hover, as before. */}
               {item.uploaderId === currentUserId && (
                 <button
                   type="button"
                   onClick={() => handleRemove(item)}
                   disabled={isPending}
-                  className="absolute right-0.5 top-0.5 hidden size-5 rounded-full bg-black/70 text-xs text-white group-hover:block"
+                  className="absolute right-0.5 top-0.5 size-5 rounded-full bg-black/70 text-xs text-white focus-visible:block group-hover:block [@media(hover:hover)]:hidden"
                   aria-label="Usuń zdjęcie"
                 >
                   ×

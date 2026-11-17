@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { LandingPage } from "@/components/landing-page";
+
+// The home page declares its own canonical so the root layout does not have
+// to: a canonical of "/" in the layout is inherited by every page without
+// one of its own (login, register, password reset…) and points them all at
+// the home page. Static metadata — "/" stays static.
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 // Declared HERE, in a server component, not inside the "use client" landing
 // page. There, the prerendered HTML and the browser bundle got two different

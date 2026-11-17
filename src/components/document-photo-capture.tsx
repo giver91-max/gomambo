@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getFrameCropRect } from "@/lib/camera-crop";
+import { captureVideoFrame } from "@/lib/verification-image";
 
 const MAX_ATTEMPTS = 3;
 
 // Generalizes selfie-capture.tsx's getUserMedia+canvas pattern for photos
 // of a physical document. Uses the rear camera (facingMode: "environment")
-// and, unlike a selfie, has no skip affordance — a license photo can't be
-// omitted the way an optional selfie can. Capture and upload are separate
+// and has no skip affordance — the verification cannot be completed without
+// both sides of the licence. Capture and upload are separate
 // steps: taking a photo only shows a preview, the caller's onConfirm only
 // fires once the user explicitly taps "Dalej", so retaking never involves
 // a wasted upload.
@@ -51,8 +52,22 @@ export function DocumentPhotoCapture({
   async function startCamera() {
     setError(null);
     try {
+      // Without a size the browser opens the camera at 640×480, and the
+      // licence cropped out of that frame came out around 250×155 px — too
+      // small for anyone, human or OCR, to read the name or field 4b. These
+      // are soft ("ideal") constraints: a camera that cannot do it simply
+      // gives its best instead of failing. Portrait phones rotate the stream
+      // themselves, so the landscape numbers are right there too. 4K, not
+      // 1440p: iOS Safari only has 1080p and 4K presets and rounds 1440p down
+      // to 1080p, leaving the licence crop at ~740 px instead of ~1480 px.
+      // File size is not the cost it looks like — captureVideoFrame scales
+      // every photo to at most 2000 px before encoding.
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
+        video: {
+          facingMode: "environment",
+          width: { ideal: 3840 },
+          height: { ideal: 2160 },
+        },
       });
       streamRef.current = stream;
       setIsStreaming(true);
@@ -61,8 +76,8 @@ export function DocumentPhotoCapture({
       setAttempts(next);
       setError(
         next >= MAX_ATTEMPTS
-          ? "Nie udało się uzyskać dostępu do kamery. Odśwież stronę i spróbuj ponownie."
-          : `Nie udało się uzyskać dostępu do kamery (próba ${next} z ${MAX_ATTEMPTS}).`
+          ? "Nie udało się włączyć aparatu. Zezwól tej stronie na dostęp do kamery w ustawieniach przeglądarki, odśwież stronę i spróbuj ponownie."
+          : `Nie udało się włączyć aparatu (próba ${next} z ${MAX_ATTEMPTS}). Sprawdź, czy przeglądarka ma zgodę na użycie kamery.`
       );
     }
   }
@@ -80,39 +95,21 @@ export function DocumentPhotoCapture({
     setIsStreaming(false);
   }
 
-  function takePhoto() {
+  async function takePhoto() {
     const video = videoRef.current;
     const frame = frameRef.current;
     if (!video || !frame) return;
 
-    const crop = getFrameCropRect(video, frame, false);
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
     // Only the area inside the guide frame is kept — not the full,
     // uncropped camera view — so the uploaded photo matches what the user
-    // actually lined up.
-    if (crop) {
-      canvas.width = crop.sWidth;
-      canvas.height = crop.sHeight;
-      ctx.drawImage(video, crop.sx, crop.sy, crop.sWidth, crop.sHeight, 0, 0, crop.sWidth, crop.sHeight);
-    } else {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0);
-    }
-
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        capturedBlobRef.current = blob;
-        setPreviewUrl(URL.createObjectURL(blob));
-        stopCamera();
-      },
-      "image/jpeg",
-      0.9
-    );
+    // actually lined up. The crop comes from the full-resolution video
+    // buffer and is encoded as a JPEG within Rekognition's limits.
+    const crop = getFrameCropRect(video, frame, false);
+    const blob = await captureVideoFrame(video, crop);
+    if (!blob) return;
+    capturedBlobRef.current = blob;
+    setPreviewUrl(URL.createObjectURL(blob));
+    stopCamera();
   }
 
   function retake() {
@@ -152,7 +149,10 @@ export function DocumentPhotoCapture({
 
   if (isStreaming) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-black py-6">
+      // z-[60]: above the cookie banner (z-50, rendered after the page in the
+      // root layout), which would otherwise cover the shutter and "Anuluj" —
+      // on a phone that has never been on GoMambo it is always there.
+      <div className="fixed inset-0 z-[60] flex flex-col items-center justify-between bg-black py-6">
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video
           ref={videoRef}

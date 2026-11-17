@@ -92,13 +92,15 @@ export async function notifyAdmins(
 }
 
 function renderAdminEmail({ link, email }: AdminAlert): string {
+  // pre-wrap keeps the line breaks of a multi-line value — a user's chat
+  // message is one — without letting any markup through.
   const rows = email.rows
     .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
     .map(
       ([label, value]) =>
         `<tr><td style="padding:4px 12px 4px 0;color:#666;vertical-align:top;white-space:nowrap">${escapeHtml(
           label
-        )}</td><td style="padding:4px 0;vertical-align:top">${escapeHtml(String(value))}</td></tr>`
+        )}</td><td style="padding:4px 0;vertical-align:top;white-space:pre-wrap">${escapeHtml(String(value))}</td></tr>`
     )
     .join("");
 

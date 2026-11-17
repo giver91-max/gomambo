@@ -527,7 +527,12 @@ export type NotificationType =
   | "deposit_review"
   | "deposit_refunded"
   | "deposit_overdue"
-  | "deposit_objection";
+  | "deposit_objection"
+  // GoMambo's decision about a rental company (0053). Rows from before it
+  // carry car_approved / car_rejected with a /dashboard/firma link.
+  | "partner_approved"
+  | "partner_changes_requested"
+  | "partner_status_changed";
 
 export type DamageReportStatus = "open" | "resolved";
 

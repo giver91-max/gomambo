@@ -17,6 +17,7 @@ export async function notifyUser({
   emailHtml,
   body,
   link = "/dashboard",
+  fallbackType,
 }: {
   userId: string;
   type: NotificationType;
@@ -24,6 +25,12 @@ export async function notifyUser({
   emailHtml: string;
   body: string;
   link?: string;
+  /**
+   * An older type to store instead when the CHECK constraint does not know
+   * `type` yet (code 23514) — the code can then deploy before the migration
+   * that adds the type, without the in-app entry being lost.
+   */
+  fallbackType?: NotificationType;
 }) {
   // Never throw: callers reach this AFTER money has already moved (refunds,
   // deposit releases), so a misconfigured service-role key must not turn a
@@ -37,9 +44,15 @@ export async function notifyUser({
   // supabase-js resolves DB errors into { error } rather than throwing, so
   // without this a rejected insert (e.g. a type the CHECK doesn't know yet)
   // would vanish silently. The email below still goes out either way.
-  const { error: insertError } = await admin
+  let { error: insertError } = await admin
     .from("notifications")
     .insert({ user_id: userId, type, body, link });
+  if (insertError?.code === "23514" && fallbackType) {
+    console.warn("[notify-user] type not allowed yet, storing fallback", { userId, type, fallbackType });
+    ({ error: insertError } = await admin
+      .from("notifications")
+      .insert({ user_id: userId, type: fallbackType, body, link }));
+  }
   if (insertError) {
     console.error("[notify-user] notification insert failed", {
       userId,

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { getRecaptchaToken } from "@/lib/recaptcha-client";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import { BackButton } from "@/components/back-button";
+import { SUBMIT_FAILED_MESSAGE } from "../auth-errors";
 
 const initialState: AuthActionState = { error: null };
 
@@ -40,12 +41,16 @@ function RegisterForm() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
-      const token = await getRecaptchaToken("register");
-      formData.set("recaptchaToken", token ?? "");
-      const result = await signUp(initialState, formData);
-      // signUp redirects on success instead of returning a value — only
-      // update state on failure, otherwise the page is already navigating away.
-      if (result) setState(result);
+      try {
+        const token = await getRecaptchaToken("register");
+        formData.set("recaptchaToken", token ?? "");
+        const result = await signUp(initialState, formData);
+        // signUp redirects on success instead of returning a value — only
+        // update state on failure, otherwise the page is already navigating away.
+        if (result) setState(result);
+      } catch {
+        setState({ error: SUBMIT_FAILED_MESSAGE });
+      }
     });
   }
 
@@ -103,19 +108,24 @@ function RegisterForm() {
                 className="mt-1 size-4 shrink-0 rounded border-input"
               />
               <Label htmlFor="acceptTerms" className="text-sm font-normal text-muted-foreground">
-                Akceptuję{" "}
-                <Link href="/regulamin" target="_blank" className="underline underline-offset-4">
-                  Regulamin
-                </Link>{" "}
-                i{" "}
-                <Link
-                  href="/polityka-prywatnosci"
-                  target="_blank"
-                  className="underline underline-offset-4"
-                >
-                  Politykę prywatności
-                </Link>
-                .
+                {/* One span, so the shared Label's flex layout sees a single
+                    item: loose text runs and links each became a flex item
+                    with a gap between them and the period left dangling. */}
+                <span className="leading-snug">
+                  Akceptuję{" "}
+                  <Link href="/regulamin" target="_blank" className="underline underline-offset-4">
+                    Regulamin
+                  </Link>{" "}
+                  i{" "}
+                  <Link
+                    href="/polityka-prywatnosci"
+                    target="_blank"
+                    className="underline underline-offset-4"
+                  >
+                    Politykę prywatności
+                  </Link>
+                  .
+                </span>
               </Label>
             </div>
             {state.error && (

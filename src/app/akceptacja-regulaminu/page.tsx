@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -5,6 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import { CURRENT_TERMS_LABEL, CURRENT_TERMS_VERSION } from "@/lib/terms";
 import { AcceptTermsForm } from "./accept-terms-form";
+
+export const metadata: Metadata = {
+  title: "Akceptacja regulaminu",
+  robots: { index: false, follow: false },
+};
 
 /**
  * Where the dashboard sends anyone who has not accepted the Regulamin now in
@@ -21,8 +27,11 @@ export default async function AcceptTermsPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // Straight to the final target after login, not back to this page: the
+  // middleware sends the person through the terms gate again on the way if
+  // it still applies, and the target (with its query) is not lost.
   if (!user) {
-    redirect(`/login?redirect=${encodeURIComponent("/akceptacja-regulaminu")}`);
+    redirect(`/login?redirect=${encodeURIComponent(redirectTo)}`);
   }
 
   const { data: profile } = await supabase

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BackButton } from "@/components/back-button";
 import { FavoriteButton } from "@/components/favorite-button";
+import { formatPriceZl } from "@/lib/money-format";
 
 export default async function FavoritesPage() {
   const supabase = await createClient();
@@ -72,7 +73,7 @@ export default async function FavoritesPage() {
                   <CardContent className="space-y-1 text-sm text-muted-foreground">
                     <p>{car.city}</p>
                     <p className="font-semibold text-foreground">
-                      {Number(car.price_per_day).toFixed(2)} zł / dzień
+                      {formatPriceZl(car.price_per_day)} / dzień
                     </p>
                   </CardContent>
                 </Card>

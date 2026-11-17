@@ -6,6 +6,7 @@ import {
   payExtraCharge,
 } from "@/app/dashboard/rentals/payment-actions";
 import { Button } from "@/components/ui/button";
+import { formatZl } from "@/lib/deposit";
 
 export function PayExtraChargeButton({
   extraChargeId,
@@ -32,7 +33,7 @@ export function PayExtraChargeButton({
   return (
     <div className="space-y-2 rounded-md border border-destructive/40 p-3">
       <p className="text-sm">
-        Właściciel prosi o dopłatę <strong>{amountPln.toFixed(2)} zł</strong> — {reason}
+        Właściciel prosi o dopłatę <strong>{formatZl(amountPln)}</strong> — {reason}
       </p>
       {paymentMethod === "bank_transfer" && (
         <p className="text-xs">

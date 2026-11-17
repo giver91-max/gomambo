@@ -26,6 +26,8 @@ import {
   resolveProcessingDeposit,
 } from "@/lib/deposit-service";
 import type { BookingDeposit, BookingStatus } from "@/types/database";
+import { formatZl } from "@/lib/deposit";
+import { escapeHtml } from "@/lib/html";
 
 /**
  * What this booking costs, in the order of trust: the amounts locked on the
@@ -150,7 +152,7 @@ export async function createBookingCheckoutSession(
         subject: "Płatność za wynajem otrzymana",
         body: `Najemca opłacił wynajem ${car.brand} ${car.model}. Rezerwacja jest potwierdzona.`,
         emailHtml: `
-          <p>Najemca opłacił rezerwację — ${car.brand} ${car.model}.</p>
+          <p>Najemca opłacił rezerwację — ${escapeHtml(`${car.brand} ${car.model}`)}.</p>
           <p><a href="${SITE_URL}/dashboard/bookings">Przejdź do rezerwacji →</a></p>
         `,
         link: "/dashboard/bookings",
@@ -296,7 +298,7 @@ export async function declareBankTransfer(bookingId: string): Promise<{ error: s
         subject: "Płatność za wynajem otrzymana",
         body: `Najemca opłacił wynajem ${car.brand} ${car.model}. Rezerwacja jest potwierdzona.`,
         emailHtml: `
-          <p>Najemca opłacił rezerwację — ${car.brand} ${car.model}.</p>
+          <p>Najemca opłacił rezerwację — ${escapeHtml(`${car.brand} ${car.model}`)}.</p>
           <p><a href="${SITE_URL}/dashboard/bookings">Przejdź do rezerwacji →</a></p>
         `,
         link: "/dashboard/bookings",
@@ -333,7 +335,7 @@ export async function declareBankTransfer(bookingId: string): Promise<{ error: s
   if (declared) {
     const { error: notifyError } = await admin.from("admin_notifications").insert({
       type: "bank_transfer_declared",
-      body: `Najemca zadeklarował przelew ${gross.toFixed(2)} zł za wynajem ${car.brand} ${car.model} (rezerwacja ${bookingId}). Potwierdź wpłatę, żeby rezerwacja została opłacona.`,
+      body: `Najemca zadeklarował przelew ${formatZl(gross)} za wynajem ${car.brand} ${car.model} (rezerwacja ${bookingId}). Potwierdź wpłatę, żeby rezerwacja została opłacona.`,
       link: "/admin/przelewy",
     });
     if (notifyError) {
@@ -529,10 +531,10 @@ export async function declareExtraChargeBankTransfer(
           userId: healedBooking.owner_id,
           type: "extra_charge_requested",
           subject: `Dopłata opłacona: ${label}`,
-          body: `Najemca opłacił dopłatę ${Number(extraCharge.amount_pln).toFixed(2)} zł za ${label}.`,
+          body: `Najemca opłacił dopłatę ${formatZl(Number(extraCharge.amount_pln))} za ${label}.`,
           emailHtml: `
-            <p>Najemca opłacił zgłoszoną przez Ciebie dopłatę — ${label}.</p>
-            <p><strong>Kwota:</strong> ${Number(extraCharge.amount_pln).toFixed(2)} zł</p>
+            <p>Najemca opłacił zgłoszoną przez Ciebie dopłatę — ${escapeHtml(label)}.</p>
+            <p><strong>Kwota:</strong> ${formatZl(Number(extraCharge.amount_pln))}</p>
             <p><a href="${SITE_URL}/dashboard/bookings">Zobacz rezerwacje →</a></p>
           `,
           link: "/dashboard/bookings",
@@ -558,7 +560,7 @@ export async function declareExtraChargeBankTransfer(
   if (declared) {
     const { error: notifyError } = await admin.from("admin_notifications").insert({
       type: "bank_transfer_declared",
-      body: `Najemca zadeklarował przelew ${Number(extraCharge.amount_pln).toFixed(2)} zł za dopłatę (${extraCharge.reason}). Potwierdź wpłatę, żeby zamknąć rozliczenie.`,
+      body: `Najemca zadeklarował przelew ${formatZl(Number(extraCharge.amount_pln))} za dopłatę (${extraCharge.reason}). Potwierdź wpłatę, żeby zamknąć rozliczenie.`,
       link: "/admin/przelewy",
     });
     if (notifyError) {
@@ -841,10 +843,10 @@ export async function payExtraCharge(extraChargeId: string): Promise<{ error: st
         userId: booking.owner_id,
         type: "extra_charge_requested",
         subject: `Dopłata opłacona: ${booking.cars.brand} ${booking.cars.model}`,
-        body: `Najemca opłacił dodatkową opłatę ${Number(extraCharge.amount_pln).toFixed(2)} zł.`,
+        body: `Najemca opłacił dodatkową opłatę ${formatZl(Number(extraCharge.amount_pln))}.`,
         emailHtml: `
           <p>Najemca opłacił zgłoszoną przez Ciebie dodatkową opłatę na GoMambo.</p>
-          <p><strong>Kwota:</strong> ${Number(extraCharge.amount_pln).toFixed(2)} zł</p>
+          <p><strong>Kwota:</strong> ${formatZl(Number(extraCharge.amount_pln))}</p>
           <p><a href="${SITE_URL}/dashboard/bookings">Zobacz rezerwacje →</a></p>
         `,
         link: "/dashboard/bookings",

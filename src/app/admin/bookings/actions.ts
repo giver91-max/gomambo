@@ -82,7 +82,7 @@ export async function adminCancelBooking(
       emailHtml: `
         <p>Administrator GoMambo anulował tę rezerwację.</p>
         <ul>
-          <li><strong>Auto:</strong> ${carLabel}</li>
+          <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
           <li><strong>Termin:</strong> ${period}</li>
         </ul>
         <p><a href="https://www.gomambo.pl/dashboard/bookings">Zobacz rezerwacje →</a></p>
@@ -97,7 +97,7 @@ export async function adminCancelBooking(
       emailHtml: `
         <p>Administrator GoMambo anulował tę rezerwację.${escapeHtml(renterMoneyLine)}</p>
         <ul>
-          <li><strong>Auto:</strong> ${carLabel}</li>
+          <li><strong>Auto:</strong> ${escapeHtml(carLabel)}</li>
           <li><strong>Termin:</strong> ${period}</li>
         </ul>
         <p><a href="https://www.gomambo.pl/dashboard/rentals">Zobacz rezerwacje →</a></p>

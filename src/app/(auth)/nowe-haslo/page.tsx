@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -9,6 +10,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { SetPasswordForm } from "./set-password-form";
+import { signOut } from "../actions";
+
+export const metadata: Metadata = {
+  title: "Ustaw nowe hasło",
+};
 
 export default async function SetNewPasswordPage() {
   const supabase = await createClient();
@@ -28,10 +34,23 @@ export default async function SetNewPasswordPage() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Ustaw nowe hasło</CardTitle>
-          <CardDescription>Wpisz nowe hasło do swojego konta GoMambo.</CardDescription>
+          {/* The reset link signs in whichever account it was issued for, and
+              anyone can forward a link from their own mailbox — naming the
+              account makes a stranger's one obvious (see confirmEmailLink). */}
+          <CardDescription>
+            Wpisz nowe hasło do konta GoMambo{" "}
+            {user.email ? <strong className="text-foreground">{user.email}</strong> : null}.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <SetPasswordForm />
+          <form action={signOut} className="text-xs text-muted-foreground">
+            To nie Twój adres? Nie ustawiaj hasła —{" "}
+            <button type="submit" className="underline underline-offset-4">
+              wyloguj się
+            </button>
+            .
+          </form>
         </CardContent>
       </Card>
     </div>

@@ -110,6 +110,7 @@ export function BookingVerificationRenter({
         <SelfieCapture
           onConfirm={upload}
           onSkip={() => setCapturing(false)}
+          cameraHelp="Zezwól tej stronie na dostęp do kamery w ustawieniach przeglądarki (albo przy ikonie obok adresu strony) i spróbuj ponownie."
           isSubmitting={isPending}
           autoStart
         />

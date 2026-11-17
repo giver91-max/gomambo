@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { SiteHeader } from "@/components/site-header";
 import { AdminNav } from "@/components/admin-nav";
 import { getUnreadCounts } from "@/lib/notifications";
-import { DEPOSIT_ADMIN_STATES } from "@/lib/deposit";
+import { getAdminQueueCounts } from "./queue-counts";
 
 export default async function AdminLayout({
   children,
@@ -22,66 +21,18 @@ export default async function AdminLayout({
 
   // Middleware already redirects non-admins away from /admin/*, so this
   // pays off in the common case by not waiting on the profile query before
-  // starting the other fetches too.
-  // bookings/booking_extra_charges have no admin RLS policy — only the two
-  // participants can read a row — so the transfer badge has to be counted
-  // with the service-role client. Nothing derived from it is rendered
-  // before the role check below redirects a non-admin away.
-  const admin = createAdminClient();
-  const [
-    { data: profile },
-    { unreadMessages, unreadNotifications },
-    { count: pendingCars },
-    { count: pendingVerifications },
-    { count: pendingBookingTransfers },
-    { count: pendingChargeTransfers },
-    { count: openReports },
-    { count: openVerifications },
-    { count: pendingPartners },
-    { count: depositCases },
-  ] = await Promise.all([
+  // starting the other fetches too. The queue counts are shared with the
+  // overview page (see queue-counts.ts); nothing derived from them is
+  // rendered before the role check below redirects a non-admin away.
+  const [{ data: profile }, { unreadMessages, unreadNotifications }, queues] = await Promise.all([
     supabase.from("profiles").select("role, full_name").eq("id", user.id).single(),
     getUnreadCounts(supabase, user.id),
-    supabase.from("cars").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    supabase
-      .from("identity_verifications")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending"),
-    admin
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("payment_method", "bank_transfer")
-      .eq("payment_status", "unpaid")
-      .in("status", ["accepted", "completed"]),
-    admin
-      .from("booking_extra_charges")
-      .select("id", { count: "exact", head: true })
-      .eq("payment_method", "bank_transfer")
-      .eq("status", "requested"),
-    admin
-      .from("damage_reports")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "open"),
-    admin
-      .from("booking_verifications")
-      .select("booking_id", { count: "exact", head: true })
-      .eq("status", "escalated"),
-    admin
-      .from("partners")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending"),
-    // Same filter as the "Do decyzji" view of /admin/kaucje.
-    admin
-      .from("booking_deposits")
-      .select("booking_id", { count: "exact", head: true })
-      .or(`status.in.(${DEPOSIT_ADMIN_STATES.join(",")}),refund_status.eq.failed`),
+    getAdminQueueCounts(),
   ]);
 
   if (profile?.role !== "admin") {
     redirect("/dashboard");
   }
-
-  const pendingTransfers = (pendingBookingTransfers ?? 0) + (pendingChargeTransfers ?? 0);
 
   return (
     <div className="min-h-screen">
@@ -94,14 +45,14 @@ export default async function AdminLayout({
       />
       <main className="mx-auto max-w-5xl px-6 py-8">
         <AdminNav
-          pendingCars={pendingCars ?? 0}
+          pendingCars={queues.pendingCars}
           unreadMessages={unreadMessages}
-          pendingVerifications={pendingVerifications ?? 0}
-          pendingTransfers={pendingTransfers}
-          openReports={openReports ?? 0}
-          openVerifications={openVerifications ?? 0}
-          pendingPartners={pendingPartners ?? 0}
-          depositCases={depositCases ?? 0}
+          pendingVerifications={queues.pendingVerifications}
+          pendingTransfers={queues.pendingTransfers}
+          openReports={queues.openReports}
+          openVerifications={queues.openVerifications}
+          pendingPartners={queues.pendingPartners}
+          depositCases={queues.depositCases}
         />
         {children}
       </main>

@@ -6,13 +6,34 @@ import { SiteFooter } from "@/components/site-footer";
 import { BackButton } from "@/components/back-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SITE_NAME } from "@/lib/site";
 import { EarningsCalculator } from "./earnings-calculator";
 
+const TITLE = "Zostań właścicielem — wynajmuj auto lub flotę na GoMambo";
+const DESCRIPTION =
+  "Dodaj swoje auto — albo całą flotę wypożyczalni — na GoMambo. Ty ustalasz cenę i dostępność, wystawienie ogłoszenia jest darmowe, a z wynajmu dostajesz pełną swoją stawkę.";
+
 export const metadata: Metadata = {
-  title: "Zostań właścicielem — wynajmuj auto lub flotę na GoMambo",
-  description:
-    "Dodaj swoje auto — albo całą flotę wypożyczalni — na GoMambo. Ty ustalasz cenę i dostępność, wystawienie ogłoszenia jest darmowe, a z wynajmu dostajesz pełną swoją stawkę.",
+  title: TITLE,
+  description: DESCRIPTION,
   alternates: { canonical: "/zostan-wlascicielem" },
+  // Without its own url and title, a shared link to this page inherited the
+  // root layout's og:url and og:title — the preview showed (and Facebook
+  // linked) the home page, not the page that recruits owners. A page's
+  // openGraph REPLACES the layout's whole object, so type, locale, site name
+  // and image are repeated here; keep the image in step with app/layout.tsx.
+  openGraph: {
+    type: "website",
+    locale: "pl_PL",
+    siteName: SITE_NAME,
+    url: "/zostan-wlascicielem",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: [{ url: "/hero.png", width: 1672, height: 543, alt: SITE_NAME }],
+  },
+  // Card type only: with no title, description or image here, Next fills the
+  // Twitter tags from openGraph above instead of keeping the home page's.
+  twitter: { card: "summary_large_image" },
 };
 
 const TIPS = [
@@ -93,7 +114,7 @@ const OWNER_FAQ = (maintenance: boolean) => [
     ? [
         {
           q: "Kiedy ruszy wynajem?",
-          a: "Zbieramy teraz auta od właścicieli i wypożyczalni. Katalog dla najemców otworzymy, gdy będzie w czym wybierać — Twoje zatwierdzone auto pojawi się w nim automatycznie, a my damy Ci znać mailem.",
+          a: "Zbieramy teraz auta od właścicieli i wypożyczalni. Katalog dla najemców otworzymy, gdy będzie w czym wybierać — Twoje zatwierdzone auto z ważnym OC i przeglądem pojawi się w nim automatycznie, a my damy Ci znać mailem.",
         },
       ]
     : []),
@@ -115,6 +136,11 @@ const OWNER_FAQ = (maintenance: boolean) => [
   },
 ];
 
+// Asks for everything the admin's "add a car for the owner" form refuses to
+// save without (registration, OC policy and both expiry dates, photos, the
+// owner's confirmation they may rent the car out) plus the company account
+// the cars go to, so a fleet list does not end in a round of follow-up mails.
+// The admin can only add cars once that company account is verified.
 const FLEET_MAILTO = `mailto:kontakt@gomambo.pl?subject=${encodeURIComponent(
   "Zgłoszenie floty — GoMambo"
 )}&body=${encodeURIComponent(
@@ -123,12 +149,15 @@ const FLEET_MAILTO = `mailto:kontakt@gomambo.pl?subject=${encodeURIComponent(
     "",
     "chcę wystawić flotę na GoMambo.",
     "",
+    "E-mail konta firmy na GoMambo:",
     "Nazwa firmy / wypożyczalni:",
     "Miasto:",
     "Liczba aut:",
-    "Lista aut (marka, model, rok, cena za dzień):",
     "",
-    "Zdjęcia prześlę w załączniku lub linkiem.",
+    "Lista aut (marka, model, rok, numer rejestracyjny, paliwo, skrzynia biegów, liczba miejsc, cena za dzień w zł, OC ważne do, przegląd ważny do):",
+    "",
+    "W załączniku przesyłam polisy OC (zdjęcie lub PDF) i zdjęcia aut.",
+    "Potwierdzam, że firma może wynajmować te auta.",
     "",
     "Telefon kontaktowy:",
     "",
@@ -274,10 +303,19 @@ export default async function BecomeOwnerPage() {
 
           <div className="space-y-4 rounded-xl bg-muted p-6">
             <h3 className="text-lg font-bold">Jak dodajemy flotę</h3>
+            {/* The list is not a way around the company account: the admin
+                can add cars only to a verified company, so the copy says so
+                and names what to send and where. */}
             <p className="text-sm text-muted-foreground">
               Najpierw załóż konto firmy — dane z NIP i odpis z CEIDG lub KRS, bez prawa jazdy
-              i selfie. Po weryfikacji firmy dodasz auta sam w panelu albo prześlesz nam listę
-              (marka, model, rok, cena za dzień, zdjęcia), a my dodamy je za Ciebie.
+              i selfie. Gdy zweryfikujemy firmę, dodasz auta samodzielnie w panelu. Możesz też
+              wysłać listę aut na{" "}
+              <a href={FLEET_MAILTO} className="underline underline-offset-4">
+                kontakt@gomambo.pl
+              </a>{" "}
+              — dla każdego auta markę, model, rok, numer rejestracyjny, cenę za dzień oraz daty
+              ważności OC i przeglądu, a w załączniku polisę OC i zdjęcia. Dodamy je za Ciebie,
+              ale dopiero po weryfikacji firmy.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link href={companyHref} className={buttonVariants({ size: "lg" })}>
@@ -310,7 +348,7 @@ export default async function BecomeOwnerPage() {
         </section>
 
         <section className="space-y-4 rounded-xl bg-muted p-8 text-center">
-          <h2 className="text-2xl font-bold">Gotowy, żeby zacząć?</h2>
+          <h2 className="text-2xl font-bold">Zaczynamy?</h2>
           <p className="text-muted-foreground">Dodanie ogłoszenia zajmuje kilka minut.</p>
           <Link href={addCarHref} className={buttonVariants({ size: "lg" })}>
             Dodaj swoje pierwsze auto →
