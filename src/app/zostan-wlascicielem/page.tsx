@@ -45,7 +45,7 @@ const TIPS = [
   {
     icon: "⚡",
     title: "Odpowiadaj szybko",
-    body: "Najemcy częściej wybierają właścicieli, którzy szybko potwierdzają rezerwację.",
+    body: "Szybkie potwierdzenie rezerwacji to dla najemcy ważny sygnał, że może na Ciebie liczyć.",
   },
   {
     icon: "📋",
@@ -87,18 +87,23 @@ const FLEET_TERMS = [
   { value: "Ty decydujesz", label: "Ceny i dostępność każdego auta" },
 ];
 
+// Written so it stays true before and after renting opens: what the service
+// will do for the company, never a claim that customers are booking today.
+// "Każdą rezerwację potwierdzasz Ty" holds for every car this section leads
+// to — both routes below put the cars on a company account, and a company's
+// car can never be instant-booked (0042 forces instant_book off).
 const FLEET_FEATURES = [
   {
-    title: "Konkretne auto, nie klasa",
-    body: "Każdy samochód to osobne ogłoszenie z prawdziwymi zdjęciami — klient rezerwuje dokładnie to auto, które widzi.",
+    title: "Konkretne auto",
+    body: "W ogłoszeniu klient zobaczy zdjęcia i opis tego konkretnego auta — i zarezerwuje właśnie je.",
   },
   {
     title: "Zapytania w jednym miejscu",
-    body: "Wiadomości i rezerwacje od klientów spływają do Twojego panelu, bez przełączania się między kanałami.",
+    body: "Wiadomości i prośby o rezerwację trafią do Twojego panelu. Każdą rezerwację potwierdzasz Ty, a klient zapłaci dopiero po potwierdzeniu.",
   },
   {
     title: "Płatność i kaucja online",
-    body: "Opłata za wynajem, kaucja i wypłata na Twoje konto obsługiwane przez Stripe.",
+    body: "Klient zapłaci online za wynajem i kaucję, jeśli ją ustalisz, a wypłata trafi na Twoje konto — obsługuje to Stripe.",
   },
   {
     title: "Sprawdzeni najemcy",
@@ -128,7 +133,7 @@ const OWNER_FAQ = (maintenance: boolean) => [
   },
   {
     q: "Co, jeśli najemca uszkodzi auto?",
-    a: "Zasady dotyczące szkód i ochrony auta ogłosimy przed startem wynajmu. Już teraz warto zapytać swojego ubezpieczyciela, czy Twoje AC obejmuje odpłatny wynajem — wiele polis tego nie obejmuje. GoMambo nie jest ubezpieczycielem.",
+    a: "Zasady dotyczące szkód i kaucji ogłosimy przed startem wynajmu. Już teraz warto zapytać swojego ubezpieczyciela, czy Twoje AC obejmuje odpłatny wynajem — wiele polis tego nie obejmuje. GoMambo nie jest ubezpieczycielem.",
   },
   {
     q: "Co muszę przygotować?",
@@ -180,7 +185,8 @@ export default async function BecomeOwnerPage() {
   const companyHref = user
     ? "/dashboard/firma"
     : { pathname: "/register", query: { next: "/dashboard/firma" } };
-  const faq = OWNER_FAQ(await isMaintenanceMode());
+  const maintenance = await isMaintenanceMode();
+  const faq = OWNER_FAQ(maintenance);
 
   return (
     <div className="min-h-screen">
@@ -205,8 +211,9 @@ export default async function BecomeOwnerPage() {
             <br className="hidden sm:block" /> gdy z niego nie korzystasz
           </h1>
           <p className="max-w-xl text-muted-foreground sm:text-lg">
-            GoMambo łączy właścicieli aut z osobami, które ich potrzebują. Ty
-            ustalasz cenę i dostępność — dodanie ogłoszenia jest darmowe.
+            GoMambo łączy właścicieli aut z osobami, które potrzebują
+            samochodu. Ty ustalasz cenę i dostępność — dodanie ogłoszenia jest
+            darmowe.
           </p>
           <Link href={addCarHref} className={buttonVariants({ size: "lg" })}>
             Dodaj swoje auto →
@@ -273,11 +280,13 @@ export default async function BecomeOwnerPage() {
             <h2 className="text-2xl font-bold sm:text-3xl">
               Prowadzisz wypożyczalnię albo masz flotę?
             </h2>
+            {/* Companies arrive here from a leaflet while the catalogue is
+                still closed, so this must not suggest customers are already
+                booking. Same switch as the "Kiedy ruszy wynajem?" answer. */}
             <p className="max-w-2xl text-muted-foreground">
-              Wystaw swoje auta na GoMambo i docieraj do klientów, którzy porównują oferty
-              lokalnych wypożyczalni w jednym miejscu. Klient rezerwuje konkretny samochód,
-              nie „klasę lub podobny” — dokładnie to, czego w klasycznych wypożyczalniach
-              brakuje.
+              {maintenance
+                ? "Gdy ruszą rezerwacje online, klienci będą mogli zarezerwować Twoje auta na GoMambo. Na razie przyjmujemy ogłoszenia — zatwierdzone auta pojawią się w katalogu automatycznie, gdy go otworzymy. Każdy samochód to osobne ogłoszenie z własnymi zdjęciami."
+                : "Wystaw swoje auta na GoMambo — klienci mogą je zarezerwować online. Każdy samochód to osobne ogłoszenie z własnymi zdjęciami."}
             </p>
           </div>
 

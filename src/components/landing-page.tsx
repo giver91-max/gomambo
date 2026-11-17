@@ -164,7 +164,7 @@ export function LandingPage() {
             <div className={styles.ctaRole}>Dla właścicieli</div>
             <div className={styles.ctaTitle}>Udostępnij auto →</div>
             <div className={styles.ctaDesc}>
-              Zarabiaj gdy Twój samochód stoi. Ty ustalasz ceny i dostępność.
+              Zarabiaj, gdy Twój samochód stoi. Ty ustalasz ceny i dostępność.
             </div>
           </Link>
           <Link href="/wynajmij-auto" className={`${styles.ctaCard} ${styles.renter}`}>
@@ -190,33 +190,23 @@ export function LandingPage() {
       </section>
 
       <section id="difference">
-        <p className={styles.sectionLabel}>Różnica</p>
+        <p className={styles.sectionLabel}>Konkretne auto</p>
         <h2 className={styles.sectionTitle}>
-          Nie wynajmujesz klasy. Wynajmujesz TO auto.
+          Wynajmujesz dokładnie to auto, które widzisz.
         </h2>
         <p className={styles.diffIntro}>
-          W tradycyjnej wypożyczalni rezerwujesz kategorię — &bdquo;kompakt lub
-          podobny&rdquo; — i dostajesz cokolwiek akurat stoi na parkingu. W
-          GoMambo widzisz dokładnie ten samochód, który wynajmiesz: ten kolor,
-          ten silnik, to konkretne wyposażenie. To, co widzisz w ogłoszeniu,
-          to auto, którym pojedziesz.
+          Każdy samochód na GoMambo to osobne ogłoszenie ze zdjęciami tego
+          konkretnego auta — od prywatnego właściciela albo od lokalnej
+          wypożyczalni.
         </p>
         <div className={styles.diffGrid}>
-          <div className={`${styles.diffCard} ${styles.old}`}>
-            <div className={styles.diffLabel}>Tradycyjna wypożyczalnia</div>
-            <div className={styles.diffMain}>&bdquo;Ford Focus lub podobny&rdquo;</div>
-            <ul>
-              <li>Rezerwujesz kategorię, nie konkretny samochód</li>
-              <li>Kolor, silnik i wyposażenie — niespodzianka na miejscu</li>
-            </ul>
-          </div>
           <div className={`${styles.diffCard} ${styles.new}`}>
-            <div className={styles.diffLabel}>GoMambo</div>
+            <div className={styles.diffLabel}>Każde ogłoszenie</div>
             <div className={styles.diffMain}>Ten konkretny samochód</div>
             <ul>
-              <li>Widzisz realne zdjęcia auta, zanim zarezerwujesz</li>
-              <li>Znasz kolor, silnik i wyposażenie z góry</li>
-              <li>To, co widzisz, to dostajesz — zero niespodzianek</li>
+              <li>Widzisz prawdziwe zdjęcia auta, zanim zarezerwujesz</li>
+              <li>Z góry znasz rocznik, rodzaj paliwa i skrzynię biegów</li>
+              <li>To, co widzisz w ogłoszeniu, to auto, którym pojedziesz</li>
             </ul>
           </div>
         </div>
@@ -230,7 +220,10 @@ export function LandingPage() {
             <div className={styles.stepNum}>Krok 01</div>
             <div className={styles.stepIcon}>🪪</div>
             <h3>Zarejestruj się</h3>
-            <p>Weryfikacja tożsamości i prawa jazdy zajmuje 5 minut. Robimy to raz.</p>
+            <p>
+              Weryfikacja tożsamości i prawa jazdy zajmuje 5 minut. Robimy to raz.
+              Wypożyczalnia zamiast prawa jazdy podaje dane firmy.
+            </p>
           </div>
           <div className={styles.step}>
             <div className={styles.stepNum}>Krok 02</div>
@@ -242,7 +235,7 @@ export function LandingPage() {
             <div className={styles.stepNum}>Krok 03</div>
             <div className={styles.stepIcon}>📅</div>
             <h3>Zarezerwuj</h3>
-            <p>Płatność online. Odbiór bezpośrednio od właściciela.</p>
+            <p>Płatność online. Odbiór bezpośrednio od właściciela albo w wypożyczalni.</p>
           </div>
           <div className={styles.step}>
             <div className={styles.stepNum}>Krok 04</div>
@@ -287,9 +280,9 @@ export function LandingPage() {
             <div className={styles.useCaseIcon}>🏢</div>
             <h3>Masz flotę lub wypożyczalnię</h3>
             <p>
-              Wystaw wszystkie auta w jednym miejscu i docieraj do klientów, którzy
-              porównują oferty na GoMambo. Ceny ustalasz Ty, dodanie floty jest
-              darmowe.
+              Wystaw wszystkie auta w jednym miejscu — każde jako osobne
+              ogłoszenie z własnymi zdjęciami. Ceny ustalasz Ty, a dodanie
+              floty jest darmowe.
             </p>
           </div>
         </div>
@@ -302,7 +295,7 @@ export function LandingPage() {
         </div>
         <div className={styles.trustItem}>
           <span className={styles.trustNum}>100%</span>
-          <div className={styles.trustDesc}>Najemców i właścicieli z weryfikacją</div>
+          <div className={styles.trustDesc}>Najemców z weryfikacją tożsamości i prawa jazdy</div>
         </div>
         <div className={styles.trustItem}>
           <span className={styles.trustNum}>0%</span>

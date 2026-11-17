@@ -82,3 +82,17 @@ export const PARTNER_STATUS_LABELS: Record<PartnerStatus, string> = {
   suspended: "Zawieszona",
   terminated: "Współpraca zakończona",
 };
+
+/**
+ * Why a trip on a company's car cannot be extended from the renter's panel.
+ *
+ * Rafał's rule: every booking of a Partner car is confirmed by the company
+ * (the same rule that keeps instant_book off for Partner cars, 0042). An
+ * extension is a booking of more days, and the self-service one is paid and
+ * applied without anyone at the company agreeing or looking at its fleet
+ * calendar — so for a Partner car it is refused, and the renter is sent to
+ * the company instead. One string for the server action that refuses it and
+ * the rentals page that hides the form, so the two cannot drift.
+ */
+export const PARTNER_EXTENSION_REFUSAL =
+  "Przedłużenie najmu w wypożyczalni wymaga jej zgody. Napisz do wypożyczalni w wiadomościach albo wyślij nową prośbę o rezerwację na kolejne dni.";

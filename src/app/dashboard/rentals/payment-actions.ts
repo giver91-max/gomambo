@@ -28,6 +28,7 @@ import {
 import type { BookingDeposit, BookingStatus } from "@/types/database";
 import { formatZl } from "@/lib/deposit";
 import { escapeHtml } from "@/lib/html";
+import { PARTNER_EXTENSION_REFUSAL } from "@/lib/partner";
 
 /**
  * What this booking costs, in the order of trust: the amounts locked on the
@@ -572,10 +573,12 @@ export async function declareExtraChargeBankTransfer(
   return { error: null };
 }
 
-// Extending an already-accepted, already-paid booking — auto-approved if
-// the extra nights are free (same instant-book philosophy as the initial
-// booking, reusing the same overlap guard), no separate owner-approval
-// step. end_date/total_price on the booking itself are only bumped once
+// Extending an already-accepted, already-paid booking of a PRIVATE owner's
+// car — auto-approved if the extra nights are free (same instant-book
+// philosophy as the initial booking, reusing the same overlap guard), no
+// separate owner-approval step. A Partner car is refused before any of that:
+// the company confirms every booking of its cars, extensions included.
+// end_date/total_price on the booking itself are only bumped once
 // Stripe confirms payment (webhook, kind === "trip_extension") — never
 // optimistically, so an extension can never exist without being paid for.
 export async function requestBookingExtension(
@@ -600,6 +603,22 @@ export async function requestBookingExtension(
 
   if (!booking || booking.renter_id !== user.id) {
     return { error: "Nie masz dostępu do tej rezerwacji." };
+  }
+  // A company's car is never extended from here — every booking of it waits
+  // for the company (see PARTNER_EXTENSION_REFUSAL). Read with the service
+  // role, not through the cars embed above: RLS hides a car whose listing is
+  // back in review or paused, and an unreadable row must not pass as a
+  // private car.
+  const { data: extensionCar, error: extensionCarError } = await createAdminClient()
+    .from("cars")
+    .select("partner_id")
+    .eq("id", booking.car_id)
+    .maybeSingle();
+  if (extensionCarError || !extensionCar) {
+    return { error: "Nie udało się sprawdzić auta. Spróbuj ponownie za chwilę." };
+  }
+  if (extensionCar.partner_id) {
+    return { error: PARTNER_EXTENSION_REFUSAL };
   }
   if (booking.status !== "accepted") {
     return { error: "Można przedłużyć tylko potwierdzoną rezerwację." };

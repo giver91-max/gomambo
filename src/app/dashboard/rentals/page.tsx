@@ -25,6 +25,7 @@ import {
 } from "@/components/deposit-renter-panel";
 import { bookingDepositAmounts, formatZl } from "@/lib/deposit";
 import { formatDatePl, todayInPoland } from "@/lib/calendar";
+import { PARTNER_EXTENSION_REFUSAL } from "@/lib/partner";
 
 const statusLabel: Record<BookingStatus, string> = {
   requested: "Oczekuje na potwierdzenie",
@@ -54,7 +55,7 @@ export default async function RentalHistoryPage() {
       `id, start_date, end_date, status, created_at,
        pickup_odometer_km, pickup_fuel_level, return_odometer_km, return_fuel_level,
        payment_status, payment_method, total_price, deposit_amount, deposit_fee_amount,
-       cars(id, brand, model, city, cancellation_policy, security_deposit_amount,
+       cars(id, brand, model, city, partner_id, cancellation_policy, security_deposit_amount,
             mileage_limit_km, mileage_overage_fee_per_km,
             partners(trade_name), owner:profiles!cars_owner_id_fkey(full_name))`
     )
@@ -303,13 +304,20 @@ export default async function RentalHistoryPage() {
                   />
                 ))}
                 {/* Up to the last day of the trip, and not once the deposit
-                    is being settled — the server refuses both as well. */}
+                    is being settled — the server refuses both as well. A
+                    company's car is never extended here: the company has to
+                    agree, so the renter is told where to ask instead (the
+                    server refuses it too, also when the car row is hidden
+                    from this page by RLS and partner_id reads as null). */}
                 {booking.status === "accepted" &&
                   booking.payment_status === "paid" &&
                   booking.end_date >= today &&
-                  (!deposit || ["requested", "processing", "paid"].includes(deposit.status)) && (
+                  (!deposit || ["requested", "processing", "paid"].includes(deposit.status)) &&
+                  (booking.cars?.partner_id ? (
+                    <p className="text-xs">{PARTNER_EXTENSION_REFUSAL}</p>
+                  ) : (
                     <ExtendBookingForm bookingId={booking.id} currentEndDate={booking.end_date} />
-                  )}
+                  ))}
                 {(booking.status === "requested" || booking.status === "accepted") &&
                   (() => {
                     const policy: CancellationPolicy =
